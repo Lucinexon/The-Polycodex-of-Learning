@@ -2,7 +2,7 @@
    THE POLYMATH CODEX — engine.js
    Zero-build engine: pixel sprites, Web Audio synth, state/progression,
    MiniSearch index, Marked+KaTeX quiz engine, flashcard runner, widget helpers.
-   Data comes from data/sectors-part{1,2,3}.js (globals SECTORS_PART1/2/3,
+   Data comes from js/sectors-part{1,2,3}.js (globals SECTORS_PART1/2/3,
    CHRONO_ROWS, CHRONO_STAGES, SYSLOG, CODEX_CARDS, MASTER_EXAM).
    ========================================================================== */
 'use strict';
@@ -16,8 +16,8 @@ const pad2 = n => (n < 10 ? '0' + n : '' + n);
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ================= PIXEL SPRITES ================= */
-const PAL = { d:'#b3811f', y:'#ffd166', w:'#f7faff', s:'#dba43a', c:'#3fe0ff', t:'#2ee6b8', p:'#a78bfa',
-  r:'#ff5c7a', o:'#ff9f43', g:'#54e38a', n:'#8f9bd4', k:'#10173a', e:'#3a4478' };
+const PAL = { d:'#b9741f', y:'#ffc874', w:'#e9fbff', s:'#e8a24a', c:'#5fd0ee', t:'#46f0c4', p:'#a99cff',
+  r:'#ff7b8a', o:'#ff9f6b', g:'#5df2b8', n:'#7fb0c0', k:'#031821', e:'#27566a' };
 const SPRITES = {
   coin:    ['..dddd..','.dyyyyd.','dywwyyyd','dywyyyyd','dyyyyyyd','dyyssyyd','.dyssyd.','..dddd..'],
   star:    ['...yy...','...yy...','.yyyyyy.','yyyyyyyy','.yyyyyy.','..yyyy..','.yy..yy.','y......y'],
@@ -59,15 +59,41 @@ const SPRITES = {
   antenna: ['...cc...','..c..c..','.c....c.','...ww...','...ww...','..w..w..','...ww...','..wwww..'],
   gear:    ['..n..n..','.nnnnnn.','.nn..nn.','nnn..nnn','nnn..nnn','.nn..nn.','.nnnnnn.','..n..n..']
 };
+/* Sprites render as glowing "plankton" dot-matrices. Each unique
+   (sprite · tint · size) is painted ONCE to a canvas and reused as a CSS
+   background — ~190 elements instead of the ~12,000 <i> nodes the old
+   grid renderer produced, and no more display:flex-vs-inline-grid clashes. */
+const _SPR_CACHE = {};
+function _spriteURL(name, px, tint) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const key = name + '|' + px + '|' + (tint || '') + '|' + dpr;
+  if (_SPR_CACHE[key]) return _SPR_CACHE[key];
+  const art = SPRITES[name]; if (!art) return '';
+  const cell = Math.max(3, Math.ceil(px * dpr / 8)), N = cell * 8;
+  const cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const c = cv.getContext('2d'); if (!c) return '';
+  const fat = px <= 30;                       // small/medium icons: overlapping blobs stay legible
+  const r = cell * (fat ? 0.58 : 0.46);
+  art.forEach((row, y) => {
+    for (let x = 0; x < 8; x++) {
+      const ch = row[x]; if (ch === '.') continue;
+      const col = tint || PAL[ch] || '#fff';
+      c.shadowColor = col; c.shadowBlur = cell * (fat ? 0.7 : 1.1);
+      c.fillStyle = col; c.beginPath();
+      c.arc((x + 0.5) * cell, (y + 0.5) * cell, r, 0, 6.2832); c.fill();
+    }
+  });
+  return (_SPR_CACHE[key] = 'url(' + cv.toDataURL() + ')');
+}
 function drawSprites(root) {
   $$('[data-sprite]', root || document).forEach(el => {
-    const art = SPRITES[el.dataset.sprite]; if (!art) return;
-    const px = +(el.dataset.px || 16), tint = el.dataset.tint;
-    el.innerHTML = art.map(row => Array.prototype.map.call(row, ch =>
-      ch === '.' ? '<i></i>' : '<i style="background:' + (tint || PAL[ch] || '#fff') + '"></i>'
-    ).join('')).join('');
-    el.style.gridTemplateColumns = 'repeat(8,1fr)';
-    el.style.gridTemplateRows = 'repeat(8,1fr)';
+    const name = el.dataset.sprite, px = +(el.dataset.px || 16), tint = el.dataset.tint || '';
+    const sig = name + '|' + px + '|' + tint;
+    if (el.dataset.drawn === sig) return;                       // already painted
+    if (window.CodexIcons && window.CodexIcons.paint(el, name, px, tint)) { el.dataset.drawn = sig; return; }
+    if (!SPRITES[name]) return;                                 // unknown icon: leave empty
+    el.dataset.drawn = sig; el.textContent = '';                // legacy pixel fallback
+    el.style.backgroundImage = _spriteURL(name, px, tint);
     el.style.width = px + 'px'; el.style.height = px + 'px';
     el.setAttribute('aria-hidden', 'true');
   });
@@ -115,11 +141,11 @@ function confettiInit() {
 function celebrate(n) {
   if (REDUCED) return;
   const fx = confettiInit(); if (!fx) return;
-  const colors = ['#3fe0ff', '#2ee6b8', '#a78bfa', '#ffd166', '#ff5c9e', '#f7faff'];
-  fx({ particleCount: Math.min(n || 90, 130), spread: 75, origin: { y: .68 }, colors, shapes: ['square'], scalar: 1.05, zIndex: 300, ticks: 220 });
+  const colors = ['#5fd0ee', '#46f0c4', '#a99cff', '#ffc874', '#ff7ec9', '#effcff'];
+  fx({ particleCount: Math.min(n || 90, 130), spread: 75, origin: { y: .68 }, colors, shapes: ['circle'], scalar: 1.0, gravity: .55, decay: .94, zIndex: 300, ticks: 260 });
   if ((n || 0) >= 80) {
-    setTimeout(() => fx({ particleCount: 55, angle: 60, spread: 62, origin: { x: 0, y: .72 }, colors, shapes: ['square'], scalar: .95 }), 160);
-    setTimeout(() => fx({ particleCount: 55, angle: 120, spread: 62, origin: { x: 1, y: .72 }, colors, shapes: ['square'], scalar: .95 }), 320);
+    setTimeout(() => fx({ particleCount: 55, angle: 60, spread: 62, origin: { x: 0, y: .72 }, colors, shapes: ['circle'], scalar: .9, gravity: .55 }), 160);
+    setTimeout(() => fx({ particleCount: 55, angle: 120, spread: 62, origin: { x: 1, y: .72 }, colors, shapes: ['circle'], scalar: .9, gravity: .55 }), 320);
   }
 }
 
@@ -169,6 +195,7 @@ const LEVELS = [
   { xp: 1900, t: 'UNIVERSAL ARCHITECT' }
 ];
 function levelOf(xp) { let l = 0; LEVELS.forEach((L, i) => { if (xp >= L.xp) l = i; }); return l; }
+window.LEVELS = LEVELS;   // top-level const is NOT a window property; network.js reads window.LEVELS
 const BADGES = [
   { id: 'first_boot',   name: 'FIRST TRANSMISSION', desc: 'Boot into your first sector.',                     icon: 'power' },
   { id: 'read10',       name: 'DATA MINER',          desc: 'Scan 10 lore terminal entries.',                   icon: 'book' },
@@ -198,7 +225,7 @@ const NAV_ITEMS = [{ id: 'home', label: 'CODEX HUB', sub: 'Start the quest', ico
     { id: 'probes', label: 'TELEMETRY BAY', sub: 'Probe expeditions', icon: 'radar', prog: false },
     { id: 'dispatch', label: '0600 DISPATCH', sub: 'Daily calibration', icon: 'antenna', prog: false },
     { id: 'lobby', label: 'OBSERVATION LOUNGE', sub: 'Multiplayer deck · chat', icon: 'moon', prog: false },
-    { id: 'notebook', label: 'GROUP NOTEBOOK', sub: 'Collaborative essays', icon: 'doc', prog: false },
+    { id: 'notebook', label: 'NOTEBOOK', sub: 'Notes & shared rooms', icon: 'doc', prog: false },
     { id: 'chrono', label: 'CHRONO MATRIX', sub: 'Timelines & recall', icon: 'calendar', prog: true },
     { id: 'syslog', label: 'SYS-LOG', sub: 'Cheat sheet', icon: 'bulb', prog: false },
     { id: 'flash', label: 'NEURAL MATRIX', sub: 'Flashcard deck', icon: 'cards', prog: true },
@@ -231,7 +258,7 @@ function mdBlock(src) {                      // full markdown (panel bodies)
   let html;
   try { html = (typeof marked !== 'undefined') ? marked.parse(lifted) : '<p>' + esc(lifted).replace(/\n/g, '<br>') + '</p>'; }
   catch (e) { html = '<p>' + esc(lifted).replace(/\n/g, '<br>') + '</p>'; }
-  return _dropMath(html);
+  return _dropMath(html).replace(/<i class="pixelart-icons-font-([a-z0-9-]+)"><\/i>/g, '<span class="mi" data-sprite="$1" data-px="15" role="img"></span>');
 }
 function mdInline(src) {                     // inline-safe markdown (buttons, cards, quiz text)
   const lifted = _liftMath(src);
@@ -300,7 +327,7 @@ function gainXP(n, silent) {
     const final = after === LEVELS.length - 1;
     openModal('<div style="text-align:center">' +
       '<p class="sec-kick" style="margin-top:4px">RANK PROMOTION</p>' +
-      '<div style="font-family:var(--pf);font-size:34px;color:var(--gold);margin:14px 0;text-shadow:3px 3px 0 #05081c">LV ' + (after + 1) + '</div>' +
+      '<div style="font-family:var(--pf);font-size:34px;color:var(--gold);margin:14px 0;text-shadow:3px 3px 0 #001018">LV ' + (after + 1) + '</div>' +
       '<p style="font-family:var(--px);letter-spacing:1px;color:var(--cyan)">' + LEVELS[after].t + '</p>' +
       (final
         ? '<p class="small" style="margin-top:12px">You have reached the summit of the codex. The Void Trial still awaits a perfect run, Architect.</p>'
@@ -383,8 +410,8 @@ function sectorScreen(sec) {
   const blocks = sec.blocks.map((b, i) => {
     const tags = (b.tags && b.tags.length)
       ? '<span class="blk-tags">' + b.tags.map(t => '<span class="blk-tag">' + esc(t) + '</span>').join('') +
-        '<span class="blk-check" data-sprite="check" data-px="15" data-tint="#54e38a"></span></span>'
-      : '<span class="blk-check" data-sprite="check" data-px="15" data-tint="#54e38a"></span>';
+        '<span class="blk-check" data-sprite="check" data-px="15" data-tint="#5df2b8"></span></span>'
+      : '<span class="blk-check" data-sprite="check" data-px="15" data-tint="#5df2b8"></span>';
     return '<article class="block panel" id="' + esc(b.id) + '" data-title="' + esc(b.title) + '">' +
       '<header class="blk-head"><span class="blk-idx">' + pad2(i + 1) + '</span><h3 class="blk-title">' + esc(b.title) + '</h3>' + tags + '</header>' +
       '<div class="md-body">' + mdBlock(b.md) + '</div></article>';
@@ -413,7 +440,7 @@ function chronoScreen() {
     '<span class="sec-chip" id="chip-chrono">0%</span></div>' +
     '<article class="block panel" id="ch-1" data-title="Chrono Matrix master grid">' +
     '<header class="blk-head"><span class="blk-idx">01</span><h3 class="blk-title">The Master Grid</h3>' +
-    '<span class="blk-check" data-sprite="check" data-px="15" data-tint="#54e38a"></span></header>' +
+    '<span class="blk-check" data-sprite="check" data-px="15" data-tint="#5df2b8"></span></header>' +
     '<p>Four bands of time, color-coded: <span class="mchip m-big">BIG HISTORY</span> <span class="mchip m-anthro">ANTHROPOLOGY</span> <span class="mchip m-memes">MEMETICS</span> <span class="mchip m-vibes">AESTHETICS</span></p>' +
     '<div class="tl-tools no-print"><div class="chips" id="tlStages">' +
     '<button class="chip on" data-stage="all">All bands</button>' +
@@ -463,8 +490,8 @@ function flashScreen() {
     '<button class="btn primary" id="fFlip">FLIP CARD</button>' +
     '<button class="btn" id="fNext">NEXT<span class="ar"></span></button></div>' +
     '<div class="f-mark">' +
-    '<button class="btn" id="fNo"><span data-sprite="cross" data-px="14" data-tint="#ff6b7d"></span> NOT MASTERED</button>' +
-    '<button class="btn primary" id="fYes">MASTERED<span data-sprite="check" data-px="14" data-tint="#03212e"></span></button></div>' +
+    '<button class="btn" id="fNo"><span data-sprite="cross" data-px="14" data-tint="#ff7b8a"></span> NOT MASTERED</button>' +
+    '<button class="btn primary" id="fYes">MASTERED<span data-sprite="check" data-px="14" data-tint="#012a36"></span></button></div>' +
     '<p class="f-keys">Keys: <span class="kbd">←</span> <span class="kbd">→</span> navigate · <span class="kbd">SPACE</span> flip · <span class="kbd">1</span> not mastered · <span class="kbd">2</span> mastered</p>' +
     '</div></section>';
 }
@@ -624,7 +651,7 @@ function bindSearch() {
 const QSTATE = {};
 function qzContainer(qid) { return document.querySelector('.qz[data-quiz="' + qid + '"]'); }
 function fbHTML(ok, q) {
-  return '<div class="qfb ' + (ok ? 'ok' : 'no') + '"><span class="fbic" data-sprite="' + (ok ? 'check' : 'cross') + '" data-px="18" data-tint="' + (ok ? '#54e38a' : '#ff6b7d') + '"></span>' +
+  return '<div class="qfb ' + (ok ? 'ok' : 'no') + '"><span class="fbic" data-sprite="' + (ok ? 'check' : 'cross') + '" data-px="18" data-tint="' + (ok ? '#5df2b8' : '#ff7b8a') + '"></span>' +
     '<div><b>' + (ok ? 'CORRECT! +10 XP' : 'INPUT REJECTED') + '</b><br>' + mdInline(q.why) + '</div></div>';
 }
 function renderQuiz(cont, qid) {
@@ -641,7 +668,7 @@ function renderQuiz(cont, qid) {
     cont.innerHTML = '<div class="qz-head"><span data-sprite="' + q.icon + '" data-px="30"></span>' +
       '<div><p class="qz-title">RESULTS · ' + esc(q.title) + '</p><p class="qz-sub">Simulation complete</p></div></div>' +
       '<div class="qres"><div class="qstars">' +
-      [0, 1, 2].map(i => '<span data-sprite="star" data-px="34" data-tint="' + (i < stars ? '#ffd166' : '#3a4478') + '"></span>').join('') + '</div>' +
+      [0, 1, 2].map(i => '<span data-sprite="star" data-px="34" data-tint="' + (i < stars ? '#ffc874' : '#27566a') + '"></span>').join('') + '</div>' +
       '<p class="qscore">' + st.score + '/' + total + ' · ' + pct + '%' + (st.isBest ? '<span class="newbest">NEW RECORD!</span>' : '') + '</p>' +
       (pct === 100 ? '<p class="qperfect">FLAWLESS — the terminal bows to you.</p>' :
         pct >= 66 ? '<p class="qperfect">Strong run — a few packets dropped.</p>' :
@@ -907,7 +934,7 @@ function renderFlash() {
   }
   const c = F.deck[F.idx], known = S.known.includes(c.i);
   area.innerHTML = '<button class="fc' + (F.flip ? ' fl' : '') + '" id="fcCard" aria-label="Flashcard — press to flip">' +
-    (known ? '<span class="fc-star" data-sprite="star" data-px="18" data-tint="#ffd166" title="Mastered"></span>' : '') +
+    (known ? '<span class="fc-star" data-sprite="star" data-px="18" data-tint="#ffc874" title="Mastered"></span>' : '') +
     '<span class="fc-in">' +
     '<span class="fc-face fc-front"><span class="fc-bab">' + (CH_LABEL[c.ch] || 'MIXED') + '</span>' +
     '<span class="fc-q">' + mdInline(c.q) + '</span><span class="fc-hint">— CLICK / SPACE TO FLIP —</span></span>' +
@@ -983,7 +1010,7 @@ function openBadges() {
   openModal('<h4>BADGES <span style="color:var(--gold)">' + got + '/' + BADGES.length + '</span></h4>' +
     '<div class="badges">' + BADGES.map(b => {
       const on = S.badges.includes(b.id);
-      return '<div class="badge' + (on ? ' on' : '') + '"><span class="bic" data-sprite="' + b.icon + '" data-px="30" data-tint="' + (on ? '#ffd166' : '#6c79b3') + '"></span>' +
+      return '<div class="badge' + (on ? ' on' : '') + '"><span class="bic" data-sprite="' + b.icon + '" data-px="30" data-tint="' + (on ? '#ffc874' : '#5d8798') + '"></span>' +
         '<b>' + esc(b.name) + '</b><span>' + esc(b.desc) + '</span><em>' + (on ? 'UNLOCKED' : '???') + '</em></div>';
     }).join('') + '</div>' +
     '<div class="mbtns"><button class="btn primary" id="mOk">CLOSE</button></div>', 'BADGES');

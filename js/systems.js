@@ -347,16 +347,16 @@
       this.sweep = (this.sweep + dt * 0.0011) % TAU;
       this.spike *= 0.955;
       /* phosphor persistence */
-      ctx.fillStyle = 'rgba(5,9,30,0.30)'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(2,16,26,0.30)'; ctx.fillRect(0, 0, w, h);
       /* radar grid */
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(63,224,255,0.20)';
+      ctx.strokeStyle = 'rgba(95,208,238,0.20)';
       [1 / 3, 2 / 3, 1].forEach(f => { ctx.beginPath(); ctx.arc(L.cx, L.cy, L.r * f, 0, TAU); ctx.stroke(); });
       ctx.beginPath();
       ctx.moveTo(L.cx - L.r, L.cy); ctx.lineTo(L.cx + L.r, L.cy);
       ctx.moveTo(L.cx, L.cy - L.r); ctx.lineTo(L.cx, L.cy + L.r);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(63,224,255,0.34)';
+      ctx.strokeStyle = 'rgba(95,208,238,0.34)';
       for (let i = 0; i < 12; i++) {
         const a = i * Math.PI / 6;
         ctx.beginPath();
@@ -367,7 +367,7 @@
       /* sweep trail (brightness falls off behind the leading edge) */
       for (let k = 0; k < 26; k++) {
         const a = this.sweep - k * 0.022;
-        ctx.strokeStyle = 'rgba(63,224,255,' + (0.5 * (1 - k / 26)).toFixed(3) + ')';
+        ctx.strokeStyle = 'rgba(95,208,238,' + (0.5 * (1 - k / 26)).toFixed(3) + ')';
         ctx.beginPath(); ctx.moveTo(L.cx, L.cy);
         ctx.lineTo(L.cx + Math.cos(a) * L.r, L.cy + Math.sin(a) * L.r);
         ctx.stroke();
@@ -378,12 +378,12 @@
         let dd = this.sweep - b.ang; dd = ((dd % TAU) + TAU) % TAU; if (dd > Math.PI) dd = TAU - dd;
         const glow = Math.max(0, 1 - dd / 0.9);
         const bx = L.cx + Math.cos(b.ang) * L.r * b.rad, by = L.cy + Math.sin(b.ang) * L.r * b.rad;
-        const col = b.tier === 'deep' ? '255,209,102' : b.tier === 'archive' ? '167,139,250' : '63,224,255';
+        const col = b.tier === 'deep' ? '255,200,116' : b.tier === 'archive' ? '169,156,255' : '95,208,238';
         const pulse = (tsec * 0.7 + (hashStr(b.id) % 10) / 10) % 1;
         ctx.strokeStyle = 'rgba(' + col + ',' + (0.55 * (1 - pulse)).toFixed(3) + ')';
         ctx.beginPath(); ctx.arc(bx, by, 3 + pulse * 9, 0, TAU); ctx.stroke();
         ctx.fillStyle = 'rgba(' + col + ',' + (0.45 + 0.55 * glow).toFixed(3) + ')';
-        ctx.fillRect(bx - 2.5, by - 2.5, 5, 5);
+        ctx.beginPath(); ctx.arc(bx, by, 3, 0, TAU); ctx.fill();
         if (glow > 0.15) {
           ctx.font = '9px "JetBrains Mono", monospace';
           ctx.fillStyle = 'rgba(' + col + ',' + (0.5 + 0.5 * glow).toFixed(3) + ')';
@@ -391,21 +391,21 @@
         }
       });
       /* center + header */
-      ctx.fillStyle = '#3fe0ff'; ctx.fillRect(L.cx - 2, L.cy - 2, 4, 4);
-      ctx.font = '10px "Silkscreen", monospace';
-      ctx.fillStyle = 'rgba(154,167,221,0.75)';
-      ctx.fillText('RADAR SWEEP — ACTIVE PROBES: ' + blips.length, 10, 16);
+      ctx.fillStyle = '#5fd0ee'; ctx.fillRect(L.cx - 2, L.cy - 2, 4, 4);
+      ctx.font = '10px "Atkinson Hyperlegible", sans-serif';
+      ctx.fillStyle = 'rgba(143,195,208,0.75)';
+      ctx.fillText('SONAR SWEEP — ACTIVE PROBES: ' + blips.length, 10, 16);
       /* oscilloscope strip */
-      ctx.strokeStyle = 'rgba(63,224,255,0.30)';
+      ctx.strokeStyle = 'rgba(95,208,238,0.30)';
       ctx.beginPath(); ctx.moveTo(0, L.scopeY); ctx.lineTo(w, L.scopeY); ctx.stroke();
       const mid = L.scopeY + L.scopeH / 2;
       const amp = 7 + blips.length * 4 + this.spike * 26;
-      ctx.strokeStyle = 'rgba(63,224,255,0.16)'; ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(95,208,238,0.16)'; ctx.lineWidth = 3;
       this.scopePath(ctx, w, mid, amp, tsec, blips.length); ctx.stroke();
-      ctx.strokeStyle = '#3fe0ff'; ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#5fd0ee'; ctx.lineWidth = 1.2;
       this.scopePath(ctx, w, mid, amp, tsec, blips.length); ctx.stroke();
-      ctx.font = '9px "Silkscreen", monospace';
-      ctx.fillStyle = 'rgba(154,167,221,0.6)';
+      ctx.font = '9px "Atkinson Hyperlegible", sans-serif';
+      ctx.fillStyle = 'rgba(143,195,208,0.6)';
       ctx.fillText('SIGNAL ACQUISITION', 10, L.scopeY + 14);
     },
     scopePath(ctx, w, mid, amp, tsec, n) {
@@ -724,7 +724,7 @@
           '<span class="opt-key">' + String.fromCharCode(65 + i) + '</span><span>' + mdInline(o.t) + '</span></button>').join('') + '</div>' +
         auditItemChips(opts, picked) +
         (picked != null
-          ? '<div class="qfb ' + (opts[picked].ok ? 'ok' : 'no') + '"><span class="fbic" data-sprite="' + (opts[picked].ok ? 'check' : 'cross') + '" data-px="18" data-tint="' + (opts[picked].ok ? '#54e38a' : '#ff6b7d') + '"></span>' +
+          ? '<div class="qfb ' + (opts[picked].ok ? 'ok' : 'no') + '"><span class="fbic" data-sprite="' + (opts[picked].ok ? 'check' : 'cross') + '" data-px="18" data-tint="' + (opts[picked].ok ? '#5df2b8' : '#ff7b8a') + '"></span>' +
             '<div><b>' + (opts[picked].ok ? 'CORRECT' : 'INPUT REJECTED') + '</b><br>' + mdInline(Q.why || '') + '</div></div>' +
             '<div class="mbtns"><button class="btn primary" id="taNext">' + (AUDIT.i === AUDIT.qs.length - 1 ? 'VIEW RESULT' : 'NEXT') + ' <span class="ar"></span></button></div>'
           : ''),
@@ -741,13 +741,13 @@
         toast('<b>NODE INTEGRITY RESTORED</b><br>100% · stability S ' + rec.before + ' → ' + rec.after + ' days', 'check', 3800);
         html = '<div style="text-align:center">' +
           '<p class="sec-kick" style="color:var(--teal)">RECALIBRATION COMPLETE</p>' +
-          '<div style="font-family:var(--pf);font-size:30px;color:var(--teal);margin:14px 0;text-shadow:3px 3px 0 #05081c">NODE 100%</div>' +
+          '<div style="font-family:var(--pf);font-size:30px;color:var(--teal);margin:14px 0;text-shadow:3px 3px 0 #001018">NODE 100%</div>' +
           '<p class="small">Integrity restored to OPTIMAL. Stability S hardened: ' + rec.before + ' → ' + rec.after + ' days.<br>+10 XP · +5 energy · the decay curve just got flatter.</p></div>';
       } else {
         sfx('bad');
         html = '<div style="text-align:center">' +
           '<p class="sec-kick" style="color:var(--red)">RECALIBRATION FAILED</p>' +
-          '<div style="font-family:var(--pf);font-size:30px;color:var(--red);margin:14px 0;text-shadow:3px 3px 0 #05081c">' + AUDIT.score + '/3</div>' +
+          '<div style="font-family:var(--pf);font-size:30px;color:var(--red);margin:14px 0;text-shadow:3px 3px 0 #001018">' + AUDIT.score + '/3</div>' +
           '<p class="small">Stability S is unchanged and the node keeps decaying. Re-scan the sector terminals, then run the audit again.</p></div>';
       }
       sysSave();
@@ -1145,7 +1145,7 @@
       '<p class="sec-sub">Long-range expeditions run on real timestamps — background the tab, close it, come back</p></span></div>' +
 
       '<div class="pb-stats">' +
-      '<div class="pb-stat"><span data-sprite="bolt" data-px="20" data-tint="#ffd166"></span><span><b id="pbEnergy">—</b><span class="pl">ENERGY · SPENT ON LAUNCHES</span></span></div>' +
+      '<div class="pb-stat"><span data-sprite="bolt" data-px="20" data-tint="#ffc874"></span><span><b id="pbEnergy">—</b><span class="pl">ENERGY · SPENT ON LAUNCHES</span></span></div>' +
       '<div class="pb-stat"><span data-sprite="radar" data-px="20"></span><span><b id="pbActive">—</b><span class="pl">PROBES IN FLIGHT</span></span></div>' +
       '<div class="pb-stat"><span data-sprite="bag" data-px="20"></span><span><b id="pbCache">—</b><span class="pl">DATA CACHE ITEMS</span></span></div>' +
       '<div class="pb-stat"><span data-sprite="hour" data-px="20"></span><span><b id="pbChrono">—</b><span class="pl">CHRONO METRICS</span></span></div>' +
@@ -1247,8 +1247,8 @@
       inv.innerHTML = ids.length ? ids.map(k => {
         const it = ALL_LOOT[k]; if (!it) return '';
         const fn = ITEMS[k];
-        const tint = fn ? (fn.kind === 'xp' ? '#ffd166' : fn.kind === 'tonic' ? '#2ee6b8' : '#54e38a')
-          : it.kind === 'rare' ? '#ffd166' : '#8f9bd4';
+        const tint = fn ? (fn.kind === 'xp' ? '#ffc874' : fn.kind === 'tonic' ? '#46f0c4' : '#5df2b8')
+          : it.kind === 'rare' ? '#ffc874' : '#7fb0c0';
         const sub = fn
           ? (fn.kind === 'energy' ? 'USABLE · +' + fn.give + ' ENERGY'
             : fn.kind === 'xp' ? 'EXCHANGE · +' + fn.give + ' XP'
@@ -1360,7 +1360,7 @@
     });
     qh += '</div>';
     if (pick != null) {
-      qh += '<div class="qfb ' + (pick === Q.a ? 'ok' : 'no') + '"><span class="fbic" data-sprite="' + (pick === Q.a ? 'check' : 'cross') + '" data-px="18" data-tint="' + (pick === Q.a ? '#54e38a' : '#ff6b7d') + '"></span>' +
+      qh += '<div class="qfb ' + (pick === Q.a ? 'ok' : 'no') + '"><span class="fbic" data-sprite="' + (pick === Q.a ? 'check' : 'cross') + '" data-px="18" data-tint="' + (pick === Q.a ? '#5df2b8' : '#ff7b8a') + '"></span>' +
         '<div><b>' + (pick === Q.a ? 'CALIBRATED' : 'DRIFT DETECTED') + '</b><br>' + mdInline(Q.w) + '</div></div>';
     } else {
       qh += '<p class="small">Answer to calibrate the analyst baseline — the claim below works either way.</p>';
@@ -1955,42 +1955,42 @@
     const fluxDipFrac = mgTRFlux(ratio, x, cx, R, rpVis) * ratio * ratio;
     const physDip = ratio * ratio;
     /* draw */
-    ctx.fillStyle = '#04081c'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#02111a'; ctx.fillRect(0, 0, W, H);
     /* starfield specks */
-    ctx.fillStyle = 'rgba(188,210,255,.5)';
+    ctx.fillStyle = 'rgba(190,235,250,.5)';
     for (let i = 0; i < 40; i++) {
       const h = (hashStr('star' + i) % 100) / 100;
       ctx.fillRect((hashStr('sx' + i) % W), 8 + h * 110, 1, 1);
     }
     /* star with limb gradient */
     const grad = ctx.createRadialGradient(cx - 8, cy - 8, 4, cx, cy, R);
-    grad.addColorStop(0, '#fff6d8');
-    grad.addColorStop(.7, '#ffd166');
+    grad.addColorStop(0, '#fff3d6');
+    grad.addColorStop(.7, '#ffc874');
     grad.addColorStop(1, '#c98f1f');
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
     /* planet silhouette (dark disc) */
-    ctx.fillStyle = '#04081c';
+    ctx.fillStyle = '#02111a';
     ctx.beginPath(); ctx.arc(x, cy, rpVis, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(63,224,255,.85)'; ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(95,208,238,.85)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(x, cy, rpVis, 0, Math.PI * 2); ctx.stroke();
     /* orbit chord */
-    ctx.strokeStyle = 'rgba(63,224,255,.22)';
+    ctx.strokeStyle = 'rgba(95,208,238,.22)';
     ctx.setLineDash([4, 5]);
     ctx.beginPath(); ctx.moveTo(16, cy); ctx.lineTo(W - 16, cy); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.font = '10px "Silkscreen", monospace';
-    ctx.fillStyle = 'rgba(154,167,221,.8)';
+    ctx.font = '10px "Atkinson Hyperlegible", sans-serif';
+    ctx.fillStyle = 'rgba(143,195,208,.8)';
     ctx.fillText('FIELD VIEW · ' + def.label + ' (disc size exaggerated ×9)', 10, 16);
     /* light curve panel */
     const y0 = 142, yh = 56;
-    ctx.strokeStyle = 'rgba(63,224,255,.30)';
+    ctx.strokeStyle = 'rgba(95,208,238,.30)';
     ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke();
     const maxDip = Math.max(physDip, 1e-9);
     const mag = Math.min(5e5, Math.max(200, 44 / maxDip));     // display magnification
-    ctx.fillStyle = 'rgba(154,167,221,.85)';
+    ctx.fillStyle = 'rgba(143,195,208,.85)';
     ctx.fillText('NORMALIZED FLUX · Y-AXIS MAGNIFIED ×' + mag.toExponential(1), 10, y0 + 12);
-    ctx.strokeStyle = '#3fe0ff'; ctx.lineWidth = 1.6;
+    ctx.strokeStyle = '#5fd0ee'; ctx.lineWidth = 1.6;
     ctx.beginPath();
     const N = 160;
     for (let i = 0; i <= N; i++) {
@@ -2004,7 +2004,7 @@
     /* playhead */
     const phDip = mgTRFlux(ratio, x, cx, R, rpVis) * physDip;
     const py = Math.min(y0 + yh - 4, y0 + 14 + phDip * mag * (40 / 44) * 0.92);
-    ctx.fillStyle = '#ffd166';
+    ctx.fillStyle = '#ffc874';
     ctx.fillRect(x - 2, py - 2, 4, 4);
     /* readouts */
     const set = function (k, v) { const el = MinigameEngine.el(simEl, k); if (el) el.textContent = v; };

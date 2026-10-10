@@ -555,7 +555,7 @@ $$\text{N}_2 + 3\,\text{H}_2 \rightleftharpoons 2\,\text{NH}_3 \quad (\Delta H=-
 <li><b>BGP-4 / AS / IXP</b> — the routing trust protocol; autonomous systems; exchange points</li>
 <li><b>PGP / LSB / DCT</b> — Cicada's signature scheme; steganographic bit-hiding; JPEG coefficient domain</li>
 <li><b>LCG / AABB / GJK</b> — linear congruential generator; bounding boxes; Minkowski-difference collision test</li>
-<li><b>FE / RemoteEvent / DevEx</b> — Roblox's server-authority switch; validated crossings; cashout haircut ($0.0125 in, $0.0035 out)</li>
+<li><b>FE / RemoteEvent / DevEx</b> — Roblox's server-authority switch; validated crossings; cashout haircut (0.0125 USD in, 0.0035 USD out)</li>
 <li><b>TiDi / TCU / ISK</b> — EVE's 10% server slow-motion; territorial claim units; the currency of empires</li>
 </ul>
 <ul>

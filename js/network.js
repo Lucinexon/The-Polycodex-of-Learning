@@ -53,17 +53,13 @@ service cloud.firestore {
       allow read, create: if request.auth != null;
       allow delete: if isAdmin();
     }
-    match /chat_essay_{code}/{id} {
-      allow read, create: if request.auth != null;
-      allow delete: if isAdmin();
-    }
-    match /chat_study_{topic}/{id} {
-      allow read, create: if request.auth != null;
-      allow delete: if isAdmin();
-    }
-    match /chat_dm_{a}_{b}/{id} {
-      allow read, create: if request.auth != null;
-      allow delete: if isAdmin();
+    // Room / topic / DM chats live in per-channel collections named
+    // chat_essay_<code>, chat_study_<topic>, chat_dm_<uidA>_<uidB>.
+    // Firestore rules cannot wildcard PART of a collection name, so match
+    // any top-level collection and filter on its prefix instead.
+    match /{col}/{id} {
+      allow read, create: if request.auth != null && col.matches('chat_(essay|study|dm)_.*');
+      allow delete: if isAdmin() && col.matches('chat_(essay|study|dm)_.*');
     }
     match /broadcasts/latest {
       allow read: if request.auth != null;
@@ -111,7 +107,9 @@ const LS = {
   nb: 'polymath_codex_nb_v1',          // personal scratchpad text
   quota: 'polymath_codex_quota_v1',    // daily write budget ledger
   banner: 'polymath_codex_banner_v1',  // last dismissed broadcast ts
-  nbroom: 'polymath_codex_nbroom_v1'   // last joined notebook room
+  nbroom: 'polymath_codex_nbroom_v1',  // last joined notebook room
+  vault: 'polymath_codex_vault_v1',    // notebook vault (all local notes)
+  nbview: 'polymath_codex_nbview_v1'   // edit | split | read
 };
 const DAY_MS = 86400000;
 
@@ -252,6 +250,10 @@ const AuthManager = {
 
   onAuth: function (user) {
     this.authResolved = true; // <-- Mark that Firebase has finished checking storage
+    if (!user && this.pendingWhy) {            // a feature asked for a link before auth resolved — retry now
+      const w = this.pendingWhy, me = this; this.pendingWhy = null;
+      setTimeout(function () { me.ensureAuth(w === true ? undefined : w); }, 0);
+    }
     const prevUid = this.uid;
     this.user = user || null;
     this.uid = user ? user.uid : null;
@@ -274,16 +276,18 @@ const AuthManager = {
       if (prevUid !== this.uid) {
         LoungeEngine.identityChanged();
         ChatEngine.identityChanged();
+      NotebookManager.identityChanged();
       }
     } else {
       LoungeEngine.identityChanged();
       ChatEngine.identityChanged();
+      NotebookManager.identityChanged();
     }
   },
 
   ensureAuth: function (why) {
     /* Wait until Firebase has finished restoring any existing session. */
-    if (!this.authResolved) return;
+    if (!this.authResolved) { this.pendingWhy = why || true; return; }
     if (!fbOK() || this.user || this.busy) return;
 
     const self = this;
@@ -448,9 +452,10 @@ const AuthManager = {
         const st = engS() || {};
         q('#apName').textContent = this.name || 'OPERATOR';
         let rank = 'LV 1 · NOVICE CHRONICLER';
-        if (typeof window.levelOf === 'function' && typeof window.LEVELS !== 'undefined') {
+        const LV = window.LEVELS || (typeof LEVELS !== 'undefined' ? LEVELS : null);
+        if (typeof window.levelOf === 'function' && LV) {
           const lv = window.levelOf(st.xp || 0);
-          rank = 'LV ' + (lv + 1) + ' · ' + window.LEVELS[lv].t;
+          rank = 'LV ' + (lv + 1) + ' · ' + LV[lv].t;
         }
         q('#apRank').textContent = rank + (this.admin ? ' · ★ SYSOP' : '');
         q('#apAvatar').textContent = String(this.name || '?').charAt(0).toUpperCase();
@@ -490,214 +495,621 @@ function authErr(err) {
 }
 
 /* ========================= [3] NOTEBOOK MANAGER =========================
-   Dual-pane academic writing terminal. Scratchpad is local-only; group
-   rooms sync through group_notes/{code} behind the QuotaGuard debounce
-   (1.5s typing pause OR 10s hard interval — never per keystroke). */
+   Obsidian-style vault. A quiet markdown editor with a notes list, [[wikilinks]]
+   + backlinks, a "/" insert menu, a Ctrl/Cmd+P palette and Edit / Split /
+   Reading views. Notes live on this device (localStorage). A shared room is just
+   another document: it syncs through group_notes/{code} behind the QuotaGuard
+   debounce (1.5 s typing pause OR 10 s hard interval — never per keystroke) and
+   never touches your local notes. Leaving a room keeps a copy as a normal note. */
+const NB_WELCOME = [
+  '# Welcome to your vault', '',
+  'Quiet notes, kept on this device.', '',
+  '- Type `/` for the insert menu: headings, tables, math, code, citations',
+  '- Type `[[` to link another note — links show up as backlinks',
+  '- **Ctrl/Cmd + E** flips between editing and reading; **Ctrl/Cmd + P** opens the palette',
+  '- Tick tasks while reading:',
+  '  - [ ] Try the slash menu',
+  '  - [x] Open the Welcome note', '',
+  'Math works too: $E = mc^2$', ''
+].join('\n');
+
+const NB_SLASH = [
+  { label: 'Heading 1', hint: '#', icon: 'doc', w: 'h1 title heading', ins: '# ' },
+  { label: 'Heading 2', hint: '##', icon: 'doc', w: 'h2 heading', ins: '## ' },
+  { label: 'Heading 3', hint: '###', icon: 'doc', w: 'h3 heading', ins: '### ' },
+  { label: 'Bulleted list', hint: '-', icon: 'doc', w: 'bullet list ul', ins: '- ' },
+  { label: 'Numbered list', hint: '1.', icon: 'doc', w: 'number ordered list ol', ins: '1. ' },
+  { label: 'Task list', hint: '[ ]', icon: 'check', w: 'task todo checkbox', ins: '- [ ] ' },
+  { label: 'Quote', hint: '>', icon: 'speech', w: 'quote blockquote', ins: '> ' },
+  { label: 'Code block', hint: '~~~', icon: 'cpu', w: 'code fence snippet', ins: '~~~\n\n~~~', caret: 4 },
+  { label: 'Table', hint: '3×3', icon: 'chart', w: 'table grid', ins: '| Header 1 | Header 2 | Header 3 |\n| --- | --- | --- |\n| — | — | — |\n| — | — | — |\n', caret: 2 },
+  { label: 'Math block', hint: '$$', icon: 'atom', w: 'math latex equation formula', ins: '$$\n\n$$', caret: 3 },
+  { label: 'Inline math', hint: '$', icon: 'atom', w: 'inline math latex', ins: '$$', caret: 1 },
+  { label: 'Citation / footnote', hint: '[^1]', icon: 'book', w: 'cite citation footnote reference', special: 'cite' },
+  { label: 'Link to note', hint: '[[', icon: 'link', w: 'link wiki note', ins: '[[]]', caret: 2 },
+  { label: 'Divider', hint: '---', icon: 'doc', w: 'divider rule hr line', ins: '---\n' }
+];
+
 const NotebookManager = {
-  mode: 'scratch',          // 'scratch' | 'group'
-  room: null,               // 4-digit code while in a group room
-  roomUnsub: null,
-  dirtyLocal: false,        // unsynced local keystrokes
-  previewT: null,
-  scratchT: null,
-  remoteNoticeT: 0,
-  COLLAB_FRESH_MS: 150000,  // collaborator considered active for 2.5 min
+  vault: { v: 1, active: null, notes: [] },
+  doc: 'note',                 // 'note' | 'room'  (what the editor is showing)
+  room: null, roomMd: '', roomUnsub: null, pendingRoom: null,
+  view: 'edit', lastEdit: 'edit', filter: '', armed: null,
+  active: false, dirtyLocal: false,
+  previewT: null, saveT: null, renameT: null, armedT: null, remoteNoticeT: 0,
+  menu: { open: false, items: [], sel: 0 }, pal: { items: [], sel: 0 },
+  COLLAB_FRESH_MS: 150000,
 
   editor: function () { return q('#nbEditor'); },
 
+  /* ------------------------------ boot ------------------------------ */
   init: function () {
-    const self = this;
-    /* mode switching */
-    q('#nbScratchBtn').addEventListener('click', function () { self.setMode('scratch'); blip('click'); });
-    q('#nbGroupBtn').addEventListener('click', function () { self.setMode('group'); blip('click'); });
-    /* room controls */
-    q('#nbJoinBtn').addEventListener('click', function () { self.joinRoom(false); });
-    q('#nbCreateBtn').addEventListener('click', function () { self.joinRoom(true); });
-    q('#nbLeaveBtn').addEventListener('click', function () { self.leaveRoom(); blip('click'); });
-    q('#nbRoomInput').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); self.joinRoom(false); }
-    });
-    q('#nbRoomInput').addEventListener('input', function () {
-      this.value = this.value.replace(/\D/g, '').slice(0, 4);
-    });
-    /* editor */
-    const ed = this.editor();
-    ed.addEventListener('input', function () { self.onInput(); });
-    ed.addEventListener('change', function () { self.onInput(); });
-    /* toolbar */
-    qa('.nbtool').forEach(function (b) {
-      b.addEventListener('click', function () { self.tool(b.dataset.nb); blip('click'); });
-    });
-    /* table popover */
-    q('#nbTblGen').addEventListener('click', function () { self.genTable(); blip('flip'); });
-    q('#nbTblCancel').addEventListener('click', function () { q('#nbTablePop').hidden = true; });
-    /* mobile tabs */
-    q('#nbTabEdit').addEventListener('click', function () { self.tab('edit'); blip('click'); });
-    q('#nbTabPrev').addEventListener('click', function () { self.tab('preview'); blip('flip'); });
-    /* export / copy */
-    q('#nbExportBtn').addEventListener('click', function () { self.exportMd(); });
-    q('#nbCopyBtn').addEventListener('click', function () { self.copyFormatted(); });
-    /* hydrate scratchpad */
-    let scratch = '';
-    try { scratch = localStorage.getItem(LS.nb) || ''; } catch (e) {}
-    ed.value = scratch;
-    this.updateMetrics();
-    this.renderPreview();
-    /* auto-rejoin last room if session was live */
+    if (!this.editor()) return;
+    this.loadVault();
+    try { const v = localStorage.getItem(LS.nbview); if (v === 'edit' || v === 'split' || v === 'read') this.view = v; } catch (e) {}
+    if (this.view !== 'read') this.lastEdit = this.view;
+    this.bind();
+    const sh = q('#nbShell'); if (sh) sh.dataset.side = window.innerWidth > 900 ? '1' : '0';
+    this.setView(this.view, true);
+    this.showDoc();
+    this.renderRoom();
     try {
-      const lastRoom = localStorage.getItem(LS.nbroom);
-      if (lastRoom && /^\d{4}$/.test(lastRoom)) {
-        q('#nbRoomInput').value = lastRoom;
-        this.setMode('group', true);
-        this.attachRoom(lastRoom, false);
-      }
+      const last = localStorage.getItem(LS.nbroom);
+      if (last && /^\d{4}$/.test(last)) { q('#nbRoomInput').value = last; this.attachRoom(last, false, true); }
     } catch (e) {}
-    this.setSync(this.mode === 'group' && fbOK() ? 'saved' : 'local');
   },
 
-  tab: function (which) {
-    const panes = q('.nb-panes');
-    if (!panes) return;
-    panes.classList.toggle('previewing', which === 'preview');
-    q('#nbTabEdit').classList.toggle('on', which === 'edit');
-    q('#nbTabPrev').classList.toggle('on', which === 'preview');
-    q('#nbTabEdit').setAttribute('aria-selected', String(which === 'edit'));
-    q('#nbTabPrev').setAttribute('aria-selected', String(which === 'preview'));
-    if (which === 'preview') this.renderPreview(true);
+  /* ------------------------------ vault ------------------------------ */
+  mk: function (title, md) { return { id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: title, md: md || '', ts: Date.now() }; },
+  loadVault: function () {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(LS.vault) || 'null'); } catch (e) {}
+    if (raw && Array.isArray(raw.notes) && raw.notes.length) { this.vault = raw; }
+    else {
+      let legacy = '';
+      try { legacy = localStorage.getItem(LS.nb) || ''; } catch (e) {}      // migrate the old single scratchpad
+      const notes = [];
+      if (legacy.trim()) notes.push(this.mk('Scratchpad', legacy));
+      notes.push(this.mk('Welcome', NB_WELCOME));
+      this.vault = { v: 1, active: notes[0].id, notes: notes };
+      this.persist();
+    }
+    if (!this.cur()) this.vault.active = this.vault.notes[0].id;
+  },
+  persist: function () { try { localStorage.setItem(LS.vault, JSON.stringify(this.vault)); } catch (e) {} },
+  saveScratch: function () { this.persist(); },                         // legacy name used by the boot facade
+  saveSoon: function () { const s = this; clearTimeout(this.saveT); this.saveT = setTimeout(function () { s.persist(); }, 400); },
+  cur: function () { const id = this.vault.active; return this.vault.notes.filter(function (n) { return n.id === id; })[0] || null; },
+  findByTitle: function (t) { t = String(t || '').trim().toLowerCase(); return this.vault.notes.filter(function (n) { return n.title.toLowerCase() === t; })[0] || null; },
+  uniqueTitle: function (base, exceptId) {
+    base = String(base || '').replace(/[\\\/:*?"<>|\[\]#^]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Untitled';
+    const taken = function (x) { return NotebookManager.vault.notes.some(function (n) { return n.id !== exceptId && n.title.toLowerCase() === x.toLowerCase(); }); };
+    let t = base, i = 2;
+    while (taken(t)) t = base + ' ' + (i++);
+    return t;
+  },
+  newNote: function (title) {
+    this.persist();
+    const n = this.mk(this.uniqueTitle(title || 'Untitled'), '');
+    this.vault.notes.push(n); this.vault.active = n.id; this.doc = 'note';
+    if (this.view === 'read') this.setView(this.lastEdit || 'edit');
+    this.persist(); this.showDoc(); this.closeSideOnMobile();
+    const t = q('#nbTitle'), ed = this.editor();
+    if (title) { if (ed) ed.focus(); } else if (t) { t.focus(); t.select(); }
+    return n;
+  },
+  openNote: function (id) {
+    if (!this.vault.notes.some(function (n) { return n.id === id; })) return;
+    this.persist(); this.vault.active = id; this.doc = 'note'; this.persist();
+    this.showDoc(); this.closeSideOnMobile();
+  },
+  deleteNote: function (id) {
+    const v = this.vault;
+    v.notes = v.notes.filter(function (n) { return n.id !== id; });
+    if (!v.notes.length) v.notes.push(this.mk('Untitled', ''));
+    if (v.active === id || !this.cur()) v.active = v.notes.slice().sort(function (a, b) { return b.ts - a.ts; })[0].id;
+    this.armed = null; this.persist(); this.showDoc(); blip('flip');
+  },
+  armDelete: function (id) {
+    const s = this; this.armed = id; this.renderList();
+    clearTimeout(this.armedT); this.armedT = setTimeout(function () { s.armed = null; s.renderList(); }, 2600);
+  },
+  rename: function (raw) {
+    const n = this.cur(); if (!n || this.doc !== 'note') return;
+    const old = n.title, next = this.uniqueTitle(raw, n.id);
+    if (next === old) return;
+    n.title = next; n.ts = Date.now();
+    const re = new RegExp('\\[\\[' + old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\||\\]\\])', 'gi');
+    this.vault.notes.forEach(function (m) { if (m.md) m.md = m.md.replace(re, function (x, g) { return '[[' + next + g; }); });
+    const ed = this.editor(); if (ed && ed.value !== n.md) ed.value = n.md;     // self-links
+    this.persist(); this.renderList();
+  },
+  backlinks: function () {
+    const n = this.cur(); if (!n || this.doc !== 'note') return [];
+    const re = new RegExp('\\[\\[\\s*' + n.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*(\\||\\]\\])', 'i');
+    return this.vault.notes.filter(function (m) { return m.id !== n.id && re.test(m.md); });
+  },
+  stripLinks: function (md) { return String(md).replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, function (m, a, b) { return (b || a).trim(); }); },
+  wikify: function (md) {
+    const self = this; let fence = false;
+    return String(md).split('\n').map(function (ln) {
+      if (/^\s*(~~~|```)/.test(ln)) { fence = !fence; return ln; }
+      if (fence) return ln;
+      return ln.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, function (m, a, b) {
+        const t = a.trim();
+        return '<a class="wl' + (self.findByTitle(t) ? '' : ' new') + '" data-wl="' + esc(t) + '">' + esc((b || a).trim()) + '</a>';
+      });
+    }).join('\n');
   },
 
-  setMode: function (m, silent) {
-    if (m === this.mode && !silent) { /* re-click: just refresh UI */ }
-    this.mode = m;
-    q('#nbScratchBtn').classList.toggle('on', m === 'scratch');
-    q('#nbGroupBtn').classList.toggle('on', m === 'group');
-    q('#nbScratchBtn').setAttribute('aria-pressed', String(m === 'scratch'));
-    q('#nbGroupBtn').setAttribute('aria-pressed', String(m === 'group'));
-    q('#nbRoomRow').hidden = (m !== 'group');
-    q('#nbModeChip').textContent = m === 'group' ? (this.room ? 'ROOM ' + this.room : 'GROUP') : 'SCRATCHPAD';
-    if (m === 'scratch') {
-      /* leaving group mode — flush pending edits, keep content */
-      if (this.room) { NoteSync.stop(); this.detachRoom(false); }
-      this.setSync('local');
-      let scratch = '';
-      try { scratch = localStorage.getItem(LS.nb) || ''; } catch (e) {}
-      const ed = this.editor();
-      if (ed && ed.value !== scratch) { /* keep current buffer as scratch */ }
-      this.saveScratch();
-      q('#nbCollab').innerHTML = 'Personal scratchpad — stored on this device. Open a <b>GROUP ROOM</b> to co-write essays live with a 4-digit code.';
-      this.updateMetrics(); this.renderPreview();
+  /* ------------------------------ document display ------------------------------ */
+  showDoc: function () {
+    const ed = this.editor(), ti = q('#nbTitle');
+    const isRoom = this.doc === 'room' && !!this.room;
+    if (!isRoom) this.doc = 'note';
+    const n = this.cur();
+    ed.value = isRoom ? this.roomMd : (n ? n.md : '');
+    ti.value = isRoom ? 'Room ' + this.room : (n ? n.title : '');
+    ti.readOnly = isRoom;
+    this.setSync(isRoom ? (fbOK() ? (NoteSync.dirty || this.dirtyLocal ? 'buffering' : 'saved') : 'offline') : 'local');
+    this.metrics(); this.renderPreview(); this.renderList(); this.renderRoom(); this.backlinkChip(); this.menuHide();
+    ed.scrollTop = 0;
+  },
+  showRoom: function () { this.persist(); this.doc = 'room'; this.showDoc(); this.closeSideOnMobile(); },
+  onInput: function (ev) {
+    const ed = this.editor(); if (!ed) return;
+    if (ev && ev.data === '[') {                                       // auto-close [[ → [[]]
+      const p = ed.selectionStart;
+      if (ed.value.charAt(p - 2) === '[' && ed.value.slice(p, p + 2) !== ']]') { this.put(p, p, ']]', 0); return; }
+    }
+    const md = ed.value;
+    if (this.doc === 'room') {
+      this.roomMd = md; this.dirtyLocal = true;
+      if (fbOK()) NoteSync.tap(); else this.setSync('offline');
     } else {
-      if (!fbOK()) {
-        this.setSync('offline');
-        q('#nbCollab').innerHTML = '<b style="color:var(--red)">OFFLINE MODE</b> — group rooms need the Firebase link. The scratchpad still works, and .MD export / formatted copy remain fully operational.';
-      } else {
-        this.setSync('saved');
-        q('#nbCollab').innerHTML = 'Enter a <b>4-digit room code</b> and hit JOIN (or CREATE to spawn one). Share the code with your crew — edits sync live with a 3-second debounce.';
+      const n = this.cur(); if (n) { n.md = md; n.ts = Date.now(); }
+      this.setSync('local'); this.saveSoon();
+    }
+    this.metrics(); this.previewSoon(); this.backlinkChip();
+    this.contextMenu();
+  },
+  metrics: function () {
+    const ed = this.editor(), text = ed ? ed.value : '';
+    const words = (text.trim().match(/\S+/g) || []).length;
+    const w = q('#nbWords'), r = q('#nbRead');
+    if (w) w.textContent = words + (words === 1 ? ' word' : ' words');
+    if (r) r.textContent = words > 150 ? '· ~' + Math.max(1, Math.round(words / 200)) + ' min read' : '';
+  },
+  backlinkChip: function () {
+    const b = q('#nbBack'); if (!b) return;
+    const n = this.backlinks().length;
+    b.hidden = !n; b.textContent = n + (n === 1 ? ' backlink' : ' backlinks');
+  },
+  setSync: function (state) {
+    const wrap = q('#nbSync'), tx = q('#nbSyncTx'); if (!wrap || !tx) return;
+    wrap.className = 'nbx-sync ' + state;
+    tx.textContent = ({ local: 'Saved on this device', saved: 'Synced', buffering: 'Unsynced edits…', syncing: 'Syncing…', offline: 'Offline — rooms need Firebase' })[state] || '';
+  },
+
+  /* ------------------------------ views ------------------------------ */
+  setView: function (v, boot) {
+    if (v !== 'edit' && v !== 'split' && v !== 'read') v = 'edit';
+    this.view = v; if (v !== 'read') this.lastEdit = v;
+    try { localStorage.setItem(LS.nbview, v); } catch (e) {}
+    const sh = q('#nbShell'); if (sh) sh.dataset.view = v;
+    qa('[data-nbview]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.nbview === v)); });
+    this.menuHide();
+    if (v !== 'edit') this.renderPreview();
+    if (!boot && v !== 'read') { const ed = this.editor(); if (ed && window.innerWidth > 900) ed.focus(); }
+  },
+  toggleRead: function () { this.setView(this.view === 'read' ? (this.lastEdit || 'edit') : 'read'); blip('flip'); },
+  setSide: function (on) {
+    const sh = q('#nbShell'); if (!sh) return;
+    sh.dataset.side = on ? '1' : '0';
+    const b = q('#nbSideBtn'); if (b) b.setAttribute('aria-expanded', String(!!on));
+  },
+  toggleSide: function () { const sh = q('#nbShell'); this.setSide(!(sh && sh.dataset.side === '1')); },
+  closeSideOnMobile: function () { if (window.innerWidth <= 900) this.setSide(false); },
+  previewSoon: function () { const s = this; clearTimeout(this.previewT); this.previewT = setTimeout(function () { s.renderPreview(); }, 140); },
+  renderPreview: function () {
+    const pv = q('#nbPreview'), ed = this.editor();
+    if (!pv || !ed || this.view === 'edit') return;
+    const md = ed.value || '';
+    if (!md.trim()) { pv.innerHTML = '<p class="nbx-empty">Nothing here yet — switch to edit and start writing.</p>'; return; }
+    pv.innerHTML = (typeof window.mdBlock === 'function') ? window.mdBlock(this.wikify(md)) : '<p>' + esc(md).replace(/\n/g, '<br>') + '</p>';
+    qa('input[type="checkbox"]', pv).forEach(function (cb, i) { cb.disabled = false; cb.dataset.ti = i; });
+    if (typeof window.typeset === 'function') window.typeset(pv);
+  },
+  toggleTask: function (idx) {
+    const ed = this.editor(); if (!ed) return;
+    let fence = false, n = -1;
+    const lines = ed.value.split('\n').map(function (ln) {
+      if (/^\s*(~~~|```)/.test(ln)) { fence = !fence; return ln; }
+      if (fence) return ln;
+      const m = /^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\]\s.*)$/.exec(ln);
+      if (m && ++n === idx) return m[1] + (m[2] === ' ' ? 'x' : ' ') + m[3];
+      return ln;
+    });
+    ed.value = lines.join('\n'); this.onInput();
+  },
+  follow: function (title) {
+    const n = this.findByTitle(title);
+    if (n) this.openNote(n.id); else this.newNote(title);
+  },
+
+  /* ------------------------------ editing helpers ------------------------------ */
+  put: function (start, end, text, a, b) {
+    const ed = this.editor(); if (!ed) return;
+    ed.focus(); ed.setSelectionRange(start, end);
+    let ok = false;
+    try { ok = text === '' ? (start === end ? true : document.execCommand('delete')) : document.execCommand('insertText', false, text); } catch (e) {}   // execCommand keeps native undo working
+    if (!ok) { ed.setRangeText(text, start, end, 'end'); this.onInput(); }
+    const pa = a != null ? a : text.length;                                  // always land the caret deliberately
+    ed.setSelectionRange(start + pa, start + (b != null ? b : pa));
+    this.contextMenu();                                                      // e.g. re-open the [[ link menu after auto-closing
+  },
+  wrap: function (mark, placeholder) {
+    const ed = this.editor(), s = ed.selectionStart, e = ed.selectionEnd, v = ed.value, m = mark.length, sel = v.slice(s, e);
+    if (s >= m && v.slice(s - m, s) === mark && v.slice(e, e + m) === mark) { this.put(s - m, e + m, sel, 0, sel.length); return; }
+    const body = sel || placeholder || '';
+    this.put(s, e, mark + body + mark, m, m + body.length);
+  },
+  linkSel: function () {
+    const ed = this.editor(), s = ed.selectionStart, e = ed.selectionEnd, sel = ed.value.slice(s, e) || 'text';
+    this.put(s, e, '[' + sel + '](url)', sel.length + 3, sel.length + 6);
+  },
+  lineInfo: function () {
+    const ed = this.editor(), p = ed.selectionStart, v = ed.value;
+    const ls = p > 0 ? v.lastIndexOf('\n', p - 1) + 1 : 0;
+    let le = v.indexOf('\n', p); if (le < 0) le = v.length;
+    return { p: p, ls: ls, le: le, before: v.slice(ls, p), line: v.slice(ls, le) };
+  },
+  onKey: function (e) {
+    if (e.isComposing) return;
+    if (this.menu.open && this.menuKey(e)) return;
+    const mod = e.ctrlKey || e.metaKey, k = e.key;
+    if (mod && !e.altKey) {
+      const lk = k.toLowerCase();
+      if (lk === 'b') { e.preventDefault(); this.wrap('**', 'bold'); return; }
+      if (lk === 'i') { e.preventDefault(); this.wrap('*', 'italic'); return; }
+      if (lk === 'k') { e.preventDefault(); this.linkSel(); return; }
+    }
+    const ed = this.editor();
+    if (k === 'Tab' && !mod && ed.selectionStart === ed.selectionEnd) {         // only inside lists, so Tab never traps keyboard users
+      const li = this.lineInfo();
+      if (/^\s*([-*+]|\d+\.)\s/.test(li.line)) {
+        e.preventDefault();
+        if (e.shiftKey) { const m = /^( {1,2}|\t)/.exec(li.line); if (m) { this.put(li.ls, li.ls + m[0].length, ''); ed.setSelectionRange(Math.max(li.ls, li.p - m[0].length), Math.max(li.ls, li.p - m[0].length)); } }
+        else { this.put(li.ls, li.ls, '  '); ed.setSelectionRange(li.p + 2, li.p + 2); }
+        return;
       }
-      AuthManager.ensureAuth('Group rooms and live sync need an operator link.');
+    }
+    if (k === 'Enter' && !e.shiftKey && !mod && !e.altKey && ed.selectionStart === ed.selectionEnd) {
+      const li = this.lineInfo();
+      const m = /^(\s*)((?:[-*+]|\d+\.)\s\[[ xX]\]\s|[-*+]\s|\d+\.\s|>\s)(.*)$/.exec(li.line);
+      if (m && li.before.length >= m[1].length + m[2].length) {
+        e.preventDefault();
+        if (!m[3].trim() && !ed.value.slice(li.p, li.le).trim()) {               // empty item: outdent, then clear
+          if (m[1].length >= 2) this.put(li.ls, li.le, m[1].slice(2) + m[2]); else this.put(li.ls, li.le, '');
+          return;
+        }
+        let mark = m[2];
+        if (/^\d+\./.test(mark)) mark = (parseInt(mark, 10) + 1) + '. ';
+        else if (/\[[ xX]\]/.test(mark)) mark = mark.replace(/\[[ xX]\]/, '[ ]');
+        this.put(li.p, li.p, '\n' + m[1] + mark);
+      }
     }
   },
 
-  joinRoom: function (create) {
-    const inp = q('#nbRoomInput');
-    const code = String(inp.value || '').replace(/\D/g, '');
-    if (!/^\d{4}$/.test(code)) { say('<b>ROOM CODE</b><br>Enter exactly 4 digits (e.g. 4091).', 'doc', 3000); blip('bad'); return; }
-    if (!fbOK()) { say('<b>OFFLINE</b><br>Configure FIREBASE_CONFIG to open group rooms.', 'doc', 3000); blip('bad'); return; }
-    AuthManager.ensureAuth('Group rooms need an operator link.');
-    this.attachRoom(code, create);
+  /* ------------------------------ pop-up menu: "/", "[[", ⋯, backlinks ------------------------------ */
+  menuShow: function (items, at) {
+    const ul = q('#nbMenu'); if (!ul) return;
+    this.menu = { open: items.length > 0, items: items, sel: 0 };
+    ul.hidden = !this.menu.open;
+    if (!this.menu.open) return;
+    this.fill(ul, items, 0);
+    ul.style.left = Math.max(8, Math.min(at.x, window.innerWidth - 270)) + 'px';
+    const h = ul.offsetHeight || 240;
+    ul.style.top = (at.y + h > window.innerHeight - 8 ? Math.max(8, (at.up != null ? at.up : at.y) - h) : at.y) + 'px';
+  },
+  menuHide: function () { const ul = q('#nbMenu'); if (ul) ul.hidden = true; this.menu.open = false; },
+  fill: function (ul, items, sel) {
+    ul.innerHTML = items.map(function (it, i) {
+      return '<li role="option" data-i="' + i + '"' + (i === sel ? ' class="on"' : '') + '><span data-sprite="' + (it.icon || 'doc') + '" data-px="15"></span><span class="l">' + esc(it.label) + '</span>' + (it.hint ? '<kbd>' + esc(it.hint) + '</kbd>' : '') + '</li>';
+    }).join('');
+    paint(ul);
+  },
+  mark: function (ul, sel) {
+    qa('li', ul).forEach(function (li, i) { li.classList.toggle('on', i === sel); if (i === sel && li.scrollIntoView) li.scrollIntoView({ block: 'nearest' }); });
+  },
+  menuKey: function (e) {
+    const m = this.menu, k = e.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); m.sel = (m.sel + (k === 'ArrowDown' ? 1 : m.items.length - 1)) % m.items.length; this.mark(q('#nbMenu'), m.sel); return true; }
+    if (k === 'Enter' || k === 'Tab') { e.preventDefault(); this.menuPick(m.sel); return true; }
+    if (k === 'Escape') { e.preventDefault(); this.menuHide(); return true; }
+    return false;
+  },
+  menuPick: function (i) { const it = this.menu.items[i]; this.menuHide(); if (it && it.run) it.run(); },
+  caretXY: function (ed) {
+    const m = this._mirror || (this._mirror = document.createElement('div'));
+    const cs = getComputedStyle(ed);
+    ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'tabSize', 'wordSpacing'].forEach(function (p) { m.style[p] = cs[p]; });
+    Object.assign(m.style, { position: 'fixed', visibility: 'hidden', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', top: '0', left: '-9999px', boxSizing: 'border-box', width: ed.clientWidth + 'px' });
+    m.textContent = ed.value.slice(0, ed.selectionStart);
+    const sp = document.createElement('span'); sp.textContent = '\u200b'; m.appendChild(sp);
+    document.body.appendChild(m);
+    const lh = parseFloat(cs.lineHeight) || 26, r = ed.getBoundingClientRect();
+    const out = { x: r.left + sp.offsetLeft - ed.scrollLeft, y: r.top + sp.offsetTop - ed.scrollTop + lh, up: r.top + sp.offsetTop - ed.scrollTop };
+    m.remove(); return out;
+  },
+  contextMenu: function () {
+    const ed = this.editor();
+    if (!ed || this.view === 'read' || ed.selectionStart !== ed.selectionEnd) { this.menuHide(); return; }
+    const li = this.lineInfo(), p = li.p;
+    let m = /\[\[([^\]\n]*)$/.exec(li.before);
+    if (m) { this.linkMenu(m[1], p - m[1].length - 2, p); return; }
+    m = /(?:^|\s)\/([a-z0-9 ]{0,16})$/i.exec(li.before);
+    if (m) { this.slashMenu(m[1].toLowerCase(), p - m[1].length - 1, p); return; }
+    this.menuHide();
+  },
+  slashMenu: function (qy, start, end) {
+    const s = this, items = NB_SLASH.filter(function (it) { return !qy || (it.label + ' ' + it.w).toLowerCase().indexOf(qy) >= 0; }).map(function (it) {
+      return { label: it.label, hint: it.hint, icon: it.icon, run: function () { s.slashRun(it, start, end); } };
+    });
+    this.menuShow(items.slice(0, 9), this.caretXY(this.editor()));
+  },
+  slashRun: function (it, start, end) {
+    if (it.special === 'cite') {
+      const v = this.editor().value; let n = 1;
+      (v.match(/\[\^(\d+)\]/g) || []).forEach(function (x) { const k = parseInt(x.replace(/\D/g, ''), 10); if (k >= n) n = k + 1; });
+      const tag = '[^' + n + ']';
+      this.put(start, end, tag);
+      const ed = this.editor(), len = ed.value.length, def = '\n\n' + tag + ': Source — author, "title", publication, year, page.';
+      this.put(len, len, def);
+      return;
+    }
+    this.put(start, end, it.ins, it.caret != null ? it.caret : it.ins.length);
+  },
+  linkMenu: function (qy, start, end) {
+    const s = this, ed = this.editor(), f = qy.trim().toLowerCase(), cur = this.cur();
+    const items = this.vault.notes.filter(function (n) { return (!cur || n.id !== cur.id || s.doc === 'room') && (!f || n.title.toLowerCase().indexOf(f) >= 0); })
+      .sort(function (a, b) { return b.ts - a.ts; }).slice(0, 7)
+      .map(function (n) { return { label: n.title, icon: 'doc', run: function () { s.linkRun(start, end, n.title); } }; });
+    if (f && !this.findByTitle(qy.trim())) items.push({ label: 'Create “' + qy.trim() + '”', icon: 'plus', run: function () { s.linkRun(start, end, qy.trim()); } });
+    this.menuShow(items, this.caretXY(ed));
+  },
+  linkRun: function (start, end, title) {
+    const v = this.editor().value, close = v.slice(end, end + 2) === ']]' ? 2 : 0;
+    const t = '[[' + title + ']]';
+    this.put(start, end + close, t, t.length);
+  },
+  backlinkMenu: function () {
+    const s = this, b = q('#nbBack'), r = b.getBoundingClientRect();
+    this.menuShow(this.backlinks().map(function (n) { return { label: n.title, icon: 'link', run: function () { s.openNote(n.id); } }; }), { x: r.left, y: r.top - 4, up: r.top - 4 });
+  },
+  commands: function () {
+    const s = this, inRoom = this.doc === 'room', c = [];
+    c.push({ label: 'New note', hint: 'Alt+N', icon: 'plus', run: function () { s.newNote(); } });
+    c.push({ label: this.view === 'read' ? 'Back to editing' : 'Reading view', hint: 'Ctrl+E', icon: 'book', run: function () { s.toggleRead(); } });
+    c.push({ label: 'Split view', icon: 'columns', run: function () { s.setView('split'); } });
+    c.push({ label: 'Show / hide notes list', icon: 'sidebar', run: function () { s.toggleSide(); } });
+    c.push({ label: 'Export as Markdown', icon: 'doc', run: function () { s.exportMd(); } });
+    c.push({ label: 'Copy formatted (Docs / Word)', icon: 'print', run: function () { s.copyFormatted(); } });
+    if (inRoom) c.push({ label: 'Save a copy to my notes', icon: 'bag', run: function () { const n = s.saveRoomCopy(s.room, s.roomMd); if (n) { s.openNote(n.id); say('<b>COPY SAVED</b><br>“' + esc(n.title) + '” is in your notes.', 'doc', 2800); } } });
+    else c.push({ label: 'Delete this note', icon: 'trash', run: function () { s.setSide(true); s.armDelete(s.vault.active); } });
+    if (this.room) c.push({ label: 'Leave room ' + this.room, icon: 'cross', run: function () { s.leaveRoom(); } });
+    else c.push({ label: 'Join a shared room…', icon: 'users', run: function () { s.setSide(true); const i = q('#nbRoomInput'); if (i) i.focus(); } });
+    return c;
+  },
+  moreMenu: function () {
+    const b = q('#nbMore'), r = b.getBoundingClientRect(), keep = { 'Export as Markdown': 1, 'Copy formatted (Docs / Word)': 1, 'Delete this note': 1, 'Save a copy to my notes': 1, 'Leave room': 1 };
+    const items = this.commands().filter(function (c) { return keep[c.label] || /^Leave room/.test(c.label); });
+    this.menuShow(items, { x: r.right - 250, y: r.bottom + 6, up: r.top - 4 });
   },
 
-  attachRoom: function (code, create) {
+  /* ------------------------------ palette (Ctrl/Cmd+P) ------------------------------ */
+  palOpen: function (prefill) {
+    const pal = q('#nbPal'), inp = q('#nbPalIn'); if (!pal) return;
+    this.menuHide(); pal.hidden = false; inp.value = prefill || ''; this.palRefresh(); inp.focus();
+  },
+  palClose: function () { const p = q('#nbPal'); if (p && !p.hidden) { p.hidden = true; const ed = this.editor(); if (ed && this.view !== 'read') ed.focus(); } },
+  palRefresh: function () {
+    const s = this, raw = q('#nbPalIn').value.trim(), f = raw.toLowerCase();
+    const hit = function (t) {
+      if (!f) return true; t = t.toLowerCase();
+      if (t.indexOf(f) >= 0) return true;
+      let i = 0; for (let k = 0; k < t.length && i < f.length; k++) if (t[k] === f[i]) i++;
+      return i === f.length;
+    };
+    const items = [];
+    if (this.room && hit('room ' + this.room)) items.push({ label: 'Room ' + this.room, icon: 'users', run: function () { s.showRoom(); } });
+    this.vault.notes.slice().sort(function (a, b) { return b.ts - a.ts; }).forEach(function (n) {
+      if (hit(n.title)) items.push({ label: n.title || 'Untitled', icon: 'doc', run: function () { s.openNote(n.id); } });
+    });
+    this.commands().forEach(function (c) { if (hit(c.label)) items.push(c); });
+    if (raw && !this.findByTitle(raw)) items.push({ label: 'Create “' + raw + '”', icon: 'plus', run: function () { s.newNote(raw); } });
+    this.pal = { items: items.slice(0, 14), sel: 0 };
+    this.fill(q('#nbPalList'), this.pal.items, 0);
+  },
+  palPick: function (i) { const it = this.pal.items[i]; this.palClose(); if (it && it.run) it.run(); },
+
+  /* ------------------------------ sidebar ------------------------------ */
+  renderList: function () {
+    const ul = q('#nbList'); if (!ul) return;
+    const s = this, f = this.filter.trim().toLowerCase();
+    const notes = this.vault.notes.slice().sort(function (a, b) { return a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1; })
+      .filter(function (n) { return !f || n.title.toLowerCase().indexOf(f) >= 0 || n.md.toLowerCase().indexOf(f) >= 0; });
+    let html = '';
+    if (this.room) html += '<li class="room' + (this.doc === 'room' ? ' on' : '') + '" data-room="1" role="option"><span data-sprite="users" data-px="15"></span><span class="t">Room ' + esc(this.room) + '</span><i class="nbx-live" title="Live"></i></li>';
+    html += notes.map(function (n) {
+      const on = s.doc === 'note' && n.id === s.vault.active, arm = s.armed === n.id;
+      return '<li' + (on ? ' class="on"' : '') + ' data-id="' + esc(n.id) + '" role="option"><span data-sprite="doc" data-px="15"></span><span class="t">' + esc(n.title || 'Untitled') + '</span>' +
+        '<button class="del' + (arm ? ' armed' : '') + '" data-del="' + esc(n.id) + '" aria-label="Delete note ' + esc(n.title) + '">' + (arm ? 'Delete?' : '×') + '</button></li>';
+    }).join('');
+    if (!notes.length && f) html += '<li class="empty">No matching notes</li>';
+    ul.innerHTML = html; paint(ul);
+  },
+
+  /* ------------------------------ wiring ------------------------------ */
+  bind: function () {
+    const s = this, ed = this.editor(), $ = q;
+    ed.addEventListener('input', function (e) { s.onInput(e); });
+    ed.addEventListener('keydown', function (e) { s.onKey(e); });
+    ed.addEventListener('click', function () { s.contextMenu(); });
+    ed.addEventListener('blur', function () { setTimeout(function () { if (!s.menu.open) return; s.menuHide(); }, 160); });
+    ed.addEventListener('scroll', function () { if (s.menu.open) s.menuHide(); });
+    const ti = $('#nbTitle');
+    ti.addEventListener('input', function () { if (s.doc !== 'note') return; clearTimeout(s.renameT); s.renameT = setTimeout(function () { s.rename(ti.value); }, 350); });
+    ti.addEventListener('change', function () { if (s.doc !== 'note') return; s.rename(ti.value); const n = s.cur(); if (n) ti.value = n.title; });
+    ti.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ti.blur(); if (s.view !== 'read') ed.focus(); } });
+    $('#nbNew').addEventListener('click', function () { s.newNote(); blip('click'); });
+    $('#nbSideBtn').addEventListener('click', function () { s.toggleSide(); });
+    $('#nbScrim').addEventListener('click', function () { s.setSide(false); });
+    $('#nbPalBtn').addEventListener('click', function () { s.palOpen(); });
+    $('#nbMore').addEventListener('click', function (e) { e.stopPropagation(); if (s.menu.open) s.menuHide(); else s.moreMenu(); });
+    $('#nbBack').addEventListener('click', function (e) { e.stopPropagation(); if (s.menu.open) s.menuHide(); else s.backlinkMenu(); });
+    qa('[data-nbview]').forEach(function (b) { b.addEventListener('click', function () { s.setView(b.dataset.nbview); blip('click'); }); });
+    $('#nbFilter').addEventListener('input', function () { s.filter = this.value; s.renderList(); });
+    $('#nbList').addEventListener('click', function (e) {
+      const d = e.target.closest('[data-del]');
+      if (d) { e.stopPropagation(); if (s.armed === d.dataset.del) s.deleteNote(d.dataset.del); else s.armDelete(d.dataset.del); return; }
+      const li = e.target.closest('li'); if (!li) return;
+      if (li.dataset.room) s.showRoom(); else if (li.dataset.id) s.openNote(li.dataset.id);
+    });
+    $('#nbPreview').addEventListener('click', function (e) {
+      const a = e.target.closest && e.target.closest('a.wl'); if (a) { e.preventDefault(); s.follow(a.dataset.wl); return; }
+      const t = e.target; if (t.tagName === 'INPUT' && t.type === 'checkbox' && t.dataset.ti != null) s.toggleTask(+t.dataset.ti);
+    });
+    /* menu + palette pointer handling (mousedown keeps editor focus) */
+    $('#nbMenu').addEventListener('mousedown', function (e) { e.preventDefault(); const li = e.target.closest('li[data-i]'); if (li) s.menuPick(+li.dataset.i); });
+    $('#nbPalList').addEventListener('mousedown', function (e) { e.preventDefault(); const li = e.target.closest('li[data-i]'); if (li) s.palPick(+li.dataset.i); });
+    $('#nbPal').addEventListener('mousedown', function (e) { if (e.target === this) s.palClose(); });
+    const pi = $('#nbPalIn');
+    pi.addEventListener('input', function () { s.palRefresh(); });
+    pi.addEventListener('keydown', function (e) {
+      const p = s.pal, k = e.key;
+      if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); if (p.items.length) { p.sel = (p.sel + (k === 'ArrowDown' ? 1 : p.items.length - 1)) % p.items.length; s.mark($('#nbPalList'), p.sel); } }
+      else if (k === 'Enter') { e.preventDefault(); s.palPick(p.sel); }
+      else if (k === 'Escape') { e.preventDefault(); s.palClose(); }
+    });
+    document.addEventListener('mousedown', function (e) { if (s.menu.open && !e.target.closest('#nbMenu') && e.target.id !== 'nbMore' && e.target.id !== 'nbBack') s.menuHide(); });
+    /* rooms */
+    $('#nbJoinBtn').addEventListener('click', function () { s.joinRoom(false); });
+    $('#nbCreateBtn').addEventListener('click', function () { s.joinRoom(true); });
+    $('#nbLeaveBtn').addEventListener('click', function () { s.leaveRoom(); });
+    const ri = $('#nbRoomInput');
+    ri.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); s.joinRoom(false); } });
+    ri.addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); });
+    /* global shortcuts, only while the notebook screen is showing */
+    document.addEventListener('keydown', function (e) {
+      if (!s.active) return;
+      const mod = e.ctrlKey || e.metaKey, k = (e.key || '').toLowerCase();
+      if (mod && !e.altKey && !e.shiftKey && k === 'p') { e.preventDefault(); s.palOpen(); }
+      else if (mod && !e.altKey && !e.shiftKey && k === 'e') { e.preventDefault(); s.toggleRead(); }
+      else if (e.altKey && !mod && k === 'n') { e.preventDefault(); s.newNote(); }
+    }, true);
+    if (window.matchMedia) {                                   // notes list follows the breakpoint (open on desktop, drawer on phones)
+      const mq = window.matchMedia('(max-width: 900px)'), h = function (e) { s.setSide(!e.matches); };
+      if (mq.addEventListener) mq.addEventListener('change', h); else if (mq.addListener) mq.addListener(h);
+    }
+  },
+
+  /* ------------------------------ shared rooms ------------------------------ */
+  renderRoom: function () {
+    const idle = q('#nbRoomIdle'), live = q('#nbRoomLive'); if (!idle || !live) return;
+    idle.hidden = !!this.room; live.hidden = !this.room;
+    if (!this.room) { const c = q('#nbCollab'); if (c) c.textContent = ''; }
+  },
+  joinRoom: function (create) {
+    const code = String(q('#nbRoomInput').value || '').replace(/\D/g, '');
+    if (!/^\d{4}$/.test(code)) { say('<b>ROOM CODE</b><br>Enter exactly 4 digits (e.g. 4091).', 'doc', 3000); blip('bad'); return; }
+    if (!fbOK()) { say('<b>OFFLINE</b><br>Configure FIREBASE_CONFIG to open shared rooms.', 'doc', 3000); blip('bad'); return; }
+    AuthManager.ensureAuth('Shared rooms need an operator link.');
+    this.attachRoom(code, create, false);
+  },
+  attachRoom: function (code, create, silent) {
     const self = this;
-    if (!AuthManager.user) { say('Awaiting operator link — try again in a second.', 'power', 2600); return; }
+    if (!fbOK()) { if (!silent) say('<b>OFFLINE</b><br>Configure FIREBASE_CONFIG to open shared rooms.', 'doc', 3000); return; }
+    if (!AuthManager.user) {
+      if (silent) { this.pendingRoom = code; return; }          // resume quietly once auth resolves (no toast on page load)
+      say('Awaiting operator link — try again in a second.', 'power', 2600); return;
+    }
+    if (this.room === code && this.roomUnsub) { this.showRoom(); return; }
     const ref = DB.collection('group_notes').doc(code);
+    const n = this.cur(), seed = (this.doc === 'note' && n) ? n.md : '';
     ref.get().then(function (doc) {
       if (!doc.exists && !create) {
-        say('<b>ROOM ' + esc(code) + ' NOT FOUND</b><br>Double-check the code, or hit CREATE to spawn it.', 'doc', 3400);
-        blip('bad');
+        if (silent) { try { localStorage.removeItem(LS.nbroom); } catch (e) {} }
+        else { say('<b>ROOM ' + esc(code) + ' NOT FOUND</b><br>Double-check the code, or hit New to create it from the open note.', 'doc', 3400); blip('bad'); }
         return;
       }
-      if (!doc.exists && create) {
+      let md = seed;
+      if (!doc.exists) {
         guardedWrite('create-room', function () {
-          return ref.set({
-            code: code, md: self.editor() ? self.editor().value : '',
-            updatedBy: AuthManager.uid, updatedName: AuthManager.name || 'OPERATOR',
-            coll: {}, ts: Date.now(), created: Date.now()
-          });
+          return ref.set({ code: code, md: seed, updatedBy: AuthManager.uid, updatedName: AuthManager.name || 'OPERATOR', coll: {}, ts: Date.now(), created: Date.now() });
         });
-        say('<b>ROOM ' + esc(code) + ' CREATED</b><br>Share the code — crew edits sync live.', 'coin', 3600);
+        if (!silent) say('<b>ROOM ' + esc(code) + ' CREATED</b><br>Seeded from your open note — share the code.', 'coin', 3600);
       } else {
-        say('<b>LINKED TO ROOM ' + esc(code) + '</b><br>Live essay channel bound to #essay-group.', 'coin', 3200);
-      }
-      blip('ok');
-      self.room = code;
-      try { localStorage.setItem(LS.nbroom, code); } catch (e) {}
-      self.mode = 'group';
-      q('#nbScratchBtn').classList.remove('on'); q('#nbGroupBtn').classList.add('on');
-      q('#nbScratchBtn').setAttribute('aria-pressed', 'false'); q('#nbGroupBtn').setAttribute('aria-pressed', 'true');
-      q('#nbRoomRow').hidden = false;
-      q('#nbModeChip').textContent = 'ROOM ' + code;
-      /* adopt remote content when entering */
-      if (doc.exists) {
         const d = doc.data() || {};
-        const ed = self.editor();
-        if (ed && typeof d.md === 'string' && !self.dirtyLocal) {
-          ed.value = d.md; self.updateMetrics(); self.renderPreview();
-        }
+        md = typeof d.md === 'string' ? d.md : '';
         self.renderCollab(d.coll || {});
+        if (!silent) say('<b>LINKED TO ROOM ' + esc(code) + '</b><br>Live essay channel bound to #essay-group.', 'coin', 3200);
       }
-      self.setSync('saved');
-      NoteSync.dirty = false;
+      if (!silent) blip('ok');
       self.detachRoom(true);
+      self.room = code; self.roomMd = md; self.dirtyLocal = false; NoteSync.dirty = false;
+      try { localStorage.setItem(LS.nbroom, code); } catch (e) {}
       self.roomUnsub = ref.onSnapshot(function (snap) { self.onRoomSnap(snap); }, function () {});
       ChatEngine.onRoomChanged(code);
-    }).catch(function () {
-      say('<b>ROOM LINK FAILED</b><br>Orbit relay unreachable — try again.', 'doc', 3000);
-    });
+      if (!silent) self.showRoom(); else { self.renderRoom(); self.renderList(); }
+    }).catch(function () { say('<b>ROOM LINK FAILED</b><br>Relay unreachable — try again.', 'doc', 3000); });
   },
-
   detachRoom: function (keepRoomVar) {
     if (this.roomUnsub) { try { this.roomUnsub(); } catch (e) {} this.roomUnsub = null; }
     if (!keepRoomVar) {
       this.room = null;
       try { localStorage.removeItem(LS.nbroom); } catch (e) {}
-      q('#nbModeChip').textContent = 'GROUP';
       ChatEngine.onRoomChanged(null);
     }
   },
-
+  saveRoomCopy: function (code, md) {
+    if (!md || !md.trim()) return null;
+    const title = 'Room ' + code;
+    let n = this.findByTitle(title);
+    if (n) { n.md = md; n.ts = Date.now(); } else { n = this.mk(title, md); this.vault.notes.push(n); }
+    this.persist(); return n;
+  },
   leaveRoom: function () {
-    NoteSync.stop();
-    this.dirtyLocal = false;
+    const code = this.room; if (!code) return;
+    NoteSync.stop();                                   // flush pending edits while still attached
+    const md = this.roomMd, wasOpen = this.doc === 'room';
     this.detachRoom(false);
-    this.setSync('local');
-    q('#nbCollab').innerHTML = 'Left the group room. The buffer below stays yours — switch back to <b>SCRATCHPAD</b> mode to store it locally.';
+    this.dirtyLocal = false; this.roomMd = '';
+    const copy = this.saveRoomCopy(code, md);
+    if (wasOpen) { this.doc = 'note'; if (copy) this.vault.active = copy.id; }
+    this.persist(); this.showDoc();
+    say('<b>LEFT ROOM ' + esc(code) + '</b><br>' + (copy ? 'A copy is saved as “' + esc(copy.title) + '”.' : 'Nothing to keep.'), 'doc', 3200);
     blip('flip');
   },
-
   onRoomSnap: function (snap) {
-    if (!snap.exists) { /* room deleted upstream */ return; }
+    if (!snap.exists) return;
     const d = snap.data() || {};
     this.renderCollab(d.coll || {});
-    const remoteMd = typeof d.md === 'string' ? d.md : '';
-    if (d.updatedBy === AuthManager.uid) return;               // our own echo
-    const ed = this.editor();
-    if (!ed) return;
-    if (this.dirtyLocal) {
-      /* local unsynced edits win until the next flush — surface the merge note */
+    if (d.updatedBy === AuthManager.uid) return;                       // our own echo
+    const remote = typeof d.md === 'string' ? d.md : '';
+    if (NoteSync.dirty || this.dirtyLocal) {                            // our unsent edits win until the next flush
       const now = Date.now();
-      if (now - this.remoteNoticeT > 20000) {
-        this.remoteNoticeT = now;
-        say('<b>REMOTE EDIT DETECTED</b><br>' + esc(d.updatedName || 'A collaborator') + ' pushed changes — your pending edits flush in a moment.', 'doc', 3400);
-      }
+      if (now - this.remoteNoticeT > 20000) { this.remoteNoticeT = now; say('<b>REMOTE EDIT DETECTED</b><br>' + esc(d.updatedName || 'A collaborator') + ' pushed changes — your pending edits flush in a moment.', 'doc', 3400); }
       return;
     }
-    if (ed.value !== remoteMd) {
-      ed.value = remoteMd;
-      this.updateMetrics(); this.renderPreview();
+    if (remote === this.roomMd) return;
+    this.roomMd = remote;
+    if (this.doc === 'room') {
+      const ed = this.editor(), p = Math.min(ed.selectionStart, remote.length);
+      ed.value = remote; ed.setSelectionRange(p, p);                   // keep the caret where it was
+      this.metrics(); this.previewSoon();
     }
   },
-
   renderCollab: function (coll) {
     const now = Date.now(), names = [];
     Object.keys(coll || {}).forEach(function (uid) {
@@ -705,195 +1117,49 @@ const NotebookManager = {
       if (c && c.n && (now - (c.ts || 0)) < NotebookManager.COLLAB_FRESH_MS) names.push(c.n);
     });
     if (AuthManager.name && names.indexOf(AuthManager.name) < 0) names.push(AuthManager.name);
-    q('#nbCollab').innerHTML = 'GROUP ROOM <b>' + esc(this.room || '----') + '</b> · Collaborators: <b>[' +
-      (names.length ? names.slice(0, 8).map(esc).join(', ') : '—you—') + ']</b>' +
-      (names.length > 8 ? ' +' + (names.length - 8) : '') +
-      '<br>Sync contract: 3-second typing pause or 20-second interval — keystrokes never burn the write quota.';
+    const el = q('#nbCollab');
+    if (el) el.textContent = names.length + ' editing · ' + names.slice(0, 3).join(', ') + (names.length > 3 ? ' +' + (names.length - 3) : '');
   },
-
-  onInput: function () {
-    const ed = this.editor();
-    if (!ed) return;
-    if (this.mode === 'group' && this.room && fbOK()) {
-      NoteSync.tap();                       // QuotaGuard debounce path
-    } else {
-      this.setSync('local');
-      this.saveScratchDebounced();
-    }
-    this.updateMetrics();
-    this.schedulePreview();
-  },
-
-  saveScratchDebounced: function () {
-    const self = this;
-    clearTimeout(this.scratchT);
-    this.scratchT = setTimeout(function () { self.saveScratch(); }, 500);
-  },
-  saveScratch: function () {
-    const ed = this.editor();
-    if (!ed) return;
-    try { localStorage.setItem(LS.nb, ed.value); } catch (e) {}
-  },
-
   flushRoom: function () {
     const self = this;
-    if (this.mode !== 'group' || !this.room || !fbOK() || !AuthManager.uid) { this.setSync(this.mode === 'group' && this.room ? 'buffering' : 'local'); return; }
-    const ed = this.editor();
-    const md = ed ? ed.value : '';
+    if (!this.room || !fbOK() || !AuthManager.uid) { this.setSync(this.room ? 'buffering' : 'local'); return; }
+    const md = this.roomMd, uid = AuthManager.uid, name = AuthManager.name || 'OPERATOR';
     this.setSync('syncing');
-    const uid = AuthManager.uid, name = AuthManager.name || 'OPERATOR';
     guardedWrite('note-sync', function () {
-      const coll = {};
-      coll[uid] = { n: name, ts: Date.now() };
-      return DB.collection('group_notes').doc(self.room).set({
-        code: self.room, md: md, updatedBy: uid, updatedName: name,
-        coll: coll, ts: Date.now()
-      }, { merge: true });
-    }).then(function (ok) { self.setSync(ok ? 'saved' : 'buffering'); });
+      const coll = {}; coll[uid] = { n: name, ts: Date.now() };
+      return DB.collection('group_notes').doc(self.room).set({ code: self.room, md: md, updatedBy: uid, updatedName: name, coll: coll, ts: Date.now() }, { merge: true });
+    }).then(function (ok) {
+      if (ok) self.dirtyLocal = (self.roomMd !== md);
+      self.setSync(ok ? (self.dirtyLocal ? 'buffering' : 'saved') : 'buffering');
+    });
+  },
+  identityChanged: function () {
+    if (this.pendingRoom && AuthManager.user && fbOK()) { const c = this.pendingRoom; this.pendingRoom = null; this.attachRoom(c, false, true); }
+    this.renderRoom();
   },
 
-  setSync: function (state) {
-    const wrap = q('#nbSync'), dot = q('#nbSyncDot'), tx = q('#nbSyncTx');
-    if (!wrap || !dot || !tx) return;
-    wrap.classList.remove('saved', 'buffering', 'syncing', 'offline');
-    if (state === 'saved') { wrap.classList.add('saved'); tx.textContent = '● SAVED TO CLOUD'; }
-    else if (state === 'buffering') { wrap.classList.add('buffering'); tx.textContent = '○ BUFFERING EDITS…'; }
-    else if (state === 'syncing') { wrap.classList.add('syncing'); tx.textContent = '⚡ SYNCING'; }
-    else if (state === 'offline') { wrap.classList.add('offline'); tx.textContent = '○ OFFLINE'; }
-    else { tx.textContent = '● LOCAL'; }
-  },
-
-  /* ---- toolbar ---- */
-  tool: function (what) {
-    const ed = this.editor();
-    if (!ed) return;
-    ed.focus();
-    const s = ed.selectionStart, e = ed.selectionEnd, v = ed.value, sel = v.slice(s, e);
-    const set = function (text, caretStart, caretEnd) {
-      const before = ed.scrollTop;
-      ed.value = text;
-      if (caretStart != null) { ed.selectionStart = caretStart; ed.selectionEnd = caretEnd == null ? caretStart : caretEnd; }
-      ed.scrollTop = before;
-      NotebookManager.onInput();
-    };
-    if (what === 'h1' || what === 'h2' || what === 'h3' || what === 'quote') {
-      const marks = { h1: '# ', h2: '## ', h3: '### ', quote: '> ' };
-      const lineStart = v.lastIndexOf('\n', s - 1) + 1;
-      const prefix = marks[what];
-      const already = v.slice(lineStart, lineStart + prefix.length) === prefix;
-      const next = already
-        ? v.slice(0, lineStart) + v.slice(lineStart + prefix.length)
-        : v.slice(0, lineStart) + prefix + v.slice(lineStart);
-      const delta = already ? -prefix.length : prefix.length;
-      set(next, s + delta, e + delta);
-    } else if (what === 'bold') {
-      const out = v.slice(0, s) + '**' + (sel || 'bold text') + '**' + v.slice(e);
-      set(out, s + 2, s + 2 + (sel || 'bold text').length);
-    } else if (what === 'italic') {
-      const out = v.slice(0, s) + '*' + (sel || 'italic text') + '*' + v.slice(e);
-      set(out, s + 1, s + 1 + (sel || 'italic text').length);
-    } else if (what === 'code') {
-      const body = sel || 'printf("hello, cosmos");';
-      const out = v.slice(0, s) + '\n~~~\n' + body + '\n~~~\n' + v.slice(e);
-      set(out, s + 5, s + 5 + body.length);
-    } else if (what === 'math') {
-      const body = sel || 'E = mc^2';
-      const out = v.slice(0, s) + '$' + body + '$' + v.slice(e);
-      set(out, s + 1, s + 1 + body.length);
-    } else if (what === 'cite') {
-      let n = 1;
-      const used = v.match(/\[\^(\d+)\]/g) || [];
-      used.forEach(function (m) { const k = parseInt(m.replace(/\D/g, ''), 10); if (k >= n) n = k + 1; });
-      const tag = '[^' + n + ']';
-      const tail = '\n\n' + tag + ': Source — author, "title", publication, year, page. ';
-      const out = v.slice(0, e) + tag + v.slice(e) + tail;
-      set(out, e + tag.length, null);
-      const ed2 = this.editor();
-      const cpos = out.length;
-      ed2.selectionStart = ed2.selectionEnd = cpos;
-    } else if (what === 'table') {
-      const pop = q('#nbTablePop');
-      pop.hidden = !pop.hidden;
-    }
-  },
-
-  genTable: function () {
-    const rows = Math.max(2, Math.min(12, parseInt(q('#nbTblRows').value || '3', 10)));
-    const cols = Math.max(2, Math.min(8, parseInt(q('#nbTblCols').value || '3', 10)));
-    const ed = this.editor();
-    if (!ed) return;
-    let out = '\n';
-    const cell = function (r, c) { return (r === 0 ? 'Header ' + (c + 1) : '—'); };
-    for (let r = 0; r < rows; r++) {
-      const cells = [];
-      for (let c = 0; c < cols; c++) cells.push(cell(r, c));
-      out += '| ' + cells.join(' | ') + ' |\n';
-      if (r === 0) out += '|' + ' --- |'.repeat(cols).slice(1) + '\n';
-    }
-    const s = ed.selectionStart;
-    ed.value = ed.value.slice(0, s) + out + '\n' + ed.value.slice(ed.selectionEnd);
-    ed.selectionStart = ed.selectionEnd = s + out.length + 1;
-    q('#nbTablePop').hidden = true;
-    this.onInput();
-    ed.focus();
-  },
-
-  /* ---- metrics + preview ---- */
-  updateMetrics: function () {
-    const ed = this.editor();
-    const text = ed ? ed.value : '';
-    const words = (text.trim().match(/\S+/g) || []).length;
-    const chars = text.length;
-    const mins = words / 200;
-    const pages = words / 500;
-    q('#nbWords').textContent = words + ' WORDS';
-    q('#nbChars').textContent = chars + ' CHARS';
-    q('#nbRead').textContent = '~' + Math.max(words ? 1 : 0, Math.round(mins)) + ' MIN READ';
-    q('#nbPages').textContent = (Math.round(pages * 10) / 10).toFixed(1) + ' PAGES';
-  },
-  schedulePreview: function () {
-    const self = this;
-    clearTimeout(this.previewT);
-    this.previewT = setTimeout(function () { self.renderPreview(); }, 140);
-  },
-  renderPreview: function (force) {
-    const pv = q('#nbPreview'), ed = this.editor();
-    if (!pv || !ed) return;
-    const md = ed.value || '';
-    if (!md.trim()) {
-      pv.innerHTML = '<p class="small">The formatted preview renders here — headings, tables, KaTeX formulas and citations included.</p>';
-      return;
-    }
-    let html;
-    if (typeof window.mdBlock === 'function') html = window.mdBlock(md);
-    else html = '<p>' + esc(md).replace(/\n/g, '<br>') + '</p>';
-    pv.innerHTML = html;
-    if (typeof window.typeset === 'function') window.typeset(pv);
-  },
-
-  /* ---- export & clipboard ---- */
+  /* ------------------------------ export & clipboard ------------------------------ */
   exportMd: function () {
-    const ed = this.editor();
-    if (!ed) return;
-    this.saveScratch();
-    const name = (this.mode === 'group' && this.room ? 'polymath-notebook-room' + this.room : 'polymath-scratchpad') + '-' + dayKey() + '.md';
+    const ed = this.editor(); if (!ed) return;
+    this.persist();
+    const n = this.cur();
+    const base = this.doc === 'room' ? 'room-' + this.room : String((n && n.title) || 'note').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'note';
+    const name = base + '-' + dayKey() + '.md';
     try {
       const blob = new Blob([ed.value], { type: 'text/markdown;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = name;
-      document.body.appendChild(a); a.click(); a.remove();
+      const url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      say('<b>EXPORTED</b><br>' + esc(name) + ' written to your downloads.', 'doc', 3200);
-      blip('ok');
+      say('<b>EXPORTED</b><br>' + esc(name) + ' written to your downloads.', 'doc', 3200); blip('ok');
     } catch (e) { say('Export failed — browser blocked the download.', 'doc', 3000); }
   },
-
   /* KaTeX → styled HTML for the rich clipboard (Google Docs / Word paste) */
   katexHTML: function (tex, display) {
     if (typeof window.katex !== 'undefined') {
       try {
-        return window.katex.renderToString(tex, { throwOnError: false, output: 'htmlAndMathml', displayMode: !!display });
+        /* mdBlock() HTML-escapes TeX; undo that so & < > reach KaTeX intact */
+        const raw = String(tex).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+        return window.katex.renderToString(raw, { throwOnError: false, output: 'htmlAndMathml', displayMode: !!display });
       } catch (e) { /* fall through */ }
     }
     return esc((display ? '$$' + tex + '$$' : '$' + tex + '$'));
@@ -902,7 +1168,7 @@ const NotebookManager = {
     const ed = this.editor();
     const md = ed ? ed.value : '';
     let html;
-    if (typeof window.mdBlock === 'function') html = window.mdBlock(md);
+    if (typeof window.mdBlock === 'function') html = window.mdBlock(NotebookManager.stripLinks(md));
     else html = '<p>' + esc(md).replace(/\n/g, '<br>') + '</p>';
     /* render math segments for targets that never load KaTeX css */
     html = html.replace(/\$\$([\s\S]+?)\$\$/g, (function (m, tx) { return NotebookManager.katexHTML(tx, true); }))
@@ -957,23 +1223,155 @@ const NotebookManager = {
   },
 
   onScreen: function (active) {
-    if (active) {
-      this.updateMetrics();
-      this.renderPreview(true);
-      if (this.mode === 'group' && !this.room) AuthManager.ensureAuth('Group rooms need an operator link.');
-    } else {
-      /* leaving the notebook — persist everything, flush group buffer */
-      this.saveScratch();
-      NoteSync.flush();
+    this.active = !!active;
+    if (active) { this.metrics(); this.renderPreview(); this.renderList(); this.renderRoom(); this.backlinkChip(); }
+    else { this.persist(); NoteSync.flush(); this.menuHide(); this.palClose(); }
+  }
+};
+
+/* ========================= [3b] SUPABASE REALTIME — LOUNGE TRANSPORT =========================
+   The observation lounge used to heartbeat every operator's position into
+   Firestore (a write per operator every ~15 s, plus ghost-purging deletes, all
+   counted against the daily write budget). Supabase Realtime does the same job
+   without a database at all:
+
+     · PRESENCE  — who is on the deck. Joins/leaves are automatic (the socket IS
+                   the heartbeat), so there is nothing to purge. Each operator's
+                   resting position rides along as presence metadata.
+     · BROADCAST — one tiny "walk" message per click-to-walk (a start point and a
+                   target). Peers animate the walk locally, so the wire stays quiet.
+     · The channel is only open while the Lounge screen is showing, and it is
+       dropped 45 s after the tab is hidden.
+
+   Firebase is untouched for accounts, notebook rooms, chat and moderation; it
+   still supplies the operator identity (uid + display name) used here.
+
+   SETUP (no tables, no SQL): create a Supabase project, copy Project URL and the
+   `anon` public key (Project Settings → API) below. Realtime public channels are
+   on by default. Leave both as placeholders and the lounge falls back to the
+   previous Firestore presence automatically.
+
+   TRUST MODEL: the anon key is public by design. Lounge presence is cosmetic —
+   names and positions are self-declared and sanitised on receipt (length, range,
+   prototype-key guards). Never put anything sensitive on this channel. */
+const SUPABASE_CONFIG = {
+  url: 'https://supabase.com/dashboard/project/qxdieorzlnocxbxmgyoj/settings/infrastructure',              // e.g. https://abcdxyz.supabase.co
+  anonKey: 'sb_publishable_rPtDHrr-OQKH9h093HiW5w_KCvs9fIU',     // the public "anon" key
+  channel: 'lounge:deck07'
+};
+const SB_OK = (function () {
+  try {
+    const u = String(SUPABASE_CONFIG.url || ''), k = String(SUPABASE_CONFIG.anonKey || '');
+    return u.indexOf('https://') === 0 && u.indexOf('YOUR_') < 0 && k.length > 20 && k.indexOf('YOUR_') !== 0;
+  } catch (e) { return false; }
+})();
+function clampN(v, lo, hi, d) { v = +v; return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; }
+
+const SupabaseLounge = {
+  client: null, ch: null, uid: null,
+  state: 'idle',                 // idle | joining | live | retry
+  WALK_MIN_MS: 120,              // at most ~8 walk messages / second
+  REST_MS: 1500,                 // settle time before refreshing our resting position
+  lastWalk: 0, walkT: null, restT: null, hiddenT: null, _vw: false,
+
+  available: function () { return SB_OK && typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function'; },
+  label: function () { return this.state === 'live' ? 'REALTIME' : (this.state === 'retry' ? 'RECONNECTING…' : 'CONNECTING…'); },
+
+  ensureClient: function () {
+    if (this.client) return this.client;
+    try {
+      this.client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },   // Firebase owns accounts
+        realtime: { params: { eventsPerSecond: 10 } }
+      });
+    } catch (e) { this.client = null; }
+    return this.client;
+  },
+
+  /* what peers need to draw us when we are standing still */
+  meta: function () {
+    const st = engS(); let lv = 1;
+    if (typeof window.levelOf === 'function' && st) lv = window.levelOf(st.xp || 0) + 1;
+    const me = LoungeEngine.me;
+    return { n: String(AuthManager.name || 'GUEST').slice(0, 14), lv: lv, a: AuthManager.admin ? 1 : 0, x: Math.round(me.cx), y: Math.round(me.cy), ts: Date.now() };
+  },
+
+  connect: function () {
+    const uid = AuthManager.uid;
+    if (!this.available() || !uid) return false;
+    if (this.ch && this.uid === uid) return true;            // already live for this identity
+    this.disconnect();
+    const c = this.ensureClient(); if (!c) return false;
+    const self = this;
+    this.uid = uid; this.state = 'joining';
+    const ch = c.channel(SUPABASE_CONFIG.channel, { config: { presence: { key: uid }, broadcast: { self: false, ack: false } } });
+    ch.on('presence', { event: 'sync' }, function () { self.onSync(); })
+      .on('broadcast', { event: 'walk' }, function (m) { LoungeEngine.applyWalk(m && m.payload); })
+      .subscribe(function (status) {
+        if (self.ch !== ch) return;                         // a newer channel replaced this one
+        if (status === 'SUBSCRIBED') { self.state = 'live'; try { ch.track(self.meta()); } catch (e) {} }
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') self.state = 'retry';
+        else if (status === 'CLOSED') self.state = 'idle';
+        LoungeEngine.onTransport();
+      });
+    this.ch = ch;
+    return true;
+  },
+
+  disconnect: function () {
+    clearTimeout(this.restT); clearTimeout(this.walkT); this.restT = this.walkT = null;
+    const ch = this.ch; this.ch = null; this.uid = null; this.state = 'idle';
+    if (ch && this.client) {
+      try { ch.untrack(); } catch (e) {}
+      try { this.client.removeChannel(ch); } catch (e) {}
     }
+  },
+
+  onSync: function () {
+    if (!this.ch) return;
+    let st = {}; try { st = this.ch.presenceState() || {}; } catch (e) {}
+    LoungeEngine.applyRoster(st);
+  },
+
+  /* one message per click-to-walk; peers interpolate */
+  sendWalk: function () {
+    if (!this.ch || this.state !== 'live') return;
+    const self = this, wait = Math.max(0, this.WALK_MIN_MS - (Date.now() - this.lastWalk));
+    clearTimeout(this.walkT);
+    this.walkT = setTimeout(function () {
+      if (!self.ch || self.state !== 'live') return;
+      const me = LoungeEngine.me; self.lastWalk = Date.now();
+      try { self.ch.send({ type: 'broadcast', event: 'walk', payload: { u: self.uid, fx: Math.round(me.cx), fy: Math.round(me.cy), x: me.x, y: me.y } }); } catch (e) {}
+    }, wait);
+  },
+
+  /* when our walk ends, refresh the resting position newcomers will read */
+  queueRest: function () {
+    if (!this.ch || this.state !== 'live') return;
+    const self = this; clearTimeout(this.restT);
+    this.restT = setTimeout(function () { if (self.ch && self.state === 'live') { try { self.ch.track(self.meta()); } catch (e) {} } }, this.REST_MS);
+  },
+  retrack: function () { if (this.ch && this.state === 'live') { try { this.ch.track(this.meta()); } catch (e) {} } },
+
+  /* drop the socket after 45 s hidden; reconnect on return */
+  watchVisibility: function () {
+    if (this._vw) return; this._vw = true;
+    const self = this;
+    document.addEventListener('visibilitychange', function () {
+      clearTimeout(self.hiddenT);
+      if (document.hidden) {
+        self.hiddenT = setTimeout(function () { if (LoungeEngine.active && self.ch) { self.disconnect(); LoungeEngine.players = {}; LoungeEngine.onTransport(); } }, 45000);
+      } else if (LoungeEngine.active && !self.ch) LoungeEngine.attachListener();
+    });
   }
 };
 
 /* ========================= [4] LOUNGE ENGINE =========================
-   Cozy 2D pixel-art observation deck: parallax starfield, pixel Earth,
-   drifting moon + satellite, riveted floor. Operators render as retro
+   Cozy 2D observation deck beneath the surface: rising marine snow, a
+   drifting whale + jellyfish, light shafts, grated floor. Operators render as retro
    astronaut sprites with nameplates + level chips. Click the deck to
-   walk; presence heartbeats to lobby_presence at most every 15 seconds. */
+   walk. Presence + walks travel over Supabase Realtime when configured
+   (SupabaseLounge); otherwise Firestore lobby_presence at most every 15 s. */
 const LoungeEngine = {
   W: 480, H: 300, FLOOR_Y: 185, MIN_X: 16, MAX_X: 464, MIN_Y: 205, MAX_Y: 282,
   cv: null, ctx: null, buf: null, bufCtx: null,
@@ -1011,7 +1409,9 @@ const LoungeEngine = {
   },
 
   attachListener: function () {
-    if (!fbOK() || !AuthManager.user || this.presUnsub) return;
+    if (!AuthManager.user) return;
+    if (SupabaseLounge.available()) { SupabaseLounge.watchVisibility(); SupabaseLounge.connect(); return; }   // Realtime transport
+    if (!fbOK() || this.presUnsub) return;
     const self = this;
     try {
       this.presUnsub = DB.collection('lobby_presence').onSnapshot(function (snap) {
@@ -1036,6 +1436,7 @@ const LoungeEngine = {
     clearInterval(this.beatT); this.beatT = null;
     if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
     this.clearPresence();
+    if (SupabaseLounge.available()) { this.players = {}; this.renderRoster(); }
   },
 
   detachAll: function () {
@@ -1050,6 +1451,7 @@ const LoungeEngine = {
       this.renderRoster();
       this.updateWhoami();
     }
+    if (SupabaseLounge.available()) { if (!AuthManager.user) SupabaseLounge.disconnect(); else SupabaseLounge.retrack(); }
     if (this.presUnsub && !AuthManager.user) {
       try { this.presUnsub(); } catch (e) {}
       this.presUnsub = null;
@@ -1057,6 +1459,7 @@ const LoungeEngine = {
   },
 
   clearPresence: function () {
+    if (SupabaseLounge.available()) { SupabaseLounge.disconnect(); return; }
     if (!fbOK() || !AuthManager.uid) return;
     try {
       DB.collection('lobby_presence').doc(AuthManager.uid).delete().catch(function () {});
@@ -1076,9 +1479,11 @@ const LoungeEngine = {
     this.me.y = Math.max(this.MIN_Y, Math.min(this.MAX_Y, Math.round(y)));
     this.me.walk = true;
     blip('click');
+    if (SupabaseLounge.available()) SupabaseLounge.sendWalk();
   },
 
   beat: function (force) {
+    if (SupabaseLounge.available()) return;               // Realtime presence needs no heartbeat
     if (!fbOK() || !AuthManager.uid || !Presence.due(force)) return;
     Presence.mark();
     const st = engS();
@@ -1148,6 +1553,39 @@ const LoungeEngine = {
     if (AdminManager.isAdmin()) AdminManager.auditTick();
   },
 
+  /* ---- Supabase Realtime inputs (see SupabaseLounge) ---- */
+  applyRoster: function (state) {
+    const self = this, next = {}, myId = AuthManager.uid;
+    Object.keys(state || {}).forEach(function (uid) {
+      if (uid === myId || uid === '__proto__' || uid === 'constructor' || uid === 'prototype') return;
+      const arr = state[uid], d = arr && arr.length ? arr[arr.length - 1] : null;
+      if (!d || typeof d !== 'object') return;
+      const prev = Object.prototype.hasOwnProperty.call(self.players, uid) ? self.players[uid] : null;
+      const x = clampN(d.x, self.MIN_X, self.MAX_X, 240), y = clampN(d.y, self.MIN_Y, self.MAX_Y, 244);
+      next[uid] = {
+        n: String(d.n || 'OP').slice(0, 14), lv: Math.round(clampN(d.lv, 1, 99, 1)), a: !!d.a,
+        x: prev && prev.walk ? prev.x : x, y: prev && prev.walk ? prev.y : y,
+        cx: prev ? prev.cx : x, cy: prev ? prev.cy : y,
+        dir: prev ? prev.dir : 1, walk: prev ? prev.walk : false, ts: Date.now()
+      };
+    });
+    this.players = next;
+    this.renderRoster();
+    const chip = q('#lobbyCountChip');
+    if (chip) chip.textContent = this.freshCount() + ' ONLINE';
+    if (AdminManager.isAdmin()) AdminManager.auditTick();
+  },
+  applyWalk: function (p) {
+    if (!p || typeof p !== 'object' || p.u === AuthManager.uid) return;
+    const u = String(p.u);
+    if (!Object.prototype.hasOwnProperty.call(this.players, u)) return;
+    const pl = this.players[u];
+    const fx = clampN(p.fx, this.MIN_X, this.MAX_X, pl.cx), fy = clampN(p.fy, this.MIN_Y, this.MAX_Y, pl.cy);
+    if (Math.abs(pl.cx - fx) + Math.abs(pl.cy - fy) > 30) { pl.cx = fx; pl.cy = fy; }      // resync if we drifted
+    pl.x = clampN(p.x, this.MIN_X, this.MAX_X, pl.x); pl.y = clampN(p.y, this.MIN_Y, this.MAX_Y, pl.y); pl.walk = true;
+  },
+  onTransport: function () { this.updateWhoami(); this.renderRoster(); },
+
   freshCount: function () {
     return Object.keys(this.players).length + (AuthManager.user ? 1 : 0);
   },
@@ -1167,7 +1605,8 @@ const LoungeEngine = {
     if (!fbOK()) el.innerHTML = 'IDENT: <b style="color:var(--red)">OFFLINE LINK</b>';
     else if (!AuthManager.user) el.innerHTML = 'IDENT: <b>ESTABLISHING GUEST LINK…</b>';
     else el.innerHTML = 'IDENT: <b style="color:' + (AuthManager.admin ? 'var(--gold)' : 'var(--cyan)') + '">' +
-      esc(AuthManager.name || 'GUEST') + (AuthManager.admin ? ' ★SYSOP' : (AuthManager.guest ? ' ·GUEST' : '')) + '</b>';
+      esc(AuthManager.name || 'GUEST') + (AuthManager.admin ? ' ★SYSOP' : (AuthManager.guest ? ' ·GUEST' : '')) + '</b>' +
+      (SupabaseLounge.available() ? ' <span class="small">· ' + SupabaseLounge.label() + '</span>' : '');
   },
 
   renderRoster: function () {
@@ -1215,58 +1654,57 @@ const LoungeEngine = {
       if (Math.abs(dx) > 1) p.dir = dx > 0 ? 1 : -1;
       p.cx += dx * k; p.cy += dy * k; p.walk = true;
     };
+    const wasWalking = this.me.walk;
     mv(this.me, 62);
+    if (wasWalking && !this.me.walk && SupabaseLounge.available()) SupabaseLounge.queueRest();
     Object.keys(this.players).forEach(function (uid) { mv(self.players[uid], 46); });
     if (!this.REDUCED) {
-      this.stars.forEach(function (s) { s.x -= s.v * dt; if (s.x < -2) s.x = self.W + 2; s.tw += dt * 0.002; });
+      this.stars.forEach(function (s) { s.y -= s.v * dt * 0.8; s.x += Math.sin(s.tw) * 0.04; if (s.y < -2) { s.y = self.FLOOR_Y - 4; s.x = Math.random() * self.W; } s.tw += dt * 0.002; });
       this.sat.x += this.sat.v * dt;
       if (this.sat.x > self.W + 20) { this.sat.x = -20; this.sat.y = 20 + Math.random() * 90; }
     }
   },
 
-  drawEarth: function () {
-    const b = this.bufCtx, R = 26, cx = 32, cy = 32;
-    b.clearRect(0, 0, 64, 64);
-    b.fillStyle = '#0b2a6b'; b.beginPath(); b.arc(cx, cy, R, 0, 7); b.fill();
-    b.fillStyle = '#0e3f8f'; b.beginPath(); b.arc(cx - 5, cy - 6, R - 6, 0, 7); b.fill();
-    b.fillStyle = '#2e9e4f';
-    const blob = function (x, y, rx, ry, rot) {
-      b.save(); b.translate(x, y); b.rotate(rot); b.beginPath(); b.ellipse(x - cx, y - cy, rx, ry, 0, 0, 7); b.restore();
-    };
-    b.beginPath(); b.ellipse(cx - 8, cy - 6, 9, 5, 0.4, 0, 7); b.fill();
-    b.beginPath(); b.ellipse(cx + 9, cy + 2, 7, 6, -0.3, 0, 7); b.fill();
-    b.beginPath(); b.ellipse(cx - 4, cy + 13, 8, 4, 0.2, 0, 7); b.fill();
-    b.fillStyle = '#e8f4ff';
-    b.beginPath(); b.ellipse(cx, cy - R + 4, 10, 3.4, 0, 0, 7); b.fill();
-    b.beginPath(); b.ellipse(cx, cy + R - 4, 8, 3, 0, 0, 7); b.fill();
-    b.fillStyle = 'rgba(255,255,255,.55)';
-    b.beginPath(); b.ellipse(cx + 4, cy - 12, 8, 2.2, 0.5, 0, 7); b.fill();
-    b.beginPath(); b.ellipse(cx - 12, cy + 6, 6, 2, -0.4, 0, 7); b.fill();
-    /* atmosphere ring */
-    this.ctx.drawImage(this.buf, 10, 38, 128, 128);
-    this.ctx.strokeStyle = 'rgba(63,224,255,.16)';
-    this.ctx.strokeRect(10, 38, 128, 128);
+  drawGlow: function (t) {
+    const c = this.ctx, W = this.W, H = this.FLOOR_Y;
+    const g = c.createRadialGradient(W * 0.5, -30, 8, W * 0.5, -30, 270);
+    g.addColorStop(0, 'rgba(160,236,255,.62)'); g.addColorStop(0.45, 'rgba(48,150,190,.17)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    const sway = this.REDUCED ? 0 : Math.sin(t / 3200) * 10;
+    c.fillStyle = 'rgba(120,225,255,.045)';
+    [[170, 40], [250, 56], [330, 36]].forEach(function (s) {
+      c.beginPath(); c.moveTo(s[0] - s[1] / 2 + sway, 0); c.lineTo(s[0] + s[1] / 2 + sway, 0);
+      c.lineTo(s[0] + s[1] * 1.6 + sway * 2, H); c.lineTo(s[0] - s[1] * 1.6 + sway * 2, H); c.closePath(); c.fill();
+    });
   },
-  drawMoon: function (t) {
-    const c = this.ctx;
-    c.save();
-    c.fillStyle = '#c9d6ef';
-    const mx = 402, my = 52;
-    c.fillRect(mx, my + 6, 4, 4); c.fillRect(mx + 4, my + 2, 12, 12); c.fillRect(mx + 16, my + 6, 4, 4);
-    c.fillRect(mx + 8, my + 12, 8, 4);
-    c.fillStyle = '#9aa7dd';
-    c.fillRect(mx + 6, my + 6, 4, 4); c.fillRect(mx + 12, my + 10, 4, 4);
+  drawWhale: function (t) {
+    const c = this.ctx, W = this.W;
+    const x = this.REDUCED ? 300 : ((t * 0.006) % (W + 260)) - 130;
+    const y = 76 + (this.REDUCED ? 0 : Math.sin(t / 4200) * 10) - (x / W) * 14;
+    const tail = this.REDUCED ? 0 : Math.sin(t / 650) * 0.32;
+    c.save(); c.translate(x, y); c.rotate(-0.12); c.scale(0.95, 0.95);
+    c.fillStyle = 'rgba(2,13,20,.82)'; c.strokeStyle = 'rgba(120,225,255,.26)'; c.lineWidth = 0.8;
+    c.beginPath(); c.moveTo(100, 2);
+    c.bezierCurveTo(92, -12, 70, -16, 48, -13); c.bezierCurveTo(30, -10, 14, -6, 4, -3.5);
+    c.lineTo(4, 3); c.bezierCurveTo(14, 6, 32, 10, 52, 13); c.bezierCurveTo(74, 16, 94, 12, 100, 2);
+    c.closePath(); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(70, 10); c.quadraticCurveTo(62, 22, 50, 27); c.quadraticCurveTo(58, 14, 60, 10); c.closePath(); c.fill();
+    c.save(); c.translate(4, -0.5); c.rotate(tail);
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(-14, -10); c.quadraticCurveTo(-17, -3, -11, 0);
+    c.quadraticCurveTo(-17, 3, -14, 10); c.closePath(); c.fill(); c.restore();
     c.restore();
   },
-  drawSat: function () {
+  drawSat: function (t) {                       // a drifting jellyfish
     const c = this.ctx;
-    const x = Math.round(this.sat.x), y = Math.round(this.sat.y);
-    c.fillStyle = '#8f9bd4';
-    c.fillRect(x - 8, y - 1, 5, 5); c.fillRect(x + 4, y - 1, 5, 5);
-    c.fillStyle = '#f7faff';
-    c.fillRect(x - 1, y - 2, 3, 7);
-    c.fillStyle = '#ffd166';
-    c.fillRect(x, y + 5, 1, 3);
+    const x = Math.round(this.sat.x), y = Math.round(this.sat.y + Math.sin(t / 700) * 3);
+    c.fillStyle = 'rgba(130,235,255,.55)'; c.beginPath(); c.arc(x, y, 7, Math.PI, 0); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(255,200,116,.9)'; c.fillRect(x - 1, y - 3, 2, 2);
+    c.strokeStyle = 'rgba(130,235,255,.38)'; c.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      c.beginPath(); c.moveTo(x + i * 2.6, y);
+      for (let k = 1; k <= 5; k++) c.lineTo(x + i * 2.6 + Math.sin(t / 260 + k + i) * 1.6, y + k * 3);
+      c.stroke();
+    }
   },
   drawAstro: function (p, isMe, t) {
     const c = this.ctx;
@@ -1275,78 +1713,79 @@ const LoungeEngine = {
     const d = p.dir >= 0 ? 1 : -1;
     const F = function (dx, dy, w, h, col) { c.fillStyle = col; c.fillRect(x + (d > 0 ? dx : -dx - w), y + dy, w, h); };
     /* backpack */
-    F(-10, -14, 4, 10, isMe ? '#3fe0ff' : (p.a ? '#ffd166' : '#8f9bd4'));
+    F(-10, -14, 4, 10, isMe ? '#5fd0ee' : (p.a ? '#ffc874' : '#7fb0c0'));
     /* legs */
-    F(-4, -2, 3, 6, '#c9d2f2'); F(2, -2, 3, 6, '#c9d2f2');
+    F(-4, -2, 3, 6, '#bfe0ea'); F(2, -2, 3, 6, '#bfe0ea');
     /* body */
-    F(-6, -12, 12, 11, '#f2f5ff');
-    F(-6, -12, 12, 2, '#c9d2f2');
+    F(-6, -12, 12, 11, '#e8fbff');
+    F(-6, -12, 12, 2, '#bfe0ea');
     /* chest panel */
-    F(-3, -9, 6, 4, p.a ? '#ffd166' : '#3fe0ff');
+    F(-3, -9, 6, 4, p.a ? '#ffc874' : '#5fd0ee');
     /* arms */
-    F(-9, -11, 3, 7, '#dfe6fb'); F(6, -11, 3, 7, '#dfe6fb');
+    F(-9, -11, 3, 7, '#cfeaf1'); F(6, -11, 3, 7, '#cfeaf1');
     /* helmet */
-    F(-5, -20, 10, 8, '#f7faff');
-    F(-4, -19, 8, 5, '#0b1231');
-    F(d > 0 ? 0 : -4, -18, 4, 3, p.a ? '#ffd166' : '#3fe0ff');
+    F(-5, -20, 10, 8, '#effcff');
+    F(-4, -19, 8, 5, '#04222f');
+    F(d > 0 ? 0 : -4, -18, 4, 3, p.a ? '#ffc874' : '#5fd0ee');
     /* nameplate */
     const name = String(p.n || 'OP').slice(0, 14);
     const lv = 'LV' + (p.lv || 1);
-    c.font = 'bold 8px Silkscreen, "Press Start 2P", monospace';
+    c.font = 'bold 8px "Atkinson Hyperlegible", sans-serif';
     const tw = Math.max(34, c.measureText(name).width + c.measureText(lv).width + 8);
-    c.fillStyle = 'rgba(7,11,30,.88)';
+    c.fillStyle = 'rgba(3,20,30,.88)';
     c.fillRect(x - tw / 2, y - 34, tw, 11);
-    c.fillStyle = p.a ? '#ffd166' : (isMe ? '#3fe0ff' : '#e8edff');
+    c.fillStyle = p.a ? '#ffc874' : (isMe ? '#5fd0ee' : '#e6fbff');
     c.fillText(name, x - tw / 2 + 3, y - 25.5);
-    c.fillStyle = '#ffd166';
+    c.fillStyle = '#ffc874';
     c.fillText(lv, x - tw / 2 + c.measureText(name).width + 6, y - 25.5);
     if (isMe) { /* selection reticle */
-      c.fillStyle = 'rgba(63,224,255,.5)';
+      c.fillStyle = 'rgba(95,208,238,.5)';
       c.fillRect(x - 7, y + 5, 14, 2);
     }
   },
   draw: function (t) {
     const c = this.ctx;
     if (!c) return;
-    /* space */
-    c.fillStyle = '#040819'; c.fillRect(0, 0, this.W, this.H);
     const self = this;
+    /* open water */
+    const bg = c.createLinearGradient(0, 0, 0, this.FLOOR_Y);
+    bg.addColorStop(0, '#0b4d74'); bg.addColorStop(1, '#04283f');
+    c.fillStyle = bg; c.fillRect(0, 0, this.W, this.H);
+    this.drawGlow(t);
     this.stars.forEach(function (s) {
       const a = self.REDUCED ? 0.6 : (0.35 + 0.4 * Math.abs(Math.sin(s.tw)));
-      c.fillStyle = s.s > 1 ? 'rgba(255,209,102,' + a + ')' : 'rgba(188,210,255,' + a + ')';
+      c.fillStyle = s.s > 1 ? 'rgba(255,200,116,' + a + ')' : 'rgba(190,235,250,' + a + ')';
       c.fillRect(Math.round(s.x), Math.round(s.y), s.s, s.s);
     });
-    this.drawEarth();
-    this.drawMoon(t);
-    if (!this.REDUCED) this.drawSat();
-    /* window band top glow */
-    c.fillStyle = 'rgba(63,224,255,.05)'; c.fillRect(0, 0, this.W, 40);
-    /* window struts */
-    c.fillStyle = '#16214e';
+    this.drawWhale(t);
+    if (!this.REDUCED) this.drawSat(t);
+    /* viewport struts */
+    c.fillStyle = '#08304a';
     c.fillRect(0, 0, 5, this.FLOOR_Y); c.fillRect(this.W - 5, 0, 5, this.FLOOR_Y);
     c.fillRect(158, 0, 5, this.FLOOR_Y); c.fillRect(317, 0, 5, this.FLOOR_Y);
-    c.fillStyle = '#28356f';
+    c.fillStyle = '#1c6f94';
     c.fillRect(158, 0, 2, this.FLOOR_Y); c.fillRect(317, 0, 2, this.FLOOR_Y);
     /* deck floor */
-    c.fillStyle = '#101a3e'; c.fillRect(0, this.FLOOR_Y, this.W, this.H - this.FLOOR_Y);
-    c.fillStyle = '#16214e'; c.fillRect(0, this.FLOOR_Y, this.W, 6);
-    c.fillStyle = '#28356f'; c.fillRect(0, this.FLOOR_Y, this.W, 2);
-    c.strokeStyle = 'rgba(63,224,255,.10)';
+    c.fillStyle = '#07304a'; c.fillRect(0, this.FLOOR_Y, this.W, this.H - this.FLOOR_Y);
+    c.fillStyle = '#0e4a6c'; c.fillRect(0, this.FLOOR_Y, this.W, 6);
+    c.fillStyle = '#2f96bd'; c.fillRect(0, this.FLOOR_Y, this.W, 2);
+    c.strokeStyle = 'rgba(95,208,238,.10)';
     c.beginPath();
     for (let gx = 40; gx < this.W; gx += 40) { c.moveTo(gx + .5, this.FLOOR_Y + 6); c.lineTo(gx + .5, this.H); }
     for (let gy = this.FLOOR_Y + 44; gy < this.H; gy += 42) { c.moveTo(0, gy + .5); c.lineTo(this.W, gy + .5); }
     c.stroke();
-    c.fillStyle = 'rgba(255,209,102,.35)';
+    c.fillStyle = 'rgba(255,200,116,.35)';
     for (let rx = 20; rx < this.W; rx += 40) { c.fillRect(rx, this.FLOOR_Y + 12, 2, 2); c.fillRect(rx, this.H - 8, 2, 2); }
-    /* status text when offline / unlinked */
-    if (!fbOK() || !AuthManager.user) {
-      c.fillStyle = 'rgba(4,8,25,.72)'; c.fillRect(0, 78, this.W, 34);
-      c.fillStyle = !fbOK() ? '#ff6b7d' : '#ffd166';
-      c.font = 'bold 9px Silkscreen, "Press Start 2P", monospace';
-      c.textAlign = 'center';
-      c.fillText(!fbOK() ? 'OFFLINE MODE — FIREBASE LINK REQUIRED FOR OTHER OPERATORS'
-                        : 'ESTABLISHING OPERATOR LINK…', this.W / 2, 98);
-      c.textAlign = 'left';
+    /* status text when offline / unlinked / reconnecting */
+    let banner = null, red = false;
+    if (!fbOK()) { banner = 'OFFLINE MODE — FIREBASE LINK REQUIRED FOR OTHER OPERATORS'; red = true; }
+    else if (!AuthManager.user) banner = 'ESTABLISHING OPERATOR LINK…';
+    else if (SupabaseLounge.available() && SupabaseLounge.state === 'retry') banner = 'REALTIME LINK LOST — RETRYING…';
+    if (banner) {
+      c.fillStyle = 'rgba(2,20,34,.74)'; c.fillRect(0, 78, this.W, 34);
+      c.fillStyle = red ? '#ff8795' : '#ffcb7a';
+      c.font = 'bold 10px "Atkinson Hyperlegible", sans-serif';
+      c.textAlign = 'center'; c.fillText(banner, this.W / 2, 98); c.textAlign = 'left';
     }
     /* players sorted by depth */
     const list = [];
@@ -1526,14 +1965,14 @@ const ChatEngine = {
   send: function () {
     const input = q('#chatInput');
     if (!input) return;
-const text = String(input.value || '').trim().slice(0, 825);
+const text = String(input.value || '').trim().slice(0, 240);
     if (!text) return;
     if (!fbOK()) { say('<b>OFFLINE</b><br>Comms need the Firebase link.', 'speech', 2600); blip('bad'); return; }
     if (!AuthManager.user) { AuthManager.ensureAuth('Comms need an operator link — try again in a second.'); return; }
     if (this.channel === 'dm' && !this.dm) { say('Pick a direct-message partner first.', 'speech', 2400); return; }
     const now = Date.now();
     if (now - this.lastSend < this.RATE_MS) {
-      say('<b>TRANSMISSION THROTTLED</b><br>2-second cooldown between packets.', 'speech', 2200);
+      say('<b>TRANSMISSION THROTTLED</b><br>1-second cooldown between packets.', 'speech', 2200);
       blip('bad');
       return;
     }
@@ -1579,7 +2018,7 @@ const text = String(input.value || '').trim().slice(0, 825);
   renderNote: function () {
     const el = q('#chatNote');
     if (!el) return;
-    let note = '2s rate limit per message · history self-destructs after 24h · only the last 30 messages are kept';
+    let note = '1s rate limit per message · history self-destructs after 7 days · the latest 250 messages are kept';
     if (!fbOK()) note = 'OFFLINE MODE — chat, lounge presence and group sync need FIREBASE_CONFIG.';
     else if (!AuthManager.user) note = 'Establishing guest operator link…';
     else if (this.channel === 'essay') note = NotebookManager.room
