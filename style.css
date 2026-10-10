@@ -1458,6 +1458,15 @@ body.sys-banner-on{padding-top:52px}
   .sidebar{background:rgba(3,22,33,.97);border-right:1px solid var(--line2);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
   .hero{min-height:min(64vh,560px)}
 }
+@media(min-width:921px){
+  .scrim{display:none!important;opacity:0!important;pointer-events:none!important}
+  .layout{transition:grid-template-columns .25s ease,column-gap .25s ease}
+  .sidebar{transition:width .25s ease,padding .25s ease,opacity .2s ease,visibility .25s linear}
+  body.sidebar-collapsed .layout{grid-template-columns:0 minmax(0,1fr);column-gap:0}
+  body.sidebar-collapsed .sidebar{width:0;min-width:0;padding:0;overflow:hidden;opacity:0;visibility:hidden;pointer-events:none}
+  body.sidebar-collapsed .main{width:100%;transition:width .25s ease}
+  body.sidebar-collapsed .screen{width:100%;max-width:none}
+}
 @media(max-width:700px){
   .panel{-webkit-backdrop-filter:none;backdrop-filter:none;background:linear-gradient(180deg,rgba(8,46,64,.82),rgba(4,28,40,.86));padding:16px 16px}
   .brand-t{font-size:17px}

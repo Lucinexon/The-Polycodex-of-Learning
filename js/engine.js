@@ -1248,7 +1248,11 @@ function bindEvents() {
     const tile = e.target.closest('.tile');
     if (tile) { tile.classList.toggle('on'); sfx('flip'); }
   });
-  $('#menuBtn').addEventListener('click', () => { document.body.classList.toggle('nav-open'); sfx('click'); });
+  $('#menuBtn').addEventListener('click', () => {
+    if (window.innerWidth > 920) document.body.classList.toggle('sidebar-collapsed');
+    else document.body.classList.toggle('nav-open');
+    sfx('click');
+  });
   $('#sideCloseBtn').addEventListener('click', () => { document.body.classList.remove('nav-open'); sfx('click'); });
   $('#scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
   $('#fontMinus').addEventListener('click', () => { setFont(S.font - 1); sfx('click'); });
