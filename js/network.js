@@ -1255,8 +1255,8 @@ const NotebookManager = {
    names and positions are self-declared and sanitised on receipt (length, range,
    prototype-key guards). Never put anything sensitive on this channel. */
 const SUPABASE_CONFIG = {
-  url: 'YOUR_SUPABASE_URL',              // e.g. https://abcdxyz.supabase.co
-  anonKey: 'YOUR_SUPABASE_ANON_KEY',     // the public "anon" key
+  url: 'https://supabase.com/dashboard/project/qxdieorzlnocxbxmgyoj/settings/infrastructure',              // e.g. https://abcdxyz.supabase.co
+  anonKey: 'sb_publishable_rPtDHrr-OQKH9h093HiW5w_KCvs9fIU',     // the public "anon" key
   channel: 'lounge:deck07'
 };
 const SB_OK = (function () {
