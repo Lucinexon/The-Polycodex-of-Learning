@@ -14,6 +14,7 @@
 
    API: CodexIcons.has(name) · CodexIcons.paint(el, name, px, tint)
    engine.js drawSprites() calls paint() for every [data-sprite] element.
+   Glyphs are inlined (not <use>) so the class styles in style.css apply.
    ========================================================================== */
 'use strict';
 (function () {
@@ -105,9 +106,11 @@
     has: function (name) { return !!resolve(name); },
     paint: function (el, name, px, tint) {
       const key = resolve(name); if (!key) return false;
-      mount();
       const A = tint || COL[key] || COL._;
-      el.innerHTML = '<svg viewBox="0 0 32 32" focusable="false" aria-hidden="true"><use href="#ic-' + key + '"/></svg>';
+      /* Inline the glyph. <use href="#id"> clones into a closed shadow tree,
+         so the .ia/.iab rules in style.css never apply and every shape falls
+         back to SVG's default fill (solid black). */
+      el.innerHTML = '<svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">' + ICONS[key] + '</svg>';
       const s = el.style;
       s.width = px + 'px'; s.height = px + 'px';
       s.setProperty('--ica', A);

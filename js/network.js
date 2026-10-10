@@ -1246,23 +1246,33 @@ const NotebookManager = {
    Firebase is untouched for accounts, notebook rooms, chat and moderation; it
    still supplies the operator identity (uid + display name) used here.
 
-   SETUP (no tables, no SQL): create a Supabase project, copy Project URL and the
-   `anon` public key (Project Settings → API) below. Realtime public channels are
-   on by default. Leave both as placeholders and the lounge falls back to the
+   SETUP (no tables, no SQL): create a Supabase project, copy the Project URL
+   (https://<ref>.supabase.co — not the dashboard page) and the publishable
+   key (Project Settings → API Keys) below. Realtime public channels are on
+   by default. Leave both as placeholders and the lounge falls back to the
    previous Firestore presence automatically.
 
    TRUST MODEL: the anon key is public by design. Lounge presence is cosmetic —
    names and positions are self-declared and sanitised on receipt (length, range,
    prototype-key guards). Never put anything sensitive on this channel. */
 const SUPABASE_CONFIG = {
-  url: 'https://supabase.com/dashboard/project/qxdieorzlnocxbxmgyoj/settings/infrastructure',              // e.g. https://abcdxyz.supabase.co
-  anonKey: 'sb_publishable_rPtDHrr-OQKH9h093HiW5w_KCvs9fIU',     // the public "anon" key
+  url: 'https://qxdieorzlnocxbxmgyoj.supabase.co',   // API host, NOT the dashboard settings page
+  anonKey: 'sb_publishable_rPtDHrr-OQKH9h093HiW5w_KCvs9fIU',     // the public publishable key
   channel: 'lounge:deck07'
 };
+/* A dashboard link (…/dashboard/project/<ref>/…) is not an API host. The
+   socket was dialing supabase.com and sitting in RECONNECTING forever. */
+function supabaseApiUrl(raw) {
+  const u = String(raw || '').trim();
+  const dash = u.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/i);
+  if (dash) return 'https://' + dash[1] + '.supabase.co';
+  const host = u.match(/^(https:\/\/[a-z0-9-]+\.supabase\.co)(?:\/.*)?$/i);
+  return host ? host[1] : u.replace(/\/+$/, '');
+}
 const SB_OK = (function () {
   try {
-    const u = String(SUPABASE_CONFIG.url || ''), k = String(SUPABASE_CONFIG.anonKey || '');
-    return u.indexOf('https://') === 0 && u.indexOf('YOUR_') < 0 && k.length > 20 && k.indexOf('YOUR_') !== 0;
+    const u = supabaseApiUrl(SUPABASE_CONFIG.url), k = String(SUPABASE_CONFIG.anonKey || '');
+    return u.indexOf('https://') === 0 && u.indexOf('.supabase.co') > 0 && u.indexOf('YOUR_') < 0 && k.length > 20 && k.indexOf('YOUR_') !== 0;
   } catch (e) { return false; }
 })();
 function clampN(v, lo, hi, d) { v = +v; return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; }
@@ -1280,7 +1290,7 @@ const SupabaseLounge = {
   ensureClient: function () {
     if (this.client) return this.client;
     try {
-      this.client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+      this.client = window.supabase.createClient(supabaseApiUrl(SUPABASE_CONFIG.url), SUPABASE_CONFIG.anonKey, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },   // Firebase owns accounts
         realtime: { params: { eventsPerSecond: 10 } }
       });

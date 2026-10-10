@@ -1448,41 +1448,16 @@ body.sys-banner-on{padding-top:52px}
   --gold:#ffcb7a; --red:#ff8795; --green:#62f3bd;
 }
 
-/* ---------- vector icons (symbols live in #codexIconSheet) ---------- */
+/* ---------- vector icons (inlined by CodexIcons.paint) ---------- */
 [data-sprite]>svg{display:block;width:100%;height:100%;overflow:visible;
   filter:drop-shadow(0 0 var(--icr,3px) var(--icg,rgba(95,208,238,.5)))}
-#codexIconSheet .ia,#codexIconSheet .ic,#codexIconSheet .iab{fill:none;stroke:var(--ica,#8fe3fb);stroke-width:var(--icw,1.8);stroke-linecap:round;stroke-linejoin:round}
-#codexIconSheet .iab{fill:var(--icb,rgba(95,208,238,.2))}
-#codexIconSheet .ic{opacity:.62}
-#codexIconSheet .ib{fill:var(--icb,rgba(95,208,238,.2));stroke:none}
-#codexIconSheet .id{fill:var(--ica,#8fe3fb);stroke:none}
+[data-sprite] .ia,[data-sprite] .ic,[data-sprite] .iab{fill:none;stroke:var(--ica,#8fe3fb);stroke-width:var(--icw,1.8);stroke-linecap:round;stroke-linejoin:round}
+[data-sprite] .iab{fill:var(--icb,rgba(95,208,238,.2))}
+[data-sprite] .ic{opacity:.62}
+[data-sprite] .ib{fill:var(--icb,rgba(95,208,238,.2));stroke:none}
+[data-sprite] .id{fill:var(--ica,#8fe3fb);stroke:none}
 .mi{vertical-align:-3px;margin:0 2px}
 .nav-ic{padding:3px}
-
-/* Allow inline styles to override stylesheet for dynamic icons */
-[data-sprite]>svg{
-  display:block;
-  width:100%;
-  height:100%;
-  overflow:visible;
-  --ica:inherit;
-  --icb:inherit;
-  --icg:inherit;
-  --icw:inherit;
-  --icr:inherit;
-}
-
-#codexIconSheet .ia,#codexIconSheet .ic,#codexIconSheet .iab{
-  fill:none;
-  stroke:var(--ica,#8fe3fb);
-  stroke-width:var(--icw,1.8);
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-#codexIconSheet .iab{fill:var(--icb,rgba(95,208,238,.2))}
-#codexIconSheet .ic{opacity:.62}
-#codexIconSheet .ib{fill:var(--icb,rgba(95,208,238,.2));stroke:none}
-#codexIconSheet .id{fill:var(--ica,#8fe3fb);stroke:none}
 /* ---------- surfaces: bluer glass, still dark enough to read on ---------- */
 body{color:var(--ink)}
 .topbar{background:linear-gradient(180deg,rgba(4,40,66,.95),rgba(4,40,66,.72))}
