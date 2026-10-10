@@ -569,7 +569,7 @@ const io = new IntersectionObserver(es => {
 }, { threshold: 0, rootMargin: '0px 0px -50% 0px' });
 
 /* ================= SEARCH (MiniSearch + substring fallback) ================= */
-let MS = null, DOCMAP = {}, sItems = [], sActive = -1, sT = null, sAsk = 0;
+let MS = null, DOCMAP = {}, sItems = [], sActive = -1, sT = null, sAsk = 0, sAnswer = '', sCopyT = null, sBYOKReturnFocus = null;
 function buildIndex() {
   const docs = [];
   $$('article.block, #syslog .panel[data-title]').forEach(b => {
@@ -589,12 +589,19 @@ function buildIndex() {
   }
 }
 const sIn = () => $('#search'), sRes = () => $('#searchResults');
-function closeSearch() { sAsk++; const r = sRes(), i = sIn(); if (r) { r.hidden = true; r.classList.remove('ai'); } if (i) i.setAttribute('aria-expanded', 'false'); sActive = -1; }
+function closeSearch(restoreFocus) {
+  sAsk++;
+  clearTimeout(sT);
+  const r = sRes(), i = sIn();
+  if (r) { r.hidden = true; r.classList.remove('ai'); r.setAttribute('role', 'listbox'); }
+  if (i) { i.setAttribute('aria-expanded', 'false'); if (restoreFocus) i.focus(); }
+  sActive = -1;
+}
 function askBar(q) {
   const shown = q.length > 80 ? q.slice(0, 80) + '…' : q;
   return '<button type="button" class="sr-ask" id="srAsk">' +
-    '<span class="sr-ask-k">ASK THE LINK</span>' +
-    '<span class="sr-ask-q">Answer “' + esc(shown) + '”</span></button>';
+    '<span class="sr-ask-k">QUERY CODEX INTELLIGENCE</span>' +
+    '<span class="sr-ask-q">✨ Ask Codex AI: &quot;' + esc(shown) + '&quot;</span></button>';
 }
 function doSearch() {
   sAsk++;
@@ -616,6 +623,7 @@ function doSearch() {
   }
   sItems = hits; sActive = 0;
   r.classList.remove('ai');
+  r.setAttribute('role', 'listbox');
   let list;
   if (!hits.length) {
     list = '<div class="sr-empty">No packets matched “' + esc(raw) + '” — try another keyword, or ask the link.</div>';
@@ -638,29 +646,49 @@ function doSearch() {
   r.innerHTML = '<div class="sr-scroll">' + list + '</div>' + askBar(raw);
   r.hidden = false; input.setAttribute('aria-expanded', 'true');
 }
-function askSearch() {
+function searchMarkdown(src) {
+  const html = mdSafe(src);
+  if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+    return window.DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  }
+  return '<p>' + esc(src).replace(/\n/g, '<br>') + '</p>';
+}
+function openSearchBYOK() {
+  const sys = window.SystemsEngine;
+  if (!sys || !sys.openBYOK) return;
+  sBYOKReturnFocus = document.activeElement;
+  sys.openBYOK();
+}
+function askSearch(query) {
   const input = sIn(), r = sRes();
-  const q = (input.value || '').trim();
+  const q = String(query == null ? (input.value || '') : query).trim();
   if (!r || q.length < 2) return;
   const id = ++sAsk;
+  sAnswer = '';
   const sys = window.SystemsEngine;
   const client = sys && sys.BYOKClient;
   const live = !!(client && client.configured());
   r.classList.add('ai'); r.hidden = false;
+  r.setAttribute('role', 'region');
+  r.setAttribute('aria-label', 'Codex AI answer');
   input.setAttribute('aria-expanded', 'true');
   r.innerHTML = '<div class="sr-ai-bar">' +
-    '<button type="button" class="sr-ai-back" id="srAskBack"><span data-sprite="search" data-px="14"></span> MATCHES</button>' +
-    '<div class="sr-ai-h"><span class="sr-ai-k">CODEX LINK</span><b>' + esc(q) + '</b></div>' +
-    '<span class="sr-ai-meta">' + (live ? 'LINKING…' : 'NO LINK') + '</span></div>' +
-    '<div class="sr-ai-body md-body"></div>';
+    '<button type="button" class="sr-ai-back" id="srAskBack">← Back to matches</button>' +
+    '<div class="sr-ai-h"><span class="sr-ai-k">POLYMATH BYOK SYNAPSE</span><b>' + esc(q) + '</b></div>' +
+    '<button type="button" class="sr-ai-copy" id="srAskCopy" disabled>Copy</button></div>' +
+    '<div class="sr-ai-body md-body" tabindex="0" aria-label="AI answer">' +
+    (live ? '<div class="sr-ai-skeleton" role="status" aria-label="Generating answer"><span></span><span></span><span></span></div>' : '') +
+    '</div>';
   drawSprites(r);
   const body = r.querySelector('.sr-ai-body');
   if (!live) {
-    body.innerHTML = '<p>No operator link yet. Open the console, save a base URL and a model, then ask again. The key stays on this device.</p>' +
-      '<button type="button" class="btn primary" id="srAskConsole">OPEN CONSOLE</button>';
+    body.innerHTML = '<p class="sr-ai-wait">Configure a BYOK endpoint URL and model in the Operator Console, then retry. An API key is optional for local endpoints.</p>' +
+      '<button type="button" class="btn primary" id="srAskConsole">OPEN OPERATOR CONSOLE</button>' +
+      '<button type="button" class="btn" id="srAskRetry">TRY AGAIN</button>';
+    const back = r.querySelector('.sr-ai-back'); if (back) back.focus();
     return;
   }
-  body.innerHTML = '<p class="sr-ai-wait">Consulting the link…</p>';
+  const back = r.querySelector('.sr-ai-back'); if (back) back.focus();
   const excerpts = sItems.slice(0, 4).map(function (h) {
     return '• ' + h.title + ' (' + h.secLabel + '): ' + String(h.text || '').replace(/\s+/g, ' ').slice(0, 320);
   }).join('\n');
@@ -668,7 +696,7 @@ function askSearch() {
   const paint = function (final) {
     if (id !== sAsk) return;
     const b = r.querySelector('.sr-ai-body'); if (!b) return;
-    b.innerHTML = mdSafe(full) + (final ? '' : '<span class="sr-caret" aria-hidden="true"></span>');
+    b.innerHTML = searchMarkdown(full) + (final ? '' : '<span class="sr-caret" aria-hidden="true"></span>');
     if (final) typeset(b);
     b.scrollTop = b.scrollHeight;
   };
@@ -678,23 +706,24 @@ function askSearch() {
   ], { temperature: 0.4, max_tokens: 900, timeout: 50000, stream: true, onToken: function (_d, all) {
     if (id !== sAsk) return;
     full = all;
+    sAnswer = all;
+    const copy = r.querySelector('#srAskCopy'); if (copy) copy.disabled = !all;
     if (timer) return;
     timer = setTimeout(function () { timer = null; paint(false); }, 120);
   } }).then(function (res) {
     if (id !== sAsk) return;
     clearTimeout(timer);
     full = (res && res.text) || full || 'The link returned an empty reply.';
+    sAnswer = full;
+    const copy = r.querySelector('#srAskCopy'); if (copy) copy.disabled = false;
     paint(true);
-    const meta = r.querySelector('.sr-ai-meta');
-    if (meta) meta.textContent = ((res && res.model) || 'LINK') + ' · ' + (((res && res.ms) || 0) / 1000).toFixed(1) + 's';
   }).catch(function (err) {
     if (id !== sAsk) return;
     clearTimeout(timer);
     const b = r.querySelector('.sr-ai-body');
+    const copy = r.querySelector('#srAskCopy'); if (copy) copy.disabled = !sAnswer;
     if (b) b.innerHTML = '<p class="sr-ai-err">' + esc((err && err.message) || 'The link failed.') + '</p>' +
       '<p><button type="button" class="btn" id="srAskRetry">TRY AGAIN</button></p>';
-    const meta = r.querySelector('.sr-ai-meta');
-    if (meta) meta.textContent = 'LINK FAILED';
   });
 }
 function goSearch(i) {
@@ -711,7 +740,7 @@ function goSearch(i) {
 }
 function bindSearch() {
   const input = sIn(), r = sRes();
-  input.addEventListener('input', () => { clearTimeout(sT); sT = setTimeout(doSearch, 180); });
+  input.addEventListener('input', () => { sAsk++; clearTimeout(sT); sT = setTimeout(doSearch, 180); });
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       if (r.hidden || r.classList.contains('ai')) return; e.preventDefault();
@@ -721,20 +750,55 @@ function bindSearch() {
       const act = $$('.sr-item', r)[sActive]; if (act) act.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); askSearch(); }
     else if (e.key === 'Enter') { if (!r.hidden && !r.classList.contains('ai') && sItems[sActive]) goSearch(sActive); else if (!r.hidden && !sItems.length) askSearch(); }
-    else if (e.key === 'Escape') { closeSearch(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSearch(true); }
   });
   r.addEventListener('mousedown', e => {
     const it = e.target.closest('.sr-item');
     if (it) { goSearch(+it.dataset.i); return; }
-    if (!e.target.closest('a')) e.preventDefault();
+    if (!e.target.closest('button,a,input,textarea,select,[tabindex]')) e.preventDefault();
   });
   r.addEventListener('click', e => {
     if (e.target.closest('#srAsk') || e.target.closest('#srAskRetry')) { askSearch(); return; }
-    if (e.target.closest('#srAskBack')) { doSearch(); return; }
-    if (e.target.closest('#srAskConsole')) {
-      closeSearch();
-      if (window.SystemsEngine && SystemsEngine.openBYOK) SystemsEngine.openBYOK();
+    if (e.target.closest('#srAskBack')) { doSearch(); input.focus(); return; }
+    if (e.target.closest('#srAskCopy')) {
+      const button = e.target.closest('#srAskCopy');
+      if (!sAnswer) return;
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        button.textContent = 'Unavailable'; button.setAttribute('aria-label', 'Clipboard access is unavailable');
+        clearTimeout(sCopyT);
+        sCopyT = setTimeout(() => { button.textContent = 'Copy'; button.removeAttribute('aria-label'); }, 1500);
+        return;
+      }
+      navigator.clipboard.writeText(sAnswer).then(() => {
+        button.textContent = 'Copied'; button.classList.add('copied'); button.setAttribute('aria-label', 'Response copied to clipboard');
+        clearTimeout(sCopyT);
+        sCopyT = setTimeout(() => {
+          button.textContent = 'Copy'; button.classList.remove('copied'); button.removeAttribute('aria-label');
+        }, 1500);
+      }).catch(() => {
+        button.textContent = 'Copy failed'; button.setAttribute('aria-label', 'Could not copy response');
+        clearTimeout(sCopyT);
+        sCopyT = setTimeout(() => {
+          button.textContent = 'Copy'; button.removeAttribute('aria-label');
+        }, 1500);
+      });
+      return;
     }
+    if (e.target.closest('#srAskConsole')) {
+      openSearchBYOK();
+    }
+  });
+  document.addEventListener('pointerdown', e => {
+    const byok = document.getElementById('byokModal');
+    if (sBYOKReturnFocus && byok && byok.contains(e.target)) return;
+    if (!r.hidden && !e.target.closest('.searchwrap')) closeSearch();
+  });
+  document.addEventListener('click', e => {
+    if (!sBYOKReturnFocus) return;
+    const modal = document.getElementById('byokModal');
+    if (!modal || !modal.hidden || !(e.target.closest('#byokClose') || e.target === modal)) return;
+    const target = sBYOKReturnFocus; sBYOKReturnFocus = null;
+    target.focus();
   });
   input.addEventListener('blur', (e) => {
     if (e.relatedTarget && r.contains(e.relatedTarget)) return;
@@ -1240,10 +1304,14 @@ function bindEvents() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       const bk = document.getElementById('byokModal');
-      if (bk && !bk.hidden && window.SystemsEngine) { SystemsEngine.closeBYOK(); return; }
+      if (bk && !bk.hidden && window.SystemsEngine) {
+        SystemsEngine.closeBYOK();
+        if (sBYOKReturnFocus) { const target = sBYOKReturnFocus; sBYOKReturnFocus = null; target.focus(); }
+        return;
+      }
       const m = modal();
       if (m && !m.hidden) closeModal();
-      else if (!sRes().hidden) closeSearch();
+      else if (!sRes().hidden) closeSearch(true);
       else document.body.classList.remove('nav-open');
       return;
     }
