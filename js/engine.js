@@ -260,6 +260,15 @@ function mdBlock(src) {                      // full markdown (panel bodies)
   catch (e) { html = '<p>' + esc(lifted).replace(/\n/g, '<br>') + '</p>'; }
   return _dropMath(html).replace(/<i class="pixelart-icons-font-([a-z0-9-]+)"><\/i>/g, '<span class="mi" data-sprite="$1" data-px="15" role="img"></span>');
 }
+function mdSafe(src) {
+  let s = String(src || '');
+  if (((s.match(/```/g) || []).length) % 2) s += '\n```';
+  return mdBlock(s)
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '');
+}
 function mdInline(src) {                     // inline-safe markdown (buttons, cards, quiz text)
   const lifted = _liftMath(src);
   let html;
@@ -560,7 +569,7 @@ const io = new IntersectionObserver(es => {
 }, { threshold: 0, rootMargin: '0px 0px -50% 0px' });
 
 /* ================= SEARCH (MiniSearch + substring fallback) ================= */
-let MS = null, DOCMAP = {}, sItems = [], sActive = -1, sT = null;
+let MS = null, DOCMAP = {}, sItems = [], sActive = -1, sT = null, sAsk = 0;
 function buildIndex() {
   const docs = [];
   $$('article.block, #syslog .panel[data-title]').forEach(b => {
@@ -580,10 +589,18 @@ function buildIndex() {
   }
 }
 const sIn = () => $('#search'), sRes = () => $('#searchResults');
-function closeSearch() { const r = sRes(), i = sIn(); if (r) r.hidden = true; if (i) i.setAttribute('aria-expanded', 'false'); sActive = -1; }
+function closeSearch() { sAsk++; const r = sRes(), i = sIn(); if (r) { r.hidden = true; r.classList.remove('ai'); } if (i) i.setAttribute('aria-expanded', 'false'); sActive = -1; }
+function askBar(q) {
+  const shown = q.length > 80 ? q.slice(0, 80) + '…' : q;
+  return '<button type="button" class="sr-ask" id="srAsk">' +
+    '<span class="sr-ask-k">ASK THE LINK</span>' +
+    '<span class="sr-ask-q">Answer “' + esc(shown) + '”</span></button>';
+}
 function doSearch() {
+  sAsk++;
   const input = sIn(), r = sRes();
-  const q = (input.value || '').trim().toLowerCase();
+  const raw = (input.value || '').trim();
+  const q = raw.toLowerCase();
   if (q.length < 2) { closeSearch(); return; }
   if (!S.stats.search) { S.stats.search = 1; save(); award('search'); }
   let hits = [];
@@ -598,14 +615,16 @@ function doSearch() {
       d.title.toLowerCase().includes(q) || d.text.toLowerCase().includes(q)).slice(0, 14);
   }
   sItems = hits; sActive = 0;
+  r.classList.remove('ai');
+  let list;
   if (!hits.length) {
-    r.innerHTML = '<div class="sr-empty">No packets matched “' + esc(q) + '” — try another keyword.</div>';
+    list = '<div class="sr-empty">No packets matched “' + esc(raw) + '” — try another keyword, or ask the link.</div>';
   } else {
     const terms = q.split(/\s+/).filter(Boolean).slice(0, 3)
       .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     const rx = terms.length ? new RegExp('(' + terms.join('|') + ')', 'i') : null;
     const mark = v => rx ? esc(v).replace(rx, '<mark>$1</mark>') : esc(v);
-    r.innerHTML = hits.map((h, i) => {
+    list = hits.map((h, i) => {
       const lq = q, pos = h.text.toLowerCase().indexOf(lq);
       let snip = '';
       if (pos >= 0) { const st = Math.max(0, pos - 30); snip = (st > 0 ? '…' : '') + h.text.slice(st, st + 96) + '…'; }
@@ -616,7 +635,67 @@ function doSearch() {
         (snip ? '<span class="sr-snip">' + mark(snip) + '</span>' : '') + '</button>';
     }).join('');
   }
+  r.innerHTML = '<div class="sr-scroll">' + list + '</div>' + askBar(raw);
   r.hidden = false; input.setAttribute('aria-expanded', 'true');
+}
+function askSearch() {
+  const input = sIn(), r = sRes();
+  const q = (input.value || '').trim();
+  if (!r || q.length < 2) return;
+  const id = ++sAsk;
+  const sys = window.SystemsEngine;
+  const client = sys && sys.BYOKClient;
+  const live = !!(client && client.configured());
+  r.classList.add('ai'); r.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+  r.innerHTML = '<div class="sr-ai-bar">' +
+    '<button type="button" class="sr-ai-back" id="srAskBack"><span data-sprite="search" data-px="14"></span> MATCHES</button>' +
+    '<div class="sr-ai-h"><span class="sr-ai-k">CODEX LINK</span><b>' + esc(q) + '</b></div>' +
+    '<span class="sr-ai-meta">' + (live ? 'LINKING…' : 'NO LINK') + '</span></div>' +
+    '<div class="sr-ai-body md-body"></div>';
+  drawSprites(r);
+  const body = r.querySelector('.sr-ai-body');
+  if (!live) {
+    body.innerHTML = '<p>No operator link yet. Open the console, save a base URL and a model, then ask again. The key stays on this device.</p>' +
+      '<button type="button" class="btn primary" id="srAskConsole">OPEN CONSOLE</button>';
+    return;
+  }
+  body.innerHTML = '<p class="sr-ai-wait">Consulting the link…</p>';
+  const excerpts = sItems.slice(0, 4).map(function (h) {
+    return '• ' + h.title + ' (' + h.secLabel + '): ' + String(h.text || '').replace(/\s+/g, ' ').slice(0, 320);
+  }).join('\n');
+  let full = '', timer = null;
+  const paint = function (final) {
+    if (id !== sAsk) return;
+    const b = r.querySelector('.sr-ai-body'); if (!b) return;
+    b.innerHTML = mdSafe(full) + (final ? '' : '<span class="sr-caret" aria-hidden="true"></span>');
+    if (final) typeset(b);
+    b.scrollTop = b.scrollHeight;
+  };
+  client.query([
+    { role: 'system', content: 'You are the archivist of the Polymath Codex, a study spanning systems, lore, and cosmos. The operator searched the codex and asked you to answer. Use the supplied excerpts when they are relevant; if they are not, answer from knowledge and say the codex did not cover it. Write GitHub-flavored markdown. Put mathematics in $...$ or $$...$$. Lead with the answer. Be concrete and compact. No greeting and no preamble.' },
+    { role: 'user', content: 'Question: ' + q + (excerpts ? '\n\nCodex excerpts:\n' + excerpts : '') }
+  ], { temperature: 0.4, max_tokens: 900, timeout: 50000, stream: true, onToken: function (_d, all) {
+    if (id !== sAsk) return;
+    full = all;
+    if (timer) return;
+    timer = setTimeout(function () { timer = null; paint(false); }, 120);
+  } }).then(function (res) {
+    if (id !== sAsk) return;
+    clearTimeout(timer);
+    full = (res && res.text) || full || 'The link returned an empty reply.';
+    paint(true);
+    const meta = r.querySelector('.sr-ai-meta');
+    if (meta) meta.textContent = ((res && res.model) || 'LINK') + ' · ' + (((res && res.ms) || 0) / 1000).toFixed(1) + 's';
+  }).catch(function (err) {
+    if (id !== sAsk) return;
+    clearTimeout(timer);
+    const b = r.querySelector('.sr-ai-body');
+    if (b) b.innerHTML = '<p class="sr-ai-err">' + esc((err && err.message) || 'The link failed.') + '</p>' +
+      '<p><button type="button" class="btn" id="srAskRetry">TRY AGAIN</button></p>';
+    const meta = r.querySelector('.sr-ai-meta');
+    if (meta) meta.textContent = 'LINK FAILED';
+  });
 }
 function goSearch(i) {
   const h = sItems[i]; if (!h) return;
@@ -635,16 +714,32 @@ function bindSearch() {
   input.addEventListener('input', () => { clearTimeout(sT); sT = setTimeout(doSearch, 180); });
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      if (r.hidden) return; e.preventDefault();
+      if (r.hidden || r.classList.contains('ai')) return; e.preventDefault();
       const n = sItems.length; if (!n) return;
       sActive = (sActive + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
       $$('.sr-item', r).forEach((el, i) => el.classList.toggle('act', i === sActive));
       const act = $$('.sr-item', r)[sActive]; if (act) act.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'Enter') { if (!r.hidden && sItems[sActive]) goSearch(sActive); }
+    } else if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); askSearch(); }
+    else if (e.key === 'Enter') { if (!r.hidden && !r.classList.contains('ai') && sItems[sActive]) goSearch(sActive); else if (!r.hidden && !sItems.length) askSearch(); }
     else if (e.key === 'Escape') { closeSearch(); }
   });
-  r.addEventListener('mousedown', e => { const it = e.target.closest('.sr-item'); if (it) goSearch(+it.dataset.i); });
-  input.addEventListener('blur', () => { setTimeout(() => { if (!r.contains(document.activeElement)) closeSearch(); }, 160); });
+  r.addEventListener('mousedown', e => {
+    const it = e.target.closest('.sr-item');
+    if (it) { goSearch(+it.dataset.i); return; }
+    if (!e.target.closest('a')) e.preventDefault();
+  });
+  r.addEventListener('click', e => {
+    if (e.target.closest('#srAsk') || e.target.closest('#srAskRetry')) { askSearch(); return; }
+    if (e.target.closest('#srAskBack')) { doSearch(); return; }
+    if (e.target.closest('#srAskConsole')) {
+      closeSearch();
+      if (window.SystemsEngine && SystemsEngine.openBYOK) SystemsEngine.openBYOK();
+    }
+  });
+  input.addEventListener('blur', (e) => {
+    if (e.relatedTarget && r.contains(e.relatedTarget)) return;
+    setTimeout(() => { if (!r.contains(document.activeElement) && !r.matches(':hover')) closeSearch(); }, 180);
+  });
 }
 
 /* ================= QUIZ ENGINE ================= */
