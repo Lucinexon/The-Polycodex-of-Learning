@@ -2,28 +2,46 @@
 <html lang="en">
 <head>
   <script>
-  window.onerror = function (msg, url, line) {
-    alert("CRASH: " + msg + "\nFile: " + (url ? url.split('/').pop() : 'script') + "\nLine: " + line);
-  };
+  /* Non-blocking crash reporter (replaces the old blocking alert()). Benign
+     browser noise is ignored; real faults show once in a dismissible strip. */
+  (function () {
+    var seen = {};
+    function report(msg, where) {
+      msg = String(msg || '');
+      if (!msg || /ResizeObserver loop|^Script error\.?$/i.test(msg)) return;
+      var key = msg + where; if (seen[key]) return; seen[key] = 1;
+      if (window.console) console.error('[codex]', msg, where || '');
+      function mount() {
+        var el = document.getElementById('errStrip');
+        if (!el) { el = document.createElement('div'); el.id = 'errStrip'; el.setAttribute('role', 'alert'); document.body.appendChild(el); }
+        el.innerHTML = '<span></span><button type="button" aria-label="Dismiss">×</button>';
+        el.firstChild.textContent = 'Something broke: ' + msg + (where ? ' (' + where + ')' : '');
+        el.lastChild.onclick = function () { el.remove(); };
+      }
+      if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+    }
+    window.addEventListener('error', function (e) { report(e.message, (e.filename ? e.filename.split('/').pop() : '') + (e.lineno ? ':' + e.lineno : '')); });
+    window.addEventListener('unhandledrejection', function (e) { report(e.reason && e.reason.message || e.reason, 'promise'); });
+  })();
   </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#070b1e">
+<meta name="theme-color" content="#031722">
 <meta name="description" content="THE POLYMATH CODEX — an interactive retro-futurist study quest through Systems, Lore &amp; Cosmos: internet mysteries, game engines, AI, geopolitics, physics, astronomy, psychology, big history and the evolution of vibes.">
 <title>THE POLYMATH CODEX · Systems · Lore · Cosmos</title>
 
 <!-- ===== FONTS ===== -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
 <!-- ===== DEPENDENCIES (standard CDNs) ===== -->
 <!-- Pixelarticons -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pixelarticons@2.4.1/fonts/pixelart-icons-font.css">
 <!-- KaTeX -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<!-- Prism (theme is heavily overridden in css/style.css) -->
+<!-- Prism (theme is overridden in style.css) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css">
 <!-- App theme -->
 <link rel="stylesheet" href="style.css">
@@ -60,6 +78,8 @@
 <script defer src="js/systems.js"></script>
 <!-- ===== NETWORK LAYER (auth · lobby · chat · group notebook · quota armor) ===== -->
 <script defer src="js/network.js"></script>
+<!-- ===== AMBIENT DEEP-OCEAN BACKGROUND ===== -->
+<script defer src="js/ocean.js"></script>
 <!-- ===== ENGINE (must be last) ===== -->
 <script defer src="js/engine.js"></script>
 </head>
@@ -68,8 +88,8 @@
 <noscript><span class="ns">Enable JavaScript to boot THE POLYMATH CODEX.</span></noscript>
 
 <!-- background layers -->
+<canvas id="ocean" aria-hidden="true"></canvas>
 <div class="bggrid" aria-hidden="true"></div>
-<div class="starfield" aria-hidden="true"><span class="pxstar s1"></span><span class="pxstar s2"></span><span class="pxstar s3"></span><span class="pxstar s4"></span></div>
 <div class="scanlines" aria-hidden="true"></div>
 
 <!-- ============ ADMIN GLOBAL BROADCAST BANNER ============ -->
@@ -78,9 +98,6 @@
   <div class="sb-tx"><b>SYSTEM BROADCAST //</b> <span id="sysBannerTx"></span></div>
   <button class="ibtn sb-x" id="sysBannerClose" aria-label="Dismiss broadcast">×</button>
 </div>
-  <div id="chatAdminBar" hidden>
-  ...
-  </div>
 
 <!-- ============ TOPBAR / HUD ============ -->
 <header class="topbar">
@@ -147,27 +164,22 @@
 
     <!-- ================= HOME ================= -->
     <section id="home" class="screen active noprintsec" aria-labelledby="h-home">
-      <div class="hero panel">
-        <span class="deco d1" data-sprite="coin" data-px="30"></span>
-        <span class="deco d2" data-sprite="star" data-px="26" data-tint="#ffd166"></span>
-        <span class="deco d3" data-sprite="book" data-px="26"></span>
-        <span class="deco d4" data-sprite="qblock" data-px="26"></span>
-        <p class="hero-kicker">AN INTERACTIVE KNOWLEDGE QUEST · SYSTEMS · LORE · COSMOS</p>
-        <h2 class="hero-title" id="h-home">THE POLYMATH<span>CODEX</span></h2>
-        <p class="hero-tag">Scan 10 sectors of deep lore, harvest XP, ascend from Novice Chronicler to Universal Architect</p>
+      <div class="hero">
+        <h2 class="hero-title" id="h-home">The Polymath<span>Codex</span></h2>
+        <p class="hero-tag">Descend through ten sectors of deep lore, harvest XP, and rise from Novice Chronicler to Universal Architect.</p>
         <button class="btn primary startbtn" data-go="sec1"><span class="tri"></span>ENTER THE CODEX</button>
         <div class="hero-resume"><button class="btn" id="resumeBtn" data-go="syslog">RESUME: SYS-LOG</button></div>
         <div class="hero-progress">
-          <div class="hp-tx"><span>GLOBAL QUEST PROGRESS</span><span id="homeBarTx">0/11 quests</span></div>
+          <div class="hp-tx"><span>Global quest progress</span><span id="homeBarTx">0/11 quests</span></div>
           <div class="bar gold"><i id="homeBar" style="width:0%"></i></div>
         </div>
       </div>
 
       <div class="grid4" style="margin-top:18px">
-        <button class="card" data-go="sec1"><span class="card-num c1">PATH 01</span><span data-sprite="net" data-px="26"></span><b>SCAN THE SECTORS</b><span class="cp">10 terminals of lore — engine internals, cryptography, cosmos &amp; culture — tracked block by block.</span></button>
-        <button class="card" data-go="chrono"><span class="card-num c2">PATH 02</span><span data-sprite="calendar" data-px="26"></span><b>CHRONO MATRIX</b><span class="cp">Cross-epoch timelines from the Big Bang to brainrot, with a hidden-cell recall trainer.</span></button>
-        <button class="card" data-go="flash"><span class="card-num c3">PATH 03</span><span data-sprite="cards" data-px="26"></span><b>NEURAL MATRIX</b><span class="cp">Flashcard deck for high-yield constants, formulas and folklore. Flip, drill, master.</span></button>
-        <button class="card" data-go="exam"><span class="card-num c4">PATH 04</span><span data-sprite="qblock" data-px="26"></span><b>THE VOID TRIAL</b><span class="cp">A cross-sector boss exam. Survive the void and claim REALITY ARCHITECT.</span></button>
+        <button class="card" data-go="sec1"><span data-sprite="net" data-px="26"></span><b>SCAN THE SECTORS</b><span class="cp">10 terminals of lore — engine internals, cryptography, cosmos &amp; culture — tracked block by block.</span></button>
+        <button class="card" data-go="chrono"><span data-sprite="calendar" data-px="26"></span><b>CHRONO MATRIX</b><span class="cp">Cross-epoch timelines from the Big Bang to brainrot, with a hidden-cell recall trainer.</span></button>
+        <button class="card" data-go="flash"><span data-sprite="cards" data-px="26"></span><b>NEURAL MATRIX</b><span class="cp">Flashcard deck for high-yield constants, formulas and folklore. Flip, drill, master.</span></button>
+        <button class="card" data-go="exam"><span data-sprite="qblock" data-px="26"></span><b>THE VOID TRIAL</b><span class="cp">A cross-sector boss exam. Survive the void and claim REALITY ARCHITECT.</span></button>
       </div>
 
       <div class="panel" style="margin-top:18px">
@@ -249,7 +261,7 @@
           <div class="nb-pane nb-edit-pane" id="nbEditPane">
             <label class="skip" for="nbEditor">Markdown essay editor</label>
             <textarea id="nbEditor" class="nb-editor" spellcheck="true"
-              placeholder="# Term Paper — The Fermi Paradox&#10;&#10;Write in Markdown… **bold**, *italic*, $E = mc^2$, and [^1] footnotes.&#10;&#10;Group rooms sync live with a 3-second debounce to protect the Firebase free tier."></textarea>
+              placeholder="# Term Paper — The Fermi Paradox&#10;&#10;Write in Markdown… **bold**, *italic*, $E = mc^2$, and [^1] footnotes.&#10;&#10;Group rooms sync live after a 1.5-second typing pause to protect the Firebase free tier."></textarea>
           </div>
           <div class="nb-pane nb-prev-pane" id="nbPrevPane">
             <div id="nbPreview" class="md-body nb-preview" aria-live="polite"><p class="small">The formatted preview renders here — headings, tables, KaTeX formulas and citations included.</p></div>
@@ -275,14 +287,14 @@
       <div class="sec-head">
         <span class="sec-ic" data-sprite="moon" data-px="36"></span>
         <span><p class="sec-kick">SOCIAL DECK · MULTIPLAYER</p><h2 class="sec-title" id="h-lobby">OBSERVATION LOUNGE</h2>
-        <p class="sec-sub">A cozy pixel-art observation deck above Earth — click the floor to roam, talk on the channels</p></span>
+        <p class="sec-sub">A quiet observation deck beneath the surface — click the floor to roam, talk on the channels</p></span>
         <span class="sec-chip" id="lobbyCountChip">— ONLINE</span>
       </div>
 
       <div class="lobby-grid">
         <div class="panel lobby-deck-panel">
           <div class="lobby-deck-head">
-            <span class="panel-kick" style="color:var(--teal)">DECK 07 · ORBITAL OBSERVATORY</span>
+            <span class="panel-kick" style="color:var(--teal)">DECK 07 · ABYSSAL VIEWPORT</span>
             <span class="small" id="lobbyWhoami">IDENT: —</span>
           </div>
           <div class="lobby-cv-wrap">
@@ -310,7 +322,7 @@
             <button class="btn" id="adminBroadcastBtn">BROADCAST</button>
             <span class="chat-audit" id="adminAudit">ACCOUNTS: — · ACTIVE: —</span>
           </div>
-          <p class="small chat-note" id="chatNote">2s rate limit per message · history self-destructs after 24h · only the last 30 messages are kept</p>
+          <p class="small chat-note" id="chatNote">1s rate limit per message · history self-destructs after 7 days · the latest 250 messages are kept</p>
         </div>
       </div>
     </section>
