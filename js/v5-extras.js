@@ -64,6 +64,7 @@ function items() {
   return L;
 }
 function palOpen() {
+  if (window.CodexGuide) window.CodexGuide.close();
   if (!pal) {
     pal = document.createElement('div'); pal.id = 'cxPal'; pal.hidden = true;
     pal.innerHTML = '<div class="cx-pbox" role="dialog" aria-label="Command palette"><input id="cxPq" placeholder="Search lessons, notes, screens, actions…" autocomplete="off" aria-label="Command palette"><div id="cxPl" role="listbox"></div><p class="small">↑↓ move · Enter run · Esc close</p></div>';

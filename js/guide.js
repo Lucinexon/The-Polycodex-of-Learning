@@ -144,6 +144,7 @@ function paintChips(c) {
   $1('#v6gQuick').innerHTML = q.map(m => '<button type="button" data-g="quick" data-m="' + m + '">' + MODES[m].label + '</button>').join('');
 }
 function open(noIntro) {
+  const palette = $1('#cxPal'); if (palette) palette.hidden = true;
   const d = drawer(); d.classList.add('open'); d.setAttribute('aria-hidden', 'false'); paintChips(grab());
   if (!noIntro && !$1('#v6gLog').children.length) turn('a', ok() ? '<div class="v6-body"><p>Ask anything about what you’re reading. I can see the lesson, selection or note listed above (tap a chip to stop sharing it).</p></div>' : '<div class="v6-body">' + setupHTML() + '</div>');
   setTimeout(() => { const i = $1('#v6gIn'); if (i && d.classList.contains('open')) i.focus(); }, 280);
