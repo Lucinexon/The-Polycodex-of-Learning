@@ -10,7 +10,7 @@
                      self-imposed daily write budget (19k < 20k Spark limit).
    AuthManager       Pure username/password ⇄ synthetic email auth, guest
                      (anonymous) mode, cloud profile sync to players/{uid}.
-   NotebookManager   Scratchpad + 4-digit group rooms, academic toolbar,
+   NotebookManager   Obsidian-style vaults + 6-digit room vaults, academic toolbar,
                      live metrics, KaTeX preview, .md export, rich-HTML
                      clipboard copy (Google Docs / Word paste-ready).
    LoungeEngine      2D pixel-art observation deck canvas, click-to-walk,
@@ -41,6 +41,8 @@ service cloud.firestore {
     match /group_notes/{code} {
       allow read, write: if request.auth != null;
     }
+    // V5 room doc: { code, vault: { meta: {name, icon, color, owner, lock, ban, members}, notes: {id: {t, md, ts, by, pin}} } }
+    // Roles (owner/editor/viewer) are enforced by the app; the 6-digit code is the access secret.
     match /lobby_presence/{uid} {
       allow read: if request.auth != null;
       allow write: if request.auth.uid == uid;
@@ -501,733 +503,538 @@ function authErr(err) {
    another document: it syncs through group_notes/{code} behind the QuotaGuard
    debounce (1.5 s typing pause OR 10 s hard interval — never per keystroke) and
    never touches your local notes. Leaving a room keeps a copy as a normal note. */
-const NB_WELCOME = [
-  '# Welcome to your vault', '',
-  'Quiet notes, kept on this device.', '',
-  '- Type `/` for the insert menu: headings, tables, math, code, citations',
-  '- Type `[[` to link another note — links show up as backlinks',
-  '- **Ctrl/Cmd + E** flips between editing and reading; **Ctrl/Cmd + P** opens the palette',
-  '- Tick tasks while reading:',
-  '  - [ ] Try the slash menu',
-  '  - [x] Open the Welcome note', '',
-  'Math works too: $E = mc^2$', ''
-].join('\n');
+/* ===== V5 NOTEBOOK (refactored) =====================================================================
+   Obsidian-style vaults: local vaults + shared rooms (6-digit codes) where every room is itself a vault.
+   Scoped in its own closure so it cannot collide with anything above or below. PUBLIC CONTRACT (used elsewhere):
+   init · onScreen · identityChanged · saveScratch · room (chat binding) · setSync/flushRoom (legacy no-ops).
+   Room docs live in group_notes/{code}: { code, vault: { meta, notes }, ts } — legacy {md} docs upgrade in place. */
+const NotebookManager = (function () {
+const $1 = (s, r) => (r || document).querySelector(s), $A = (s, r) => Array.from((r || document).querySelectorAll(s));
+const ld = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+const sv = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v, (a, b) => a[0] === '_' ? undefined : b)); return true; } catch (e) { toast('<b>Storage full</b><br>Export a vault to free space.', 'trash'); return false; } };
+const K = { idx: 'cx_v5_idx', v: 'cx_v5_v_', pref: 'cx_v5_pref', rooms: 'cx_v5_rooms', srs: 'cx_v5_srs' };
+const bdg = id => { try { if (typeof award === 'function') award(id); } catch (e) {} };
+const ICONS = ['📚', '🧠', '🔭', '🧪', '🛰️', '🌊', '🎮', '📜', '🧬', '🪐', '⚡', '🌱'], COLORS = ['#5fd0ee', '#46f0c4', '#a99cff', '#ff7ec9', '#ffc874', '#ff7b8a', '#9ad66b'];
+const FONTS = { sans: 'var(--ui)', serif: 'Georgia,"Times New Roman",serif', mono: 'ui-monospace,Menlo,Consolas,monospace' }, WIDTHS = { narrow: '620px', normal: '800px', wide: '1100px' };
+const WELCOME = '# Welcome to your vault\n\n- Link notes with `[[double brackets]]`. In Read view, click a link to jump to it (or create it).\n- Folders come from slashes: a note titled `Physics/Entropy` lives in **Physics**.\n- Add #tags anywhere and filter by them in the sidebar.\n- Write `Term :: definition` on its own line to make a flashcard (🃏).\n- Press 📎 on any lesson block to clip it into `Clips/`.\n';
+const ROOM_WELCOME = '# Team notes\n\nEveryone in this room shares this vault live. Link notes with `[[…]]` and manage roles from the 👥 panel.\n';
+const TPL = { Cornell: '## Cues\n- \n\n## Notes\n- \n\n## Summary\n', Meeting: '## Agenda\n- \n\n## Decisions\n- \n\n## Actions\n- [ ] \n', 'Lesson recap': '## What I learned\n- \n\n## Key terms\nTerm :: definition\n\n## Questions\n- \n' };
 
-const NB_SLASH = [
-  { label: 'Heading 1', hint: '#', icon: 'doc', w: 'h1 title heading', ins: '# ' },
-  { label: 'Heading 2', hint: '##', icon: 'doc', w: 'h2 heading', ins: '## ' },
-  { label: 'Heading 3', hint: '###', icon: 'doc', w: 'h3 heading', ins: '### ' },
-  { label: 'Bulleted list', hint: '-', icon: 'doc', w: 'bullet list ul', ins: '- ' },
-  { label: 'Numbered list', hint: '1.', icon: 'doc', w: 'number ordered list ol', ins: '1. ' },
-  { label: 'Task list', hint: '[ ]', icon: 'check', w: 'task todo checkbox', ins: '- [ ] ' },
-  { label: 'Quote', hint: '>', icon: 'speech', w: 'quote blockquote', ins: '> ' },
-  { label: 'Code block', hint: '~~~', icon: 'cpu', w: 'code fence snippet', ins: '~~~\n\n~~~', caret: 4 },
-  { label: 'Table', hint: '3×3', icon: 'chart', w: 'table grid', ins: '| Header 1 | Header 2 | Header 3 |\n| --- | --- | --- |\n| — | — | — |\n| — | — | — |\n', caret: 2 },
-  { label: 'Math block', hint: '$$', icon: 'atom', w: 'math latex equation formula', ins: '$$\n\n$$', caret: 3 },
-  { label: 'Inline math', hint: '$', icon: 'atom', w: 'inline math latex', ins: '$$', caret: 1 },
-  { label: 'Citation / footnote', hint: '[^1]', icon: 'book', w: 'cite citation footnote reference', special: 'cite' },
-  { label: 'Link to note', hint: '[[', icon: 'link', w: 'link wiki note', ins: '[[]]', caret: 2 },
-  { label: 'Divider', hint: '---', icon: 'doc', w: 'divider rule hr line', ins: '---\n' }
-];
+let IDX, ROOMS, P, CUR = null, curId = null, built = false, RM = null, FILT = '', COL = {};
+let tSave = 0, tRead = 0, tTree = 0, tBack = 0, DECK = [], CI = 0, FLIP = 0, GOT = 0;
+const uid8 = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+const mk = (t, md) => ({ id: 'n' + uid8(), t, md: md || '', ts: Date.now() });
+const NE = () => ({ AuthManager: AuthManager, online: fbOK, db: function () { return DB; }, guardedWrite: guardedWrite }), FV = () => firebase.firestore.FieldValue.delete();
+const me = () => { const A = NE().AuthManager || {}; return { uid: A.uid || null, name: A.name || 'OPERATOR' }; };
+const cur = () => CUR && CUR.notes[curId], norm = s => String(s).trim().toLowerCase();
+const role = () => CUR.kind === 'local' ? 'owner' : ((CUR.meta.members || {})[me().uid] || {}).r || 'viewer';
+const canEdit = () => role() !== 'viewer', isOwner = () => role() === 'owner';
+const meta = v => ({ id: v.id, name: v.name, icon: v.icon, color: v.color });
+const sp = () => sv(K.pref, P), setBody = h => { const b = $1('#modalBody'); if (b) b.innerHTML = h; }, dlg = (t, h) => openModal(h, t);
+const clean = h => window.DOMPurify ? DOMPurify.sanitize(h, { ADD_ATTR: ['data-t', 'data-b'], FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'iframe'], FORBID_ATTR: ['style'] }) : h.replace(/<[^>]*>/g, '');
+function xp(n) { const d = new Date().toDateString(), r = ld('cx_v5_xp', { d, n: 0 }); if (r.d !== d) { r.d = d; r.n = 0; } if (r.n >= 30) return; r.n += n; sv('cx_v5_xp', r); gainXP(n, true); }
 
-const NotebookManager = {
-  vault: { v: 1, active: null, notes: [] },
-  doc: 'note',                 // 'note' | 'room'  (what the editor is showing)
-  room: null, roomMd: '', roomUnsub: null, pendingRoom: null,
-  view: 'edit', lastEdit: 'edit', filter: '', armed: null,
-  active: false, dirtyLocal: false,
-  previewT: null, saveT: null, renameT: null, armedT: null, remoteNoticeT: 0,
-  menu: { open: false, items: [], sel: 0 }, pal: { items: [], sel: 0 },
-  COLLAB_FRESH_MS: 150000,
-
-  editor: function () { return q('#nbEditor'); },
-
-  /* ------------------------------ boot ------------------------------ */
-  init: function () {
-    if (!this.editor()) return;
-    this.loadVault();
-    try { const v = localStorage.getItem(LS.nbview); if (v === 'edit' || v === 'split' || v === 'read') this.view = v; } catch (e) {}
-    if (this.view !== 'read') this.lastEdit = this.view;
-    this.bind();
-    const sh = q('#nbShell'); if (sh) sh.dataset.side = window.innerWidth > 900 ? '1' : '0';
-    this.setView(this.view, true);
-    this.showDoc();
-    this.renderRoom();
+/* ================= DATA ================= */
+function boot() {
+  if (IDX) return;
+  IDX = ld(K.idx, null); ROOMS = ld(K.rooms, []);
+  const savedP = ld(K.pref, null);
+  P = Object.assign({ font: 'sans', size: 16, width: 'normal', view: 'edit', side: 1, roomOn: null }, savedP || {});
+  if (!savedP) {
+    let migrated = false;
     try {
-      const last = localStorage.getItem(LS.nbroom);
-      if (last && /^\d{4}$/.test(last)) { q('#nbRoomInput').value = last; this.attachRoom(last, false, true); }
+      const oldView = localStorage.getItem('polymath_codex_nbview_v1');
+      if (oldView === 'edit' || oldView === 'split' || oldView === 'read') { P.view = oldView; migrated = true; }
+      const oldRoom = localStorage.getItem('polymath_codex_nbroom_v1');
+      if (/^\d{4}$/.test(oldRoom || '')) { P.roomOn = oldRoom; migrated = true; }
     } catch (e) {}
-  },
+    if (migrated) sp();
+  }
+  if (!IDX || !IDX.vaults || !IDX.vaults.length) {
+    const v = { id: uid8(), name: 'My Vault', icon: '📚', color: COLORS[0], notes: {} };
+    try { ((JSON.parse(localStorage.getItem('polymath_codex_vault_v1') || 'null') || {}).notes || []).forEach(n => { v.notes[n.id] = { id: n.id, t: n.title || 'Untitled', md: n.md || '', ts: n.ts || Date.now() }; }); } catch (e) {}
+    try { const sp = localStorage.getItem('polymath_codex_nb_v1'); if (!Object.keys(v.notes).length && sp && sp.trim()) { const x = mk('Scratchpad', sp); v.notes[x.id] = x; } } catch (e) {}
+    if (!Object.keys(v.notes).length) { const w = mk('Welcome', WELCOME); v.notes[w.id] = w; }
+    sv(K.v + v.id, v); IDX = { active: v.id, vaults: [meta(v)] }; sv(K.idx, IDX);
+  }
+  if (!CUR) loadLocal(IDX.active);
+}
+function loadLocal(id) {
+  const v = ld(K.v + id, null) || ld(K.v + IDX.vaults[0].id, null); if (!v) return;
+  CUR = Object.assign({ kind: 'local' }, v); IDX.active = v.id; sv(K.idx, IDX);
+  curId = Object.keys(CUR.notes).sort((a, b) => CUR.notes[b].ts - CUR.notes[a].ts)[0] || null;
+}
+function saveLocal() {
+  if (!CUR || CUR.kind !== 'local') return;
+  const o = Object.assign({}, CUR); delete o.kind; sv(K.v + CUR.id, o);
+  const m = IDX.vaults.find(x => x.id === CUR.id); if (m) Object.assign(m, meta(CUR)); sv(K.idx, IDX);
+}
+function touch(n) {
+  n.ts = Date.now();
+  if (CUR.kind === 'local') { clearTimeout(tSave); tSave = setTimeout(saveLocal, 600); setSync('local'); }
+  else if (RM) { RM.pending['vault.notes.' + n.id] = { t: n.t, md: n.md, ts: n.ts, by: me().uid, pin: n.pin ? 1 : 0 }; sched(); }
+}
+function captureRoom(r) {
+  if (!r || !CUR || CUR.kind !== 'room' || CUR.code !== r.code) return;
+  const notes = {};
+  Object.keys(CUR.notes).forEach(id => { notes[id] = Object.assign({}, CUR.notes[id]); });
+  r.snapshot = { name: CUR.name, icon: CUR.icon, color: CUR.color, notes: notes };
+}
+function recoverRoom(r) {
+  if (!r || !r.snapshot || r.recoverySaved) return;
+  const v = { id: uid8(), name: r.snapshot.name + ' (recovery)', icon: r.snapshot.icon, color: r.snapshot.color, notes: r.snapshot.notes };
+  if (!sv(K.v + v.id, v)) return;
+  IDX.vaults.push(meta(v));
+  if (!sv(K.idx, IDX)) {
+    IDX.vaults.pop();
+    try { localStorage.removeItem(K.v + v.id); } catch (e) {}
+    return;
+  }
+  r.recoverySaved = true;
+  toast('<b>Room changes kept locally</b><br>Recovery vault: ' + esc(v.name), 'doc', 5000);
+}
+function setSync(s) { const e = $1('#vxSync'); if (e) { e.textContent = { local: 'Saved on this device', buf: 'Unsynced…', sync: 'Syncing…', ok: 'Synced · live', off: 'Offline · changes kept' }[s] || ''; e.dataset.s = s; } }
 
-  /* ------------------------------ vault ------------------------------ */
-  mk: function (title, md) { return { id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: title, md: md || '', ts: Date.now() }; },
-  loadVault: function () {
-    let raw = null;
-    try { raw = JSON.parse(localStorage.getItem(LS.vault) || 'null'); } catch (e) {}
-    if (raw && Array.isArray(raw.notes) && raw.notes.length) { this.vault = raw; }
-    else {
-      let legacy = '';
-      try { legacy = localStorage.getItem(LS.nb) || ''; } catch (e) {}      // migrate the old single scratchpad
-      const notes = [];
-      if (legacy.trim()) notes.push(this.mk('Scratchpad', legacy));
-      notes.push(this.mk('Welcome', NB_WELCOME));
-      this.vault = { v: 1, active: notes[0].id, notes: notes };
-      this.persist();
-    }
-    if (!this.cur()) this.vault.active = this.vault.notes[0].id;
-  },
-  persist: function () { try { localStorage.setItem(LS.vault, JSON.stringify(this.vault)); } catch (e) {} },
-  saveScratch: function () { this.persist(); },                         // legacy name used by the boot facade
-  saveSoon: function () { const s = this; clearTimeout(this.saveT); this.saveT = setTimeout(function () { s.persist(); }, 400); },
-  cur: function () { const id = this.vault.active; return this.vault.notes.filter(function (n) { return n.id === id; })[0] || null; },
-  findByTitle: function (t) { t = String(t || '').trim().toLowerCase(); return this.vault.notes.filter(function (n) { return n.title.toLowerCase() === t; })[0] || null; },
-  uniqueTitle: function (base, exceptId) {
-    base = String(base || '').replace(/[\\\/:*?"<>|\[\]#^]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Untitled';
-    const taken = function (x) { return NotebookManager.vault.notes.some(function (n) { return n.id !== exceptId && n.title.toLowerCase() === x.toLowerCase(); }); };
-    let t = base, i = 2;
-    while (taken(t)) t = base + ' ' + (i++);
-    return t;
-  },
-  newNote: function (title) {
-    this.persist();
-    const n = this.mk(this.uniqueTitle(title || 'Untitled'), '');
-    this.vault.notes.push(n); this.vault.active = n.id; this.doc = 'note';
-    if (this.view === 'read') this.setView(this.lastEdit || 'edit');
-    this.persist(); this.showDoc(); this.closeSideOnMobile();
-    const t = q('#nbTitle'), ed = this.editor();
-    if (title) { if (ed) ed.focus(); } else if (t) { t.focus(); t.select(); }
-    return n;
-  },
-  openNote: function (id) {
-    if (!this.vault.notes.some(function (n) { return n.id === id; })) return;
-    this.persist(); this.vault.active = id; this.doc = 'note'; this.persist();
-    this.showDoc(); this.closeSideOnMobile();
-  },
-  deleteNote: function (id) {
-    const v = this.vault;
-    v.notes = v.notes.filter(function (n) { return n.id !== id; });
-    if (!v.notes.length) v.notes.push(this.mk('Untitled', ''));
-    if (v.active === id || !this.cur()) v.active = v.notes.slice().sort(function (a, b) { return b.ts - a.ts; })[0].id;
-    this.armed = null; this.persist(); this.showDoc(); blip('flip');
-  },
-  armDelete: function (id) {
-    const s = this; this.armed = id; this.renderList();
-    clearTimeout(this.armedT); this.armedT = setTimeout(function () { s.armed = null; s.renderList(); }, 2600);
-  },
-  rename: function (raw) {
-    const n = this.cur(); if (!n || this.doc !== 'note') return;
-    const old = n.title, next = this.uniqueTitle(raw, n.id);
-    if (next === old) return;
-    n.title = next; n.ts = Date.now();
-    const re = new RegExp('\\[\\[' + old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\||\\]\\])', 'gi');
-    this.vault.notes.forEach(function (m) { if (m.md) m.md = m.md.replace(re, function (x, g) { return '[[' + next + g; }); });
-    const ed = this.editor(); if (ed && ed.value !== n.md) ed.value = n.md;     // self-links
-    this.persist(); this.renderList();
-  },
-  backlinks: function () {
-    const n = this.cur(); if (!n || this.doc !== 'note') return [];
-    const re = new RegExp('\\[\\[\\s*' + n.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*(\\||\\]\\])', 'i');
-    return this.vault.notes.filter(function (m) { return m.id !== n.id && re.test(m.md); });
-  },
-  stripLinks: function (md) { return String(md).replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, function (m, a, b) { return (b || a).trim(); }); },
-  wikify: function (md) {
-    const self = this; let fence = false;
-    return String(md).split('\n').map(function (ln) {
-      if (/^\s*(~~~|```)/.test(ln)) { fence = !fence; return ln; }
-      if (fence) return ln;
-      return ln.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, function (m, a, b) {
-        const t = a.trim();
-        return '<a class="wl' + (self.findByTitle(t) ? '' : ' new') + '" data-wl="' + esc(t) + '">' + esc((b || a).trim()) + '</a>';
+/* ================= ROOMS (cloud vaults) ================= */
+function sched() { setSync('buf'); clearTimeout(RM.t); RM.t = setTimeout(flush, 1500); }
+function flush() {
+  if (!RM) return; clearTimeout(RM.t);
+  if (!Object.keys(RM.pending).length) return;
+  const n = NE(); if (!n.guardedWrite) { setSync('off'); return; }
+  const r = RM, up = r.pending; r.pending = {}; up.ts = Date.now(); setSync('sync');
+  r.inflight.push(up);
+  n.guardedWrite('vault-sync', () => r.ref.update(up)).then(ok => {
+    r.inflight = r.inflight.filter(item => item !== up);
+    if (RM !== r) { if (!ok) recoverRoom(r); return; }
+    if (ok) setSync(Object.keys(r.pending).length ? 'buf' : 'ok');
+    else { delete up.ts; r.pending = Object.assign(up, r.pending); setSync('off'); clearTimeout(r.t); r.t = setTimeout(flush, 15000); }
+  });
+}
+function beat() { if (!RM || document.hidden) return; const m = me(); if ((CUR.meta.members || {})[m.uid]) { RM.pending['vault.meta.members.' + m.uid + '.ts'] = Date.now(); RM.pending['vault.meta.members.' + m.uid + '.n'] = m.name; sched(); } }
+function stopRoom() { if (!RM) return; const r = RM; if (Object.keys(r.pending).length || r.inflight.length) captureRoom(r); flush(); try { r.un && r.un(); } catch (e) {} clearInterval(r.hb); clearTimeout(r.t); API.room = null; RM = null; ChatEngine.onRoomChanged(null); }
+function withAuth(cb, silent, i) {
+  const A = NE().AuthManager; if (A && A.uid) return cb();
+  if (silent) { if ((i || 0) < 6) setTimeout(() => withAuth(cb, true, (i || 0) + 1), 700); return; }
+  if (A && A.ensureAuth) A.ensureAuth('Shared rooms need an operator link.');
+}
+function joinRoom(code, create, name, silent) {
+  const n = NE(), bad = m => { if (!silent) { toast('<b>' + m + '</b>', 'cross'); sfx('bad'); } };
+  if (!n.db) return bad('Rooms need the updated network.js');
+  if (!n.online || !n.online()) return bad('Offline: rooms need a connection');
+  withAuth(() => {
+    const ref = n.db().collection('group_notes').doc(code), m = me(), now = Date.now();
+    ref.get().then(doc => {
+      const d = doc.exists ? doc.data() : null, v = d && d.vault;
+      if (create && d) return bad('That room code is already in use — try creating the room again.');
+      if (!d && !create) return bad('Room ' + code + ' not found');
+      if (v && v.meta && v.meta.ban && v.meta.ban[m.uid]) return bad('You were removed from this room');
+      if (!v) {   // brand-new room, or a legacy note room upgraded in place
+        const b = mk(d && d.md ? 'Main' : 'Welcome', d && d.md ? d.md : ROOM_WELCOME), notes = {}; notes[b.id] = { t: b.t, md: b.md, ts: now, by: m.uid };
+        const mt = { name: name || 'Room ' + code, icon: '🛰️', color: COLORS[2], owner: m.uid, lock: 0, ban: {}, members: {} }; mt.members[m.uid] = { n: m.name, r: 'owner', ts: now };
+        return n.guardedWrite('room-create', () => ref.set({ code, vault: { meta: mt, notes }, ts: now, created: now }, { merge: true }))
+          .then(ok => { if (!ok) return bad('Could not create the room (offline or write budget used)'); attach(code, ref); sfx('power'); if (!silent) toast('<b>Room ' + code + ' ready</b><br>Share the code from the 👥 panel.', 'coin'); });
+      }
+      if ((v.meta.members || {})[m.uid]) return attach(code, ref);
+      const up = {}; up['vault.meta.members.' + m.uid] = { n: m.name, r: v.meta.lock ? 'viewer' : 'editor', ts: now };
+      n.guardedWrite('room-join', () => ref.update(up)).then(ok => { if (ok) { attach(code, ref); sfx('ok'); } else bad('Could not join the room'); });
+    }).catch(() => bad('Could not reach the room'));
+  }, silent);
+}
+function mkRoom(name) {
+  const n = NE(); if (!n.db || !n.online || !n.online()) return toast('<b>Rooms need a connection and the updated network.js</b>', 'cross');
+  withAuth(() => {
+    const col = n.db().collection('group_notes'), go = i => {
+      const c = String(100000 + Math.floor(Math.random() * 900000));
+      return col.doc(c).get().then(d => {
+        if (!d.exists) return c;
+        if (i >= 5) throw new Error('No unused room code found');
+        return go(i + 1);
       });
-    }).join('\n');
-  },
-
-  /* ------------------------------ document display ------------------------------ */
-  showDoc: function () {
-    const ed = this.editor(), ti = q('#nbTitle');
-    const isRoom = this.doc === 'room' && !!this.room;
-    if (!isRoom) this.doc = 'note';
-    const n = this.cur();
-    ed.value = isRoom ? this.roomMd : (n ? n.md : '');
-    ti.value = isRoom ? 'Room ' + this.room : (n ? n.title : '');
-    ti.readOnly = isRoom;
-    this.setSync(isRoom ? (fbOK() ? (NoteSync.dirty || this.dirtyLocal ? 'buffering' : 'saved') : 'offline') : 'local');
-    this.metrics(); this.renderPreview(); this.renderList(); this.renderRoom(); this.backlinkChip(); this.menuHide();
-    ed.scrollTop = 0;
-  },
-  showRoom: function () { this.persist(); this.doc = 'room'; this.showDoc(); this.closeSideOnMobile(); },
-  onInput: function (ev) {
-    const ed = this.editor(); if (!ed) return;
-    if (ev && ev.data === '[') {                                       // auto-close [[ → [[]]
-      const p = ed.selectionStart;
-      if (ed.value.charAt(p - 2) === '[' && ed.value.slice(p, p + 2) !== ']]') { this.put(p, p, ']]', 0); return; }
-    }
-    const md = ed.value;
-    if (this.doc === 'room') {
-      this.roomMd = md; this.dirtyLocal = true;
-      if (fbOK()) NoteSync.tap(); else this.setSync('offline');
-    } else {
-      const n = this.cur(); if (n) { n.md = md; n.ts = Date.now(); }
-      this.setSync('local'); this.saveSoon();
-    }
-    this.metrics(); this.previewSoon(); this.backlinkChip();
-    this.contextMenu();
-  },
-  metrics: function () {
-    const ed = this.editor(), text = ed ? ed.value : '';
-    const words = (text.trim().match(/\S+/g) || []).length;
-    const w = q('#nbWords'), r = q('#nbRead');
-    if (w) w.textContent = words + (words === 1 ? ' word' : ' words');
-    if (r) r.textContent = words > 150 ? '· ~' + Math.max(1, Math.round(words / 200)) + ' min read' : '';
-  },
-  backlinkChip: function () {
-    const b = q('#nbBack'); if (!b) return;
-    const n = this.backlinks().length;
-    b.hidden = !n; b.textContent = n + (n === 1 ? ' backlink' : ' backlinks');
-  },
-  setSync: function (state) {
-    const wrap = q('#nbSync'), tx = q('#nbSyncTx'); if (!wrap || !tx) return;
-    wrap.className = 'nbx-sync ' + state;
-    tx.textContent = ({ local: 'Saved on this device', saved: 'Synced', buffering: 'Unsynced edits…', syncing: 'Syncing…', offline: 'Offline — rooms need Firebase' })[state] || '';
-  },
-
-  /* ------------------------------ views ------------------------------ */
-  setView: function (v, boot) {
-    if (v !== 'edit' && v !== 'split' && v !== 'read') v = 'edit';
-    this.view = v; if (v !== 'read') this.lastEdit = v;
-    try { localStorage.setItem(LS.nbview, v); } catch (e) {}
-    const sh = q('#nbShell'); if (sh) sh.dataset.view = v;
-    qa('[data-nbview]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.nbview === v)); });
-    this.menuHide();
-    if (v !== 'edit') this.renderPreview();
-    if (!boot && v !== 'read') { const ed = this.editor(); if (ed && window.innerWidth > 900) ed.focus(); }
-  },
-  toggleRead: function () { this.setView(this.view === 'read' ? (this.lastEdit || 'edit') : 'read'); blip('flip'); },
-  setSide: function (on) {
-    const sh = q('#nbShell'); if (!sh) return;
-    sh.dataset.side = on ? '1' : '0';
-    const b = q('#nbSideBtn'); if (b) b.setAttribute('aria-expanded', String(!!on));
-  },
-  toggleSide: function () { const sh = q('#nbShell'); this.setSide(!(sh && sh.dataset.side === '1')); },
-  closeSideOnMobile: function () { if (window.innerWidth <= 900) this.setSide(false); },
-  previewSoon: function () { const s = this; clearTimeout(this.previewT); this.previewT = setTimeout(function () { s.renderPreview(); }, 140); },
-  renderPreview: function () {
-    const pv = q('#nbPreview'), ed = this.editor();
-    if (!pv || !ed || this.view === 'edit') return;
-    const md = ed.value || '';
-    if (!md.trim()) { pv.innerHTML = '<p class="nbx-empty">Nothing here yet — switch to edit and start writing.</p>'; return; }
-    pv.innerHTML = (typeof window.mdBlock === 'function') ? window.mdBlock(this.wikify(md)) : '<p>' + esc(md).replace(/\n/g, '<br>') + '</p>';
-    qa('input[type="checkbox"]', pv).forEach(function (cb, i) { cb.disabled = false; cb.dataset.ti = i; });
-    if (typeof window.typeset === 'function') window.typeset(pv);
-  },
-  toggleTask: function (idx) {
-    const ed = this.editor(); if (!ed) return;
-    let fence = false, n = -1;
-    const lines = ed.value.split('\n').map(function (ln) {
-      if (/^\s*(~~~|```)/.test(ln)) { fence = !fence; return ln; }
-      if (fence) return ln;
-      const m = /^(\s*(?:[-*+]|\d+\.)\s+\[)([ xX])(\]\s.*)$/.exec(ln);
-      if (m && ++n === idx) return m[1] + (m[2] === ' ' ? 'x' : ' ') + m[3];
-      return ln;
-    });
-    ed.value = lines.join('\n'); this.onInput();
-  },
-  follow: function (title) {
-    const n = this.findByTitle(title);
-    if (n) this.openNote(n.id); else this.newNote(title);
-  },
-
-  /* ------------------------------ editing helpers ------------------------------ */
-  put: function (start, end, text, a, b) {
-    const ed = this.editor(); if (!ed) return;
-    ed.focus(); ed.setSelectionRange(start, end);
-    let ok = false;
-    try { ok = text === '' ? (start === end ? true : document.execCommand('delete')) : document.execCommand('insertText', false, text); } catch (e) {}   // execCommand keeps native undo working
-    if (!ok) { ed.setRangeText(text, start, end, 'end'); this.onInput(); }
-    const pa = a != null ? a : text.length;                                  // always land the caret deliberately
-    ed.setSelectionRange(start + pa, start + (b != null ? b : pa));
-    this.contextMenu();                                                      // e.g. re-open the [[ link menu after auto-closing
-  },
-  wrap: function (mark, placeholder) {
-    const ed = this.editor(), s = ed.selectionStart, e = ed.selectionEnd, v = ed.value, m = mark.length, sel = v.slice(s, e);
-    if (s >= m && v.slice(s - m, s) === mark && v.slice(e, e + m) === mark) { this.put(s - m, e + m, sel, 0, sel.length); return; }
-    const body = sel || placeholder || '';
-    this.put(s, e, mark + body + mark, m, m + body.length);
-  },
-  linkSel: function () {
-    const ed = this.editor(), s = ed.selectionStart, e = ed.selectionEnd, sel = ed.value.slice(s, e) || 'text';
-    this.put(s, e, '[' + sel + '](url)', sel.length + 3, sel.length + 6);
-  },
-  lineInfo: function () {
-    const ed = this.editor(), p = ed.selectionStart, v = ed.value;
-    const ls = p > 0 ? v.lastIndexOf('\n', p - 1) + 1 : 0;
-    let le = v.indexOf('\n', p); if (le < 0) le = v.length;
-    return { p: p, ls: ls, le: le, before: v.slice(ls, p), line: v.slice(ls, le) };
-  },
-  onKey: function (e) {
-    if (e.isComposing) return;
-    if (this.menu.open && this.menuKey(e)) return;
-    const mod = e.ctrlKey || e.metaKey, k = e.key;
-    if (mod && !e.altKey) {
-      const lk = k.toLowerCase();
-      if (lk === 'b') { e.preventDefault(); this.wrap('**', 'bold'); return; }
-      if (lk === 'i') { e.preventDefault(); this.wrap('*', 'italic'); return; }
-      if (lk === 'k') { e.preventDefault(); this.linkSel(); return; }
-    }
-    const ed = this.editor();
-    if (k === 'Tab' && !mod && ed.selectionStart === ed.selectionEnd) {         // only inside lists, so Tab never traps keyboard users
-      const li = this.lineInfo();
-      if (/^\s*([-*+]|\d+\.)\s/.test(li.line)) {
-        e.preventDefault();
-        if (e.shiftKey) { const m = /^( {1,2}|\t)/.exec(li.line); if (m) { this.put(li.ls, li.ls + m[0].length, ''); ed.setSelectionRange(Math.max(li.ls, li.p - m[0].length), Math.max(li.ls, li.p - m[0].length)); } }
-        else { this.put(li.ls, li.ls, '  '); ed.setSelectionRange(li.p + 2, li.p + 2); }
-        return;
-      }
-    }
-    if (k === 'Enter' && !e.shiftKey && !mod && !e.altKey && ed.selectionStart === ed.selectionEnd) {
-      const li = this.lineInfo();
-      const m = /^(\s*)((?:[-*+]|\d+\.)\s\[[ xX]\]\s|[-*+]\s|\d+\.\s|>\s)(.*)$/.exec(li.line);
-      if (m && li.before.length >= m[1].length + m[2].length) {
-        e.preventDefault();
-        if (!m[3].trim() && !ed.value.slice(li.p, li.le).trim()) {               // empty item: outdent, then clear
-          if (m[1].length >= 2) this.put(li.ls, li.le, m[1].slice(2) + m[2]); else this.put(li.ls, li.le, '');
-          return;
-        }
-        let mark = m[2];
-        if (/^\d+\./.test(mark)) mark = (parseInt(mark, 10) + 1) + '. ';
-        else if (/\[[ xX]\]/.test(mark)) mark = mark.replace(/\[[ xX]\]/, '[ ]');
-        this.put(li.p, li.p, '\n' + m[1] + mark);
-      }
-    }
-  },
-
-  /* ------------------------------ pop-up menu: "/", "[[", ⋯, backlinks ------------------------------ */
-  menuShow: function (items, at) {
-    const ul = q('#nbMenu'); if (!ul) return;
-    this.menu = { open: items.length > 0, items: items, sel: 0 };
-    ul.hidden = !this.menu.open;
-    if (!this.menu.open) return;
-    this.fill(ul, items, 0);
-    ul.style.left = Math.max(8, Math.min(at.x, window.innerWidth - 270)) + 'px';
-    const h = ul.offsetHeight || 240;
-    ul.style.top = (at.y + h > window.innerHeight - 8 ? Math.max(8, (at.up != null ? at.up : at.y) - h) : at.y) + 'px';
-  },
-  menuHide: function () { const ul = q('#nbMenu'); if (ul) ul.hidden = true; this.menu.open = false; },
-  fill: function (ul, items, sel) {
-    ul.innerHTML = items.map(function (it, i) {
-      return '<li role="option" data-i="' + i + '"' + (i === sel ? ' class="on"' : '') + '><span data-sprite="' + (it.icon || 'doc') + '" data-px="15"></span><span class="l">' + esc(it.label) + '</span>' + (it.hint ? '<kbd>' + esc(it.hint) + '</kbd>' : '') + '</li>';
-    }).join('');
-    paint(ul);
-  },
-  mark: function (ul, sel) {
-    qa('li', ul).forEach(function (li, i) { li.classList.toggle('on', i === sel); if (i === sel && li.scrollIntoView) li.scrollIntoView({ block: 'nearest' }); });
-  },
-  menuKey: function (e) {
-    const m = this.menu, k = e.key;
-    if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); m.sel = (m.sel + (k === 'ArrowDown' ? 1 : m.items.length - 1)) % m.items.length; this.mark(q('#nbMenu'), m.sel); return true; }
-    if (k === 'Enter' || k === 'Tab') { e.preventDefault(); this.menuPick(m.sel); return true; }
-    if (k === 'Escape') { e.preventDefault(); this.menuHide(); return true; }
-    return false;
-  },
-  menuPick: function (i) { const it = this.menu.items[i]; this.menuHide(); if (it && it.run) it.run(); },
-  caretXY: function (ed) {
-    const m = this._mirror || (this._mirror = document.createElement('div'));
-    const cs = getComputedStyle(ed);
-    ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'tabSize', 'wordSpacing'].forEach(function (p) { m.style[p] = cs[p]; });
-    Object.assign(m.style, { position: 'fixed', visibility: 'hidden', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', top: '0', left: '-9999px', boxSizing: 'border-box', width: ed.clientWidth + 'px' });
-    m.textContent = ed.value.slice(0, ed.selectionStart);
-    const sp = document.createElement('span'); sp.textContent = '\u200b'; m.appendChild(sp);
-    document.body.appendChild(m);
-    const lh = parseFloat(cs.lineHeight) || 26, r = ed.getBoundingClientRect();
-    const out = { x: r.left + sp.offsetLeft - ed.scrollLeft, y: r.top + sp.offsetTop - ed.scrollTop + lh, up: r.top + sp.offsetTop - ed.scrollTop };
-    m.remove(); return out;
-  },
-  contextMenu: function () {
-    const ed = this.editor();
-    if (!ed || this.view === 'read' || ed.selectionStart !== ed.selectionEnd) { this.menuHide(); return; }
-    const li = this.lineInfo(), p = li.p;
-    let m = /\[\[([^\]\n]*)$/.exec(li.before);
-    if (m) { this.linkMenu(m[1], p - m[1].length - 2, p); return; }
-    m = /(?:^|\s)\/([a-z0-9 ]{0,16})$/i.exec(li.before);
-    if (m) { this.slashMenu(m[1].toLowerCase(), p - m[1].length - 1, p); return; }
-    this.menuHide();
-  },
-  slashMenu: function (qy, start, end) {
-    const s = this, items = NB_SLASH.filter(function (it) { return !qy || (it.label + ' ' + it.w).toLowerCase().indexOf(qy) >= 0; }).map(function (it) {
-      return { label: it.label, hint: it.hint, icon: it.icon, run: function () { s.slashRun(it, start, end); } };
-    });
-    this.menuShow(items.slice(0, 9), this.caretXY(this.editor()));
-  },
-  slashRun: function (it, start, end) {
-    if (it.special === 'cite') {
-      const v = this.editor().value; let n = 1;
-      (v.match(/\[\^(\d+)\]/g) || []).forEach(function (x) { const k = parseInt(x.replace(/\D/g, ''), 10); if (k >= n) n = k + 1; });
-      const tag = '[^' + n + ']';
-      this.put(start, end, tag);
-      const ed = this.editor(), len = ed.value.length, def = '\n\n' + tag + ': Source — author, "title", publication, year, page.';
-      this.put(len, len, def);
-      return;
-    }
-    this.put(start, end, it.ins, it.caret != null ? it.caret : it.ins.length);
-  },
-  linkMenu: function (qy, start, end) {
-    const s = this, ed = this.editor(), f = qy.trim().toLowerCase(), cur = this.cur();
-    const items = this.vault.notes.filter(function (n) { return (!cur || n.id !== cur.id || s.doc === 'room') && (!f || n.title.toLowerCase().indexOf(f) >= 0); })
-      .sort(function (a, b) { return b.ts - a.ts; }).slice(0, 7)
-      .map(function (n) { return { label: n.title, icon: 'doc', run: function () { s.linkRun(start, end, n.title); } }; });
-    if (f && !this.findByTitle(qy.trim())) items.push({ label: 'Create “' + qy.trim() + '”', icon: 'plus', run: function () { s.linkRun(start, end, qy.trim()); } });
-    this.menuShow(items, this.caretXY(ed));
-  },
-  linkRun: function (start, end, title) {
-    const v = this.editor().value, close = v.slice(end, end + 2) === ']]' ? 2 : 0;
-    const t = '[[' + title + ']]';
-    this.put(start, end + close, t, t.length);
-  },
-  backlinkMenu: function () {
-    const s = this, b = q('#nbBack'), r = b.getBoundingClientRect();
-    this.menuShow(this.backlinks().map(function (n) { return { label: n.title, icon: 'link', run: function () { s.openNote(n.id); } }; }), { x: r.left, y: r.top - 4, up: r.top - 4 });
-  },
-  commands: function () {
-    const s = this, inRoom = this.doc === 'room', c = [];
-    c.push({ label: 'New note', hint: 'Alt+N', icon: 'plus', run: function () { s.newNote(); } });
-    c.push({ label: this.view === 'read' ? 'Back to editing' : 'Reading view', hint: 'Ctrl+E', icon: 'book', run: function () { s.toggleRead(); } });
-    c.push({ label: 'Split view', icon: 'columns', run: function () { s.setView('split'); } });
-    c.push({ label: 'Show / hide notes list', icon: 'sidebar', run: function () { s.toggleSide(); } });
-    c.push({ label: 'Export as Markdown', icon: 'doc', run: function () { s.exportMd(); } });
-    c.push({ label: 'Copy formatted (Docs / Word)', icon: 'print', run: function () { s.copyFormatted(); } });
-    if (inRoom) c.push({ label: 'Save a copy to my notes', icon: 'bag', run: function () { const n = s.saveRoomCopy(s.room, s.roomMd); if (n) { s.openNote(n.id); say('<b>COPY SAVED</b><br>“' + esc(n.title) + '” is in your notes.', 'doc', 2800); } } });
-    else c.push({ label: 'Delete this note', icon: 'trash', run: function () { s.setSide(true); s.armDelete(s.vault.active); } });
-    if (this.room) c.push({ label: 'Leave room ' + this.room, icon: 'cross', run: function () { s.leaveRoom(); } });
-    else c.push({ label: 'Join a shared room…', icon: 'users', run: function () { s.setSide(true); const i = q('#nbRoomInput'); if (i) i.focus(); } });
-    return c;
-  },
-  moreMenu: function () {
-    const b = q('#nbMore'), r = b.getBoundingClientRect(), keep = { 'Export as Markdown': 1, 'Copy formatted (Docs / Word)': 1, 'Delete this note': 1, 'Save a copy to my notes': 1, 'Leave room': 1 };
-    const items = this.commands().filter(function (c) { return keep[c.label] || /^Leave room/.test(c.label); });
-    this.menuShow(items, { x: r.right - 250, y: r.bottom + 6, up: r.top - 4 });
-  },
-
-  /* ------------------------------ palette (Ctrl/Cmd+P) ------------------------------ */
-  palOpen: function (prefill) {
-    const pal = q('#nbPal'), inp = q('#nbPalIn'); if (!pal) return;
-    this.menuHide(); pal.hidden = false; inp.value = prefill || ''; this.palRefresh(); inp.focus();
-  },
-  palClose: function () { const p = q('#nbPal'); if (p && !p.hidden) { p.hidden = true; const ed = this.editor(); if (ed && this.view !== 'read') ed.focus(); } },
-  palRefresh: function () {
-    const s = this, raw = q('#nbPalIn').value.trim(), f = raw.toLowerCase();
-    const hit = function (t) {
-      if (!f) return true; t = t.toLowerCase();
-      if (t.indexOf(f) >= 0) return true;
-      let i = 0; for (let k = 0; k < t.length && i < f.length; k++) if (t[k] === f[i]) i++;
-      return i === f.length;
     };
-    const items = [];
-    if (this.room && hit('room ' + this.room)) items.push({ label: 'Room ' + this.room, icon: 'users', run: function () { s.showRoom(); } });
-    this.vault.notes.slice().sort(function (a, b) { return b.ts - a.ts; }).forEach(function (n) {
-      if (hit(n.title)) items.push({ label: n.title || 'Untitled', icon: 'doc', run: function () { s.openNote(n.id); } });
-    });
-    this.commands().forEach(function (c) { if (hit(c.label)) items.push(c); });
-    if (raw && !this.findByTitle(raw)) items.push({ label: 'Create “' + raw + '”', icon: 'plus', run: function () { s.newNote(raw); } });
-    this.pal = { items: items.slice(0, 14), sel: 0 };
-    this.fill(q('#nbPalList'), this.pal.items, 0);
-  },
-  palPick: function (i) { const it = this.pal.items[i]; this.palClose(); if (it && it.run) it.run(); },
+    go(0).then(c => { closeModal(); joinRoom(c, true, name); })
+      .catch(() => toast('<b>Could not reserve a room code</b><br>Try creating the room again.', 'cross'));
+  }, false);
+}
+function attach(code, ref) {
+  if (CUR && CUR.kind === 'local') saveLocal();
+  stopRoom();
+  CUR = { kind: 'room', id: code, code, name: 'Room ' + code, icon: '🛰️', color: COLORS[2], notes: {}, meta: { members: {} } }; curId = null;
+  RM = { code, ref, pending: {}, inflight: [], t: 0, hb: 0, un: null }; P.roomOn = code; sp();
+  RM.un = ref.onSnapshot(snap => {
+    if (snap.metadata.hasPendingWrites || !RM || RM.code !== code) return;
+    const d = snap.data();
+    if (!d || !d.vault) { toast('<b>Room closed</b><br>The owner closed this room.', 'cross'); return exitRoom(); }
+    if (!(d.vault.meta.members || {})[me().uid]) { toast('<b>Removed from room</b>', 'cross'); return exitRoom(); }
+    applyRemote(d.vault); setSync(Object.keys(RM.pending).length ? 'buf' : 'ok');
+  }, () => setSync('off'));
+  RM.hb = setInterval(beat, 150000);
+  API.room = code; ChatEngine.onRoomChanged(code); bdg('v5_room');
+  renderAll(); setSync('sync');
+}
+function exitRoom() { stopRoom(); P.roomOn = null; sp(); loadLocal(IDX.active); renderAll(); }
+function applyRemote(v) {
+  const pend = RM.pending, nn = v.notes || {};
+  Object.keys(CUR.notes).forEach(id => { if (!nn[id] && !pend['vault.notes.' + id]) delete CUR.notes[id]; });
+  Object.keys(nn).forEach(id => { const r = nn[id], l = CUR.notes[id]; if (pend['vault.notes.' + id]) return; if (!l || r.ts > l.ts) CUR.notes[id] = Object.assign({ id }, r); });
+  const m = v.meta; CUR.meta = m; CUR.name = m.name; CUR.icon = m.icon; CUR.color = m.color;
+  if (!curId || !CUR.notes[curId]) curId = Object.keys(CUR.notes).sort((a, b) => CUR.notes[b].ts - CUR.notes[a].ts)[0] || null;
+  remember(CUR.code, m.name, m.icon); renderAll();
+}
+function remember(c, n, i) { const r = ROOMS.find(x => x.code === c); if (r && r.name === n && r.icon === i) return; ROOMS = ROOMS.filter(x => x.code !== c); ROOMS.unshift({ code: c, name: n, icon: i }); ROOMS = ROOMS.slice(0, 8); sv(K.rooms, ROOMS); }
+function team(op, u, val) {
+  if (!RM || !isOwner()) return;
+  const k = 'vault.meta.', M = CUR.meta, mem = M.members, pd = RM.pending, me_ = me().uid;
+  if (op === 'role' && mem[u]) { mem[u].r = val; pd[k + 'members.' + u + '.r'] = val; }
+  else if (op === 'owner' && mem[u]) { mem[u].r = 'owner'; mem[me_].r = 'editor'; M.owner = u; pd[k + 'owner'] = u; pd[k + 'members.' + u + '.r'] = 'owner'; pd[k + 'members.' + me_ + '.r'] = 'editor'; }
+  else if (op === 'kick' || op === 'ban') {
+    if (op === 'ban') { (M.ban = M.ban || {})[u] = (mem[u] || {}).n || 'Operator'; pd[k + 'ban.' + u] = M.ban[u]; }
+    Object.keys(pd).forEach(x => { if (x.indexOf(k + 'members.' + u) === 0) delete pd[x]; });
+    delete mem[u]; pd[k + 'members.' + u] = FV();
+  } else if (op === 'unban') { delete (M.ban || {})[u]; pd[k + 'ban.' + u] = FV(); }
+  else if (op === 'lock') { M.lock = val ? 1 : 0; pd[k + 'lock'] = M.lock; }
+  sfx('click'); sched(); flush(); setBody(teamHTML()); renderAll();
+}
+function setMeta(k, v) {
+  if (CUR.kind === 'room') { if (!isOwner()) return; CUR.meta[k] = v; RM.pending['vault.meta.' + k] = v; sched(); remember(CUR.code, k === 'name' ? v : CUR.name, k === 'icon' ? v : CUR.icon); }
+  CUR[k] = v; if (CUR.kind === 'local') saveLocal(); head();
+}
+function copyLocal() {
+  const v = { id: uid8(), name: CUR.name + ' (copy)', icon: CUR.icon, color: CUR.color, notes: {} };
+  Object.values(CUR.notes).forEach(n => { const c = mk(n.t, n.md); c.pin = n.pin; v.notes[c.id] = c; });
+  sv(K.v + v.id, v); IDX.vaults.push(meta(v)); sv(K.idx, IDX); return v;
+}
+function leave(close) {
+  if (!RM) return; const r = RM, mine = me().uid;
+  if (isOwner() && !close && Object.keys(CUR.meta.members || {}).length > 1) return toast('<b>Make someone else owner first</b><br>Or close the room for everyone.', 'cross');
+  if (!confirm(close ? 'Close this room for everyone? A local copy is saved.' : 'Leave this room? A local copy is saved.')) return;
+  const v = copyLocal(); flush();
+  const g = NE().guardedWrite; if (g) g(close ? 'room-close' : 'room-leave', close ? () => r.ref.delete() : () => { const u = {}; u['vault.meta.members.' + mine] = FV(); return r.ref.update(u); });
+  stopRoom(); P.roomOn = null; sp(); loadLocal(v.id); closeModal(); renderAll();
+  toast('<b>' + (close ? 'Room closed' : 'Left room') + '</b><br>Copy saved as “' + esc(v.name) + '”.', 'doc');
+}
 
-  /* ------------------------------ sidebar ------------------------------ */
-  renderList: function () {
-    const ul = q('#nbList'); if (!ul) return;
-    const s = this, f = this.filter.trim().toLowerCase();
-    const notes = this.vault.notes.slice().sort(function (a, b) { return a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1; })
-      .filter(function (n) { return !f || n.title.toLowerCase().indexOf(f) >= 0 || n.md.toLowerCase().indexOf(f) >= 0; });
-    let html = '';
-    if (this.room) html += '<li class="room' + (this.doc === 'room' ? ' on' : '') + '" data-room="1" role="option"><span data-sprite="users" data-px="15"></span><span class="t">Room ' + esc(this.room) + '</span><i class="nbx-live" title="Live"></i></li>';
-    html += notes.map(function (n) {
-      const on = s.doc === 'note' && n.id === s.vault.active, arm = s.armed === n.id;
-      return '<li' + (on ? ' class="on"' : '') + ' data-id="' + esc(n.id) + '" role="option"><span data-sprite="doc" data-px="15"></span><span class="t">' + esc(n.title || 'Untitled') + '</span>' +
-        '<button class="del' + (arm ? ' armed' : '') + '" data-del="' + esc(n.id) + '" aria-label="Delete note ' + esc(n.title) + '">' + (arm ? 'Delete?' : '×') + '</button></li>';
-    }).join('');
-    if (!notes.length && f) html += '<li class="empty">No matching notes</li>';
-    ul.innerHTML = html; paint(ul);
-  },
+/* ================= UI ================= */
+function build() {
+  built = true;
+  const sec = $1('#notebook'); sec.classList.remove('nbx'); sec.innerHTML = ('<h2 class="skip" id="h-nb">Notebook</h2><div class="vx" id="vx" data-view="edit" data-side="1">' +
+    '<aside class="vx-side panel"><button type="button" class="vx-vsw" data-a="sw" aria-label="Switch vault or room"><span id="vxIc"></span><b id="vxVn"></b><span>▾</span></button>' +
+    '<div class="vx-tools"><button type="button" class="btn primary" data-a="new">＋ Note</button><button type="button" class="btn" data-a="daily" title="Today’s note" aria-label="Daily note">📅</button><button type="button" class="btn" data-a="graph" title="Graph view" aria-label="Graph view">🕸️</button><button type="button" class="btn" data-a="cards" title="Flashcards from your notes" aria-label="Flashcards">🃏</button></div>' +
+    '<input id="vxFilter" type="search" placeholder="Filter notes or #tags" aria-label="Filter notes" autocomplete="off"><div class="vx-tree" id="vxTree"></div><div class="vx-tags" id="vxTags"></div></aside>' +
+    '<div class="vx-main panel"><div class="vx-bar"><button type="button" class="btn" data-a="side" aria-label="Toggle sidebar">☰</button><input id="vxTitle" class="vx-title" maxlength="80" placeholder="Folder/Note title" aria-label="Note title" autocomplete="off" spellcheck="false">' +
+    '<div class="vx-seg" role="group" aria-label="View"><button type="button" data-v="edit" title="Edit">✎</button><button type="button" data-v="split" title="Edit and read">◫</button><button type="button" data-v="read" title="Read">📖</button></div>' +
+    '<button type="button" class="btn" data-a="team" id="vxTeam" title="Room team" aria-label="Room team" hidden>👥</button><button type="button" class="btn" data-a="more" title="More" aria-label="More actions">⋯</button></div>' +
+    '<div class="vx-panes"><textarea id="vxEd" aria-label="Markdown note" placeholder="Start writing…  [[link]] · #tag · Term :: definition"></textarea><article id="vxRead" class="md-body vx-read" aria-live="polite"></article></div>' +
+    '<div class="vx-foot"><span id="vxWords"></span><span id="vxBack" class="vx-backs"></span><span id="vxSync" class="vx-sync"></span></div></div></div>');
+  bind(); $1('#vx').dataset.side = P.side;
+}
+function head() {
+  if (!built) return; const v = $1('#vx');
+  $1('#vxIc').textContent = CUR.icon || '📚'; $1('#vxVn').textContent = CUR.name + (CUR.kind === 'room' ? ' · ' + CUR.code : ''); $1('#vxTeam').hidden = CUR.kind !== 'room';
+  const s = v.style; s.setProperty('--vx-acc', CUR.color || COLORS[0]); s.setProperty('--vx-font', FONTS[P.font] || FONTS.sans); s.setProperty('--vx-size', P.size + 'px'); s.setProperty('--vx-w', WIDTHS[P.width] || WIDTHS.normal);
+}
+function renderAll() { if (!built || !CUR) return; head(); renderTree(); loadNote(); setView(P.view, true); }
+const tagsOf = n => { if (n._tm !== n.ts || !n._tg) { n._tm = n.ts; n._tg = []; const re = /(?:^|\s)#([A-Za-z][\w/-]*)/g; let m; while ((m = re.exec(n.md))) { const t = m[1].toLowerCase(); if (n._tg.indexOf(t) < 0) n._tg.push(t); } } return n._tg; };
+function renderTree() {
+  if (!built || !CUR) return;
+  const f = FILT.toLowerCase(), tq = f[0] === '#' ? f.slice(1) : '';
+  let list = Object.values(CUR.notes);
+  if (f) list = list.filter(n => tq ? tagsOf(n).indexOf(tq) >= 0 : (n.t + '\n' + n.md).toLowerCase().indexOf(f) >= 0);
+  const row = n => '<button type="button" class="vx-n' + (n.id === curId ? ' on' : '') + '" data-id="' + n.id + '">' + (n.pin ? '★ ' : '') + esc(n.t.split('/').pop()) + '</button>', srt = a => a.slice().sort((x, y) => x.t.localeCompare(y.t));
+  const by = {}; list.forEach(n => { const i = n.t.lastIndexOf('/'), d = i < 0 ? '' : n.t.slice(0, i); (by[d] = by[d] || []).push(n); });
+  const pins = list.filter(n => n.pin); let h = pins.length ? '<div class="vx-sec">Pinned</div>' + srt(pins).map(row).join('') : '';
+  h += srt(by[''] || []).map(row).join('');
+  Object.keys(by).filter(Boolean).sort().forEach(d => { const op = f || !COL[d]; h += '<div class="vx-f" data-d="' + esc(d) + '"><span>' + (op ? '▾ ' : '▸ ') + esc(d) + ' <i>' + by[d].length + '</i></span>' + (canEdit() ? '<button type="button" class="vx-mini" data-a="rf" data-d="' + esc(d) + '" aria-label="Rename folder">✎</button>' : '') + '</div>' + (op ? srt(by[d]).map(row).join('') : ''); });
+  $1('#vxTree').innerHTML = h || '<p class="small vx-empty">' + (f ? 'No matches.' : 'No notes yet. Press ＋ Note.') + '</p>';
+  const tc = {}; Object.values(CUR.notes).forEach(n => tagsOf(n).forEach(t => tc[t] = (tc[t] || 0) + 1));
+  $1('#vxTags').innerHTML = Object.keys(tc).sort((a, b) => tc[b] - tc[a]).slice(0, 14).map(t => '<button type="button" class="vx-tag" data-t="' + esc(t) + '">#' + esc(t) + ' ' + tc[t] + '</button>').join('');
+}
+function loadNote() {
+  const n = cur(), ed = $1('#vxEd'), ti = $1('#vxTitle'), ro = !n || !canEdit();
+  ed.readOnly = ro; ti.readOnly = ro;
+  if (!n) { ed.value = ''; ti.value = ''; $1('#vxRead').innerHTML = '<p class="small">Nothing open. Create a note with ＋ Note.</p>'; $1('#vxWords').textContent = ''; $1('#vxBack').innerHTML = ''; return; }
+  if (ed.value !== n.md) { const s = ed.selectionStart; ed.value = n.md; try { ed.setSelectionRange(s, s); } catch (e) {} }
+  if (ti.value !== n.t && document.activeElement !== ti) ti.value = n.t;
+  renderRead(); words(); backs();
+}
+function words() { const n = cur(); if (!n) return; const w = (n.md.trim().match(/\S+/g) || []).length; $1('#vxWords').textContent = w + ' words · ' + Math.max(1, Math.round(w / 200)) + ' min' + (canEdit() ? '' : ' · view only'); }
+function renderRead() {
+  const n = cur(), el = $1('#vxRead'); if (!n || P.view === 'edit') return;
+  const src = n.md.replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, (m, t, l) => {
+    t = t.trim(); if (/^lesson:/i.test(t)) { const id = t.slice(7).trim(); return '<a href="#" class="wl les" data-b="' + esc(id) + '">' + esc(l || id) + '</a>'; }
+    return '<a href="#" class="wl' + (find(t) ? '' : ' ghost') + '" data-t="' + esc(t) + '">' + esc(l || t) + '</a>';
+  }).replace(/(^|\s)#([A-Za-z][\w/-]*)/g, (m, a, t) => a + '<a href="#" class="vx-tag" data-t="' + esc(t.toLowerCase()) + '">#' + esc(t) + '</a>');
+  el.innerHTML = clean(mdBlock(src)); typeset(el);
+}
+function setView(v, quiet) { P.view = v; $1('#vx').dataset.view = v; $A('.vx-seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); if (v !== 'edit') renderRead(); if (!quiet) sp(); }
+function side(v) { P.side = v == null ? (P.side ? 0 : 1) : v; $1('#vx').dataset.side = P.side; sp(); }
+const has = s => Object.values(CUR.notes).some(o => norm(o.t) === norm(s));
+function find(name) { const t = norm(name), all = Object.values(CUR.notes); return all.find(n => norm(n.t) === t) || all.find(n => norm(n.t.split('/').pop()) === t); }
+const refs = n => { const out = [], re = /\[\[([^\]|\n]+)/g; let m; while ((m = re.exec(n.md))) out.push(norm(m[1])); return out; };
+function backs() {
+  const n = cur(), el = $1('#vxBack'); if (!n) return;
+  const nm = [norm(n.t), norm(n.t.split('/').pop())], bl = Object.values(CUR.notes).filter(o => o.id !== n.id && o.md.indexOf('[[') >= 0 && refs(o).some(l => nm.indexOf(l) >= 0));
+  el.innerHTML = bl.length ? '↩ ' + bl.slice(0, 5).map(o => '<button type="button" class="vx-bk" data-id="' + o.id + '">' + esc(o.t.split('/').pop()) + '</button>').join('') + (bl.length > 5 ? ' +' + (bl.length - 5) : '') : '';
+}
+function openNote(id) { if (!CUR.notes[id]) return; curId = id; renderTree(); loadNote(); }
+function newNote(t, md) {
+  let name = t, i = 2; while (has(name)) name = t + ' ' + i++;
+  const n = mk(name, md); CUR.notes[n.id] = n; touch(n); openNote(n.id); sfx('click');
+  if (t === 'Untitled') { const ti = $1('#vxTitle'); ti.focus(); ti.select(); } else $1('#vxEd').focus();
+}
+function rewire(a, b) { Object.values(CUR.notes).forEach(o => { const m = o.md.split('[[' + a + ']]').join('[[' + b + ']]').split('[[' + a + '|').join('[[' + b + '|'); if (m !== o.md) { o.md = m; touch(o); } }); }
+function rename(raw) {
+  const n = cur(); if (!n || !canEdit()) return;
+  let t = String(raw).replace(/\s*\/\s*/g, '/').replace(/^\/+|\/+$/g, '').slice(0, 80) || 'Untitled', b = t, i = 2;
+  if (t === n.t) return;
+  while (Object.values(CUR.notes).some(o => o.id !== n.id && norm(o.t) === norm(t))) t = b + ' ' + i++;
+  const old = n.t; n.t = t; rewire(old, t); touch(n); renderTree(); loadNote(); sfx('click');
+}
+function renameFolder(d) {
+  if (!canEdit()) return; const to = (prompt('Rename folder “' + d + '” to:', d) || '').trim().replace(/^\/+|\/+$/g, ''); if (!to || to === d) return;
+  Object.values(CUR.notes).filter(n => n.t.indexOf(d + '/') === 0).forEach(n => { const old = n.t; n.t = to + old.slice(d.length); rewire(old, n.t); touch(n); }); renderTree(); loadNote();
+}
+function link(b) {
+  if (b.dataset.b) return lesson(b.dataset.b);
+  const n = find(b.dataset.t);
+  if (n) openNote(n.id); else if (canEdit()) { const x = mk(b.dataset.t, ''); CUR.notes[x.id] = x; touch(x); openNote(x.id); sfx('ok'); }
+}
+function lesson(bid) {
+  const el = document.getElementById(bid); if (!el) return toast('<b>Lesson block not found</b>', 'cross');
+  const sec = el.closest('.screen'); window.showScreen(sec.id);
+  const d = $1('.gl-dot[data-k="' + $A('article.block', sec).indexOf(el) + '"]', sec); if (d) d.click();
+  setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+}
+function act(a, b) {
+  if (a === 'side') return side();
+  if (a === 'sw') return dlg('VAULTS & ROOMS', swHTML());
+  if (a === 'graph') return graph();
+  if (a === 'cards') return cards();
+  if (a === 'team') return CUR.kind === 'room' && dlg('ROOM · ' + CUR.name, teamHTML());
+  if (a === 'more') return dlg('NOTE & VAULT', moreHTML());
+  if (a === 'rf') return renameFolder(b.dataset.d);
+  if (!canEdit()) return toast('<b>View only</b><br>Ask the owner for editor access.', 'cross');
+  if (a === 'new') return newNote('Untitled', '');
+  if (a === 'daily') { const t = 'Daily/' + new Date().toLocaleDateString('en-CA'), n = find(t); return n ? openNote(n.id) : newNote(t, '# ' + t.slice(6) + '\n\n## Today I learned\n- \n\n## To review\n- [ ] \n'); }
+}
+function bind() {
+  const root = $1('#vx');
+  root.addEventListener('click', e => {
+    const b = e.target.closest('[data-a],[data-v],.vx-n,.vx-f,.wl,.vx-tag,.vx-bk'); if (!b) return;
+    if (b.dataset.a) return act(b.dataset.a, b);
+    if (b.dataset.v && b.closest('.vx-seg')) { sfx('click'); return setView(b.dataset.v); }
+    if (b.classList.contains('vx-n') || b.classList.contains('vx-bk')) { openNote(b.dataset.id); sfx('click'); if (innerWidth < 900) side(0); return; }
+    if (b.classList.contains('vx-f')) { COL[b.dataset.d] = !COL[b.dataset.d]; return renderTree(); }
+    e.preventDefault();
+    if (b.classList.contains('wl')) return link(b);
+    if (b.classList.contains('vx-tag')) { FILT = '#' + b.dataset.t; $1('#vxFilter').value = FILT; side(1); renderTree(); }
+  });
+  $1('#vxEd').addEventListener('input', () => {
+    const n = cur(); if (!n || !canEdit()) return;
+    n.md = $1('#vxEd').value; touch(n); words();
+    clearTimeout(tRead); tRead = setTimeout(renderRead, 250); clearTimeout(tBack); tBack = setTimeout(() => { backs(); chk(n); }, 500); clearTimeout(tTree); tTree = setTimeout(renderTree, 1200);
+  });
+  $1('#vxTitle').addEventListener('change', () => rename($1('#vxTitle').value));
+  let ft = 0; $1('#vxFilter').addEventListener('input', e => { clearTimeout(ft); ft = setTimeout(() => { FILT = e.target.value.trim(); renderTree(); }, 120); });
+  const mb = $1('#modalBody');
+  ['click', 'change'].forEach(t => mb.addEventListener(t, e => { const b = e.target.closest('[data-vx]'); if (b && (e.type === 'change') === /^(INPUT|SELECT)$/.test(b.tagName)) mact(b, e); }));
+  mb.addEventListener('input', e => { if (e.target.id === 'vxQ') qlist(e.target.value); });
+  document.addEventListener('keydown', e => {
+    if (!$1('#notebook.active')) return;
+    if (e.key === 'Enter' && e.target.id === 'vxCode') { const j = $1('[data-vx=join]'); if (j) j.click(); }
+    else if (e.key === 'Enter' && e.target.id === 'vxQ') { const r = $1('#vxQL .vx-row'); if (r) r.click(); }
+  });
+  window.addEventListener('pagehide', () => { if (RM) flush(); });
+}
 
-  /* ------------------------------ wiring ------------------------------ */
-  bind: function () {
-    const s = this, ed = this.editor(), $ = q;
-    ed.addEventListener('input', function (e) { s.onInput(e); });
-    ed.addEventListener('keydown', function (e) { s.onKey(e); });
-    ed.addEventListener('click', function () { s.contextMenu(); });
-    ed.addEventListener('blur', function () { setTimeout(function () { if (!s.menu.open) return; s.menuHide(); }, 160); });
-    ed.addEventListener('scroll', function () { if (s.menu.open) s.menuHide(); });
-    const ti = $('#nbTitle');
-    ti.addEventListener('input', function () { if (s.doc !== 'note') return; clearTimeout(s.renameT); s.renameT = setTimeout(function () { s.rename(ti.value); }, 350); });
-    ti.addEventListener('change', function () { if (s.doc !== 'note') return; s.rename(ti.value); const n = s.cur(); if (n) ti.value = n.title; });
-    ti.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ti.blur(); if (s.view !== 'read') ed.focus(); } });
-    $('#nbNew').addEventListener('click', function () { s.newNote(); blip('click'); });
-    $('#nbSideBtn').addEventListener('click', function () { s.toggleSide(); });
-    $('#nbScrim').addEventListener('click', function () { s.setSide(false); });
-    $('#nbPalBtn').addEventListener('click', function () { s.palOpen(); });
-    $('#nbMore').addEventListener('click', function (e) { e.stopPropagation(); if (s.menu.open) s.menuHide(); else s.moreMenu(); });
-    $('#nbBack').addEventListener('click', function (e) { e.stopPropagation(); if (s.menu.open) s.menuHide(); else s.backlinkMenu(); });
-    qa('[data-nbview]').forEach(function (b) { b.addEventListener('click', function () { s.setView(b.dataset.nbview); blip('click'); }); });
-    $('#nbFilter').addEventListener('input', function () { s.filter = this.value; s.renderList(); });
-    $('#nbList').addEventListener('click', function (e) {
-      const d = e.target.closest('[data-del]');
-      if (d) { e.stopPropagation(); if (s.armed === d.dataset.del) s.deleteNote(d.dataset.del); else s.armDelete(d.dataset.del); return; }
-      const li = e.target.closest('li'); if (!li) return;
-      if (li.dataset.room) s.showRoom(); else if (li.dataset.id) s.openNote(li.dataset.id);
+/* ================= DIALOGS ================= */
+function swHTML() {
+  const L = IDX.vaults.map(v => '<button type="button" class="vx-row' + (CUR.kind === 'local' && v.id === CUR.id ? ' on' : '') + '" data-vx="open" data-id="' + v.id + '"><span>' + v.icon + '</span><b>' + esc(v.name) + '</b></button>').join('');
+  const R = ROOMS.map(r => '<button type="button" class="vx-row' + (RM && RM.code === r.code ? ' on' : '') + '" data-vx="room" data-c="' + r.code + '"><span>' + (r.icon || '🛰️') + '</span><b>' + esc(r.name) + '</b><i>' + r.code + '</i></button>').join('') || '<p class="small">No rooms yet.</p>';
+  return '<h4>Your vaults</h4><div class="vx-list">' + L + '</div><button type="button" class="btn" data-vx="newv">＋ New vault</button><h4>Shared rooms</h4><div class="vx-list">' + R + '</div>' +
+    '<div class="vx-join"><input id="vxCode" inputmode="numeric" maxlength="6" placeholder="6-digit room code" aria-label="Room code" autocomplete="off"><button type="button" class="btn primary" data-vx="join">Join</button></div>' +
+    '<div class="vx-join"><input id="vxRName" maxlength="40" placeholder="Name a new room" aria-label="New room name" autocomplete="off"><button type="button" class="btn" data-vx="mkroom">Create</button></div>' +
+    '<p class="small">A room is a shared vault: everyone in it sees the same notes live. Anyone with the code can join, so lock the room or ban members from the 👥 panel.</p>';
+}
+function teamHTML() {
+  const M = CUR.meta, mem = M.members || {}, mine = me().uid, own = isOwner(), now = Date.now(), c = CUR.code;
+  const rows = Object.keys(mem).sort((a, b) => (mem[b].r === 'owner') - (mem[a].r === 'owner')).map(u => {
+    const x = mem[u], on = now - (x.ts || 0) < 300000, opt = r => '<option value="' + r + '"' + (x.r === r ? ' selected' : '') + '>' + r + '</option>';
+    return '<div class="vx-mem"><span class="vx-dot' + (on ? ' on' : '') + '" title="' + (on ? 'Active now' : 'Away') + '"></span><b>' + esc(x.n || 'Operator') + (u === mine ? ' (you)' : '') + '</b>' +
+      (own && u !== mine ? '<select data-vx="role" data-u="' + u + '" aria-label="Role">' + opt('editor') + opt('viewer') + '</select><button type="button" class="btn" data-vx="owner" data-u="' + u + '" title="Make owner" aria-label="Make owner">👑</button><button type="button" class="btn" data-vx="kick" data-u="' + u + '">Remove</button><button type="button" class="btn danger" data-vx="ban" data-u="' + u + '">Ban</button>' : '<span class="vx-role">' + esc(x.r) + '</span>') + '</div>';
+  }).join('');
+  const bans = own ? Object.keys(M.ban || {}).map(u => '<div class="vx-mem"><b>' + esc(M.ban[u]) + '</b><button type="button" class="btn" data-vx="unban" data-u="' + u + '">Unban</button></div>').join('') : '';
+  return '<div class="vx-code" aria-label="Room code">' + c.slice(0, 3) + ' ' + c.slice(3) + '</div><div class="vx-chips"><button type="button" class="btn" data-vx="cpcode">Copy code</button><button type="button" class="btn" data-vx="cplink">Copy invite link</button></div>' +
+    (own ? '<h4>Room name</h4><input data-vx="rname" value="' + esc(M.name) + '" maxlength="40" aria-label="Room name"><label class="vx-chk"><input type="checkbox" data-vx="lock"' + (M.lock ? ' checked' : '') + '> New members join as viewers</label>' : '') +
+    '<h4>Members · ' + Object.keys(mem).length + '</h4>' + rows + (bans ? '<h4>Banned</h4>' + bans : '') +
+    '<div class="vx-chips" style="margin-top:12px"><button type="button" class="btn" data-vx="cpcopy">Save local copy</button><button type="button" class="btn danger" data-vx="leave">Leave</button>' + (own ? '<button type="button" class="btn danger" data-vx="close">Close room</button>' : '') + '</div>' +
+    '<p class="small">Roles are enforced by this app. The 6-digit code is the access secret, so treat it like a password.</p>';
+}
+function moreHTML() {
+  const n = cur(), ed = n && canEdit();
+  return '<div class="vx-list">' + (ed ? '<button type="button" class="vx-row" data-vx="pin"><b>' + (n.pin ? '★ Unpin note' : '☆ Pin note') + '</b></button><button type="button" class="vx-row" data-vx="dup"><b>⧉ Duplicate</b></button><h4>Insert template</h4><div class="vx-chips">' + Object.keys(TPL).map(k => '<button type="button" class="btn" data-vx="tpl" data-k="' + k + '">' + k + '</button>').join('') + '</div>' : '') +
+    '<button type="button" class="vx-row" data-vx="cpnote"><b>🔗 Copy [[link]] to this note</b></button><button type="button" class="vx-row" data-vx="set"><b>🎨 Appearance &amp; vault settings</b></button><button type="button" class="vx-row" data-vx="export"><b>⬇ Export vault (.json)</b></button>' +
+    '<label class="vx-row"><b>⬆ Import .json or .md files</b><input type="file" data-vx="import" accept=".json,.md,.txt" multiple hidden></label>' + (ed ? '<button type="button" class="vx-row danger" data-vx="del"><b>🗑 Delete note</b></button>' : '') + '</div>';
+}
+function setHTML() {
+  const dis = isOwner() ? '' : ' disabled', sel = (id, arr, v) => '<select data-vx="' + id + '">' + arr.map(x => '<option' + (x === v ? ' selected' : '') + '>' + x + '</option>').join('') + '</select>';
+  return '<h4>Vault' + (isOwner() ? '' : ' (owner only)') + '</h4><input data-vx="vname" value="' + esc(CUR.name) + '" maxlength="40" aria-label="Vault name"' + dis + '><div class="vx-chips">' +
+    ICONS.map(i => '<button type="button" class="btn' + (i === CUR.icon ? ' primary' : '') + '" data-vx="icon" data-v="' + i + '"' + dis + '>' + i + '</button>').join('') + '</div><div class="vx-chips">' +
+    COLORS.map(c => '<button type="button" class="vx-sw' + (c === CUR.color ? ' on' : '') + '" data-vx="color" data-v="' + c + '" style="background:' + c + '" aria-label="Accent ' + c + '"' + dis + '></button>').join('') + '</div>' +
+    '<h4>Your reading view</h4><div class="vx-chips"><label>Font ' + sel('font', Object.keys(FONTS), P.font) + '</label><label>Width ' + sel('width', Object.keys(WIDTHS), P.width) + '</label><label>Size <input type="range" min="13" max="22" value="' + P.size + '" data-vx="size"></label></div>' +
+    (CUR.kind === 'local' && IDX.vaults.length > 1 ? '<button type="button" class="btn danger" data-vx="vdel">Delete this vault</button>' : '');
+}
+function mact(b, e) {
+  const a = b.dataset.vx, v = b.value, d = b.dataset, n = cur(), cp = t => navigator.clipboard && navigator.clipboard.writeText(t).then(() => toast('<b>Copied</b>', 'check'));
+  switch (a) {
+    case 'open': stopRoom(); P.roomOn = null; sp(); loadLocal(d.id); closeModal(); renderAll(); break;
+    case 'room': closeModal(); joinRoom(d.c, false); break;
+    case 'newv': { const i = IDX.vaults.length, w = mk('Welcome', WELCOME), x = { id: uid8(), name: 'Vault ' + (i + 1), icon: ICONS[i % 12], color: COLORS[i % 7], notes: {} }; x.notes[w.id] = w; sv(K.v + x.id, x); IDX.vaults.push(meta(x)); sv(K.idx, IDX); stopRoom(); P.roomOn = null; loadLocal(x.id); renderAll(); setBody(setHTML()); sfx('ok'); break; }
+    case 'join': { const c = String($1('#vxCode').value).replace(/\D/g, ''); if (!/^\d{4}(\d{2})?$/.test(c)) { sfx('bad'); return toast('<b>Room codes are 6 digits</b>', 'cross'); } closeModal(); joinRoom(c, false); break; }
+    case 'mkroom': mkRoom($1('#vxRName').value.trim()); break;
+    case 'role': team('role', d.u, v); break;
+    case 'owner': if (confirm('Make this member the owner? You become an editor.')) team('owner', d.u); break;
+    case 'kick': case 'ban': case 'unban': team(a, d.u); break;
+    case 'lock': team('lock', null, b.checked); break;
+    case 'rname': setMeta('name', v.trim().slice(0, 40) || CUR.name); break;
+    case 'cpcode': cp(CUR.code); break;
+    case 'cplink': cp(location.origin + location.pathname + '#room=' + CUR.code); break;
+    case 'cpcopy': { const x = copyLocal(); toast('<b>Saved</b><br>“' + esc(x.name) + '” is in your vaults.', 'doc'); break; }
+    case 'leave': leave(false); break;
+    case 'close': leave(true); break;
+    case 'pin': if (n) { n.pin = n.pin ? 0 : 1; touch(n); renderTree(); closeModal(); } break;
+    case 'dup': if (n) { const c = mk(n.t + ' copy', n.md); CUR.notes[c.id] = c; touch(c); closeModal(); openNote(c.id); } break;
+    case 'tpl': { const ed = $1('#vxEd'); closeModal(); ed.setRangeText(TPL[d.k], ed.selectionStart, ed.selectionEnd, 'end'); ed.dispatchEvent(new Event('input')); ed.focus(); break; }
+    case 'cpnote': if (n) cp('[[' + n.t + ']]'); break;
+    case 'set': setBody(setHTML()); break;
+    case 'del': if (n && confirm('Delete “' + n.t + '”?')) { delete CUR.notes[n.id]; if (CUR.kind === 'local') saveLocal(); else RM.pending['vault.notes.' + n.id] = FV(), sched(); curId = Object.keys(CUR.notes)[0] || null; closeModal(); renderAll(); sfx('bad'); } break;
+    case 'export': { const o = { app: 'codex-vault', v: 5, name: CUR.name, icon: CUR.icon, color: CUR.color, notes: Object.values(CUR.notes).map(x => ({ t: x.t, md: x.md, ts: x.ts, pin: x.pin ? 1 : 0 })) }; dl(JSON.stringify(o), CUR.name + '.vault.json', 'application/json'); break; }
+    case 'import': importFiles(b.files); break;
+    case 'vname': setMeta('name', v.trim().slice(0, 40) || CUR.name); break;
+    case 'icon': case 'color': setMeta(a, d.v); setBody(setHTML()); break;
+    case 'font': case 'width': P[a] = v; sp(); head(); break;
+    case 'size': P.size = +v; sp(); head(); break;
+    case 'vdel': if (confirm('Delete vault “' + CUR.name + '” and all its notes?')) { const id = CUR.id; localStorage.removeItem(K.v + id); IDX.vaults = IDX.vaults.filter(x => x.id !== id); loadLocal(IDX.vaults[0].id); closeModal(); renderAll(); } break;
+    case 'qopen': closeModal(); openNote(d.id); break;
+    case 'qnew': closeModal(); newNote(d.t, ''); break;
+    case 'cflip': FLIP = 1; cardUI(); break;
+    case 'cgood': grade(DECK[CI], true); GOT++; xp(1); CI++; FLIP = 0; sfx('ok'); cardUI(); break;
+    case 'cagain': grade(DECK[CI], false); DECK.push(DECK[CI]); CI++; FLIP = 0; sfx('flip'); cardUI(); break;
+    case 'call': cards(true); break;
+    case 'cdone': closeModal(); break;
+  }
+}
+function dl(txt, name, type) { const a = document.createElement('a'), u = URL.createObjectURL(new Blob([txt], { type })); a.href = u; a.download = name.replace(/[^\w.\- ]+/g, '_'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
+function importFiles(files) {
+  Promise.all(Array.from(files).map(f => f.text().then(t => ({ f, t })))).then(rs => {
+    let cnt = 0;
+    rs.forEach(({ f, t }) => {
+      if (/\.json$/i.test(f.name)) { try { const o = JSON.parse(t); if (o.app !== 'codex-vault') return; const x = { id: uid8(), name: String(o.name || 'Imported').slice(0, 40), icon: o.icon || '📚', color: o.color || COLORS[0], notes: {} }; (o.notes || []).forEach(q => { const c = mk(String(q.t || 'Untitled'), String(q.md || '')); c.pin = q.pin; x.notes[c.id] = c; cnt++; }); sv(K.v + x.id, x); IDX.vaults.push(meta(x)); sv(K.idx, IDX); } catch (e) {} }
+      else if (canEdit()) { let name = f.name.replace(/\.(md|txt)$/i, ''), i = 2; while (has(name)) name += ' ' + i++; const c = mk(name, t); CUR.notes[c.id] = c; touch(c); cnt++; }
     });
-    $('#nbPreview').addEventListener('click', function (e) {
-      const a = e.target.closest && e.target.closest('a.wl'); if (a) { e.preventDefault(); s.follow(a.dataset.wl); return; }
-      const t = e.target; if (t.tagName === 'INPUT' && t.type === 'checkbox' && t.dataset.ti != null) s.toggleTask(+t.dataset.ti);
-    });
-    /* menu + palette pointer handling (mousedown keeps editor focus) */
-    $('#nbMenu').addEventListener('mousedown', function (e) { e.preventDefault(); const li = e.target.closest('li[data-i]'); if (li) s.menuPick(+li.dataset.i); });
-    $('#nbPalList').addEventListener('mousedown', function (e) { e.preventDefault(); const li = e.target.closest('li[data-i]'); if (li) s.palPick(+li.dataset.i); });
-    $('#nbPal').addEventListener('mousedown', function (e) { if (e.target === this) s.palClose(); });
-    const pi = $('#nbPalIn');
-    pi.addEventListener('input', function () { s.palRefresh(); });
-    pi.addEventListener('keydown', function (e) {
-      const p = s.pal, k = e.key;
-      if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); if (p.items.length) { p.sel = (p.sel + (k === 'ArrowDown' ? 1 : p.items.length - 1)) % p.items.length; s.mark($('#nbPalList'), p.sel); } }
-      else if (k === 'Enter') { e.preventDefault(); s.palPick(p.sel); }
-      else if (k === 'Escape') { e.preventDefault(); s.palClose(); }
-    });
-    document.addEventListener('mousedown', function (e) { if (s.menu.open && !e.target.closest('#nbMenu') && e.target.id !== 'nbMore' && e.target.id !== 'nbBack') s.menuHide(); });
-    /* rooms */
-    $('#nbJoinBtn').addEventListener('click', function () { s.joinRoom(false); });
-    $('#nbCreateBtn').addEventListener('click', function () { s.joinRoom(true); });
-    $('#nbLeaveBtn').addEventListener('click', function () { s.leaveRoom(); });
-    const ri = $('#nbRoomInput');
-    ri.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); s.joinRoom(false); } });
-    ri.addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); });
-    /* global shortcuts, only while the notebook screen is showing */
-    document.addEventListener('keydown', function (e) {
-      if (!s.active) return;
-      const mod = e.ctrlKey || e.metaKey, k = (e.key || '').toLowerCase();
-      if (mod && !e.altKey && !e.shiftKey && k === 'p') { e.preventDefault(); s.palOpen(); }
-      else if (mod && !e.altKey && !e.shiftKey && k === 'e') { e.preventDefault(); s.toggleRead(); }
-      else if (e.altKey && !mod && k === 'n') { e.preventDefault(); s.newNote(); }
-    }, true);
-    if (window.matchMedia) {                                   // notes list follows the breakpoint (open on desktop, drawer on phones)
-      const mq = window.matchMedia('(max-width: 900px)'), h = function (e) { s.setSide(!e.matches); };
-      if (mq.addEventListener) mq.addEventListener('change', h); else if (mq.addListener) mq.addListener(h);
-    }
-  },
+    closeModal(); renderAll(); toast('<b>Imported ' + cnt + ' note' + (cnt === 1 ? '' : 's') + '</b>', 'doc'); sfx('ok');
+  });
+}
+function quick() { dlg('QUICK SWITCH', '<input id="vxQ" placeholder="Jump to a note… (Enter opens)" autocomplete="off" aria-label="Jump to note"><div id="vxQL" class="vx-list"></div>'); const q = $1('#vxQ'); if (q) q.focus(); qlist(''); }
+function qlist(s) {
+  const t = norm(s), l = Object.values(CUR.notes).filter(n => !t || norm(n.t).indexOf(t) >= 0).sort((a, b) => b.ts - a.ts).slice(0, 8);
+  $1('#vxQL').innerHTML = l.map(n => '<button type="button" class="vx-row" data-vx="qopen" data-id="' + n.id + '"><b>' + esc(n.t) + '</b></button>').join('') + (t && canEdit() && !has(s) ? '<button type="button" class="vx-row" data-vx="qnew" data-t="' + esc(s.trim()) + '"><b>＋ Create “' + esc(s.trim()) + '”</b></button>' : '');
+}
+/* spaced repetition: Term :: definition lines become Leitner cards (1,2,4,8,16,32 days) */
+const SRS_IV = [0, 1, 2, 4, 8, 16, 32], CARD_RE = /^\s*(?:[-*]\s+)?(.{2,120}?)\s*::\s*(.{1,400})$/, today = () => Math.floor(Date.now() / 864e5), ck = c => norm(c.q).slice(0, 80);
+const dueOf = list => { const s = ld(K.srs, {}); return list.filter(c => !s[ck(c)] || s[ck(c)].d <= today()); };
+const cardsOf = notes => { const out = []; Object.values(notes).forEach(n => n.md.split('\n').forEach(l => { const m = CARD_RE.exec(l); if (m) out.push({ q: m[1], a: m[2], n: n.t }); })); return out; };
+function chk(n) { if ((n.md.trim().match(/\S+/g) || []).length >= 50) bdg('v5_note'); if (/\[\[[^\]\n]+\]\]/.test(n.md)) bdg('v5_link'); }
+function grade(c, ok) {
+  const s = ld(K.srs, {}), k = ck(c), r = s[k] || { b: 0 }; r.b = ok ? Math.min(6, r.b + 1) : 1; r.d = today() + SRS_IV[r.b]; s[k] = r; sv(K.srs, s);
+  if (ok) { const n = ld('cx_v5_rev', 0) + 1; sv('cx_v5_rev', n); if (n >= 10) bdg('v5_cards'); }
+}
+function cards(all) {
+  const list = cardsOf(CUR.notes);
+  if (!list.length) return dlg('FLASHCARDS FROM NOTES', '<p>No cards yet. In any note, write <code>Term :: definition</code> on its own line.</p>');
+  const due = dueOf(list);
+  if (!all && !due.length) return dlg('FLASHCARDS FROM NOTES', '<p><b>All caught up.</b> ' + list.length + ' cards, none due today.</p><button type="button" class="btn primary" data-vx="call">Review anyway</button>');
+  DECK = shuffle(all ? list : due).slice(0, 30); CI = 0; FLIP = 0; GOT = 0; dlg('FLASHCARDS FROM NOTES', ''); cardUI();
+}
+function cardUI() {
+  const c = DECK[CI];
+  setBody(!c ? '<p><b>Deck done.</b> ' + GOT + ' recalled.</p><button type="button" class="btn primary" data-vx="cdone">Close</button>' :
+    '<p class="small">' + (CI + 1) + ' / ' + DECK.length + ' · ' + esc(c.n) + '</p><div class="vx-card">' + mdInline(c.q) + (FLIP ? '<hr>' + mdInline(c.a) : '') + '</div>' +
+    (FLIP ? '<button type="button" class="btn primary" data-vx="cgood">Got it</button> <button type="button" class="btn" data-vx="cagain">Again</button>' : '<button type="button" class="btn primary" data-vx="cflip">Show answer</button>'));
+}
+function graph() {
+  const ns = Object.values(CUR.notes).slice(0, 120); if (!ns.length) return;
+  dlg('GRAPH · ' + CUR.name, '<canvas id="vxG" width="640" height="420" aria-label="Note graph" style="width:100%;border-radius:12px;background:#021017"></canvas><p class="small">Click a node to open it. Bigger dots have more links.</p>');
+  const W = 640, Hh = 420, E = [], deg = ns.map(() => 0);
+  ns.forEach((n, i) => refs(n).forEach(l => { const j = ns.findIndex(o => norm(o.t) === l || norm(o.t.split('/').pop()) === l); if (j >= 0 && j !== i) { E.push([i, j]); deg[i]++; deg[j]++; } }));
+  const X = ns.map((_, i) => W / 2 + Math.cos(i * 2.4) * (60 + i * 2.5)), Y = ns.map((_, i) => Hh / 2 + Math.sin(i * 2.4) * (60 + i * 2.5)), cl = (v, m) => Math.max(-12, Math.min(12, v)) + m;
+  for (let it = 0; it < 160; it++) {
+    const dx = ns.map(() => 0), dy = ns.map(() => 0);
+    for (let a = 0; a < ns.length; a++) for (let b = a + 1; b < ns.length; b++) { const vx = X[a] - X[b], vy = Y[a] - Y[b], f = 1800 / (vx * vx + vy * vy + 40); dx[a] += vx * f; dy[a] += vy * f; dx[b] -= vx * f; dy[b] -= vy * f; }
+    E.forEach(([a, b]) => { const vx = X[b] - X[a], vy = Y[b] - Y[a]; dx[a] += vx * .02; dy[a] += vy * .02; dx[b] -= vx * .02; dy[b] -= vy * .02; });
+    for (let i = 0; i < ns.length; i++) { X[i] = Math.max(20, Math.min(W - 20, cl(dx[i] + (W / 2 - X[i]) * .01, X[i]))); Y[i] = Math.max(20, Math.min(Hh - 20, cl(dy[i] + (Hh / 2 - Y[i]) * .01, Y[i]))); }
+  }
+  const cv = $1('#vxG'), c = cv.getContext('2d'); let hov = -1, ra = 0;
+  const draw = () => {
+    c.clearRect(0, 0, W, Hh); c.strokeStyle = 'rgba(95,208,238,.35)'; c.lineWidth = 1; E.forEach(([a, b]) => { c.beginPath(); c.moveTo(X[a], Y[a]); c.lineTo(X[b], Y[b]); c.stroke(); });
+    ns.forEach((n, i) => { c.fillStyle = n.id === curId ? '#ffc874' : i === hov ? '#fff' : (CUR.color || '#5fd0ee'); c.beginPath(); c.arc(X[i], Y[i], 4 + Math.min(deg[i], 8), 0, 7); c.fill(); if (deg[i] > 1 || i === hov || n.id === curId) { c.fillStyle = '#e4f7fb'; c.font = '12px sans-serif'; c.fillText(n.t.split('/').pop().slice(0, 22), X[i] + 8, Y[i] - 8); } });
+  };
+  const at = e => { const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * Hh / r.height; let best = -1, bd = 400; ns.forEach((n, i) => { const q = (X[i] - x) ** 2 + (Y[i] - y) ** 2; if (q < bd) { bd = q; best = i; } }); return best; };
+  cv.onmousemove = e => { const h = at(e); cv.style.cursor = h >= 0 ? 'pointer' : 'default'; if (h !== hov) { hov = h; if (!ra) ra = requestAnimationFrame(() => { ra = 0; draw(); }); } };
+  cv.onclick = e => { const i = at(e); if (i >= 0) { closeModal(); openNote(ns[i].id); } };
+  draw();
+}
 
-  /* ------------------------------ shared rooms ------------------------------ */
-  renderRoom: function () {
-    const idle = q('#nbRoomIdle'), live = q('#nbRoomLive'); if (!idle || !live) return;
-    idle.hidden = !!this.room; live.hidden = !this.room;
-    if (!this.room) { const c = q('#nbCollab'); if (c) c.textContent = ''; }
-  },
-  joinRoom: function (create) {
-    const code = String(q('#nbRoomInput').value || '').replace(/\D/g, '');
-    if (!/^\d{4}$/.test(code)) { say('<b>ROOM CODE</b><br>Enter exactly 4 digits (e.g. 4091).', 'doc', 3000); blip('bad'); return; }
-    if (!fbOK()) { say('<b>OFFLINE</b><br>Configure FIREBASE_CONFIG to open shared rooms.', 'doc', 3000); blip('bad'); return; }
-    AuthManager.ensureAuth('Shared rooms need an operator link.');
-    this.attachRoom(code, create, false);
-  },
-  attachRoom: function (code, create, silent) {
-    const self = this;
-    if (!fbOK()) { if (!silent) say('<b>OFFLINE</b><br>Configure FIREBASE_CONFIG to open shared rooms.', 'doc', 3000); return; }
-    if (!AuthManager.user) {
-      if (silent) { this.pendingRoom = code; return; }          // resume quietly once auth resolves (no toast on page load)
-      say('Awaiting operator link — try again in a second.', 'power', 2600); return;
-    }
-    if (this.room === code && this.roomUnsub) { this.showRoom(); return; }
-    const ref = DB.collection('group_notes').doc(code);
-    const n = this.cur(), seed = (this.doc === 'note' && n) ? n.md : '';
-    ref.get().then(function (doc) {
-      if (!doc.exists && !create) {
-        if (silent) { try { localStorage.removeItem(LS.nbroom); } catch (e) {} }
-        else { say('<b>ROOM ' + esc(code) + ' NOT FOUND</b><br>Double-check the code, or hit New to create it from the open note.', 'doc', 3400); blip('bad'); }
-        return;
-      }
-      let md = seed;
-      if (!doc.exists) {
-        guardedWrite('create-room', function () {
-          return ref.set({ code: code, md: seed, updatedBy: AuthManager.uid, updatedName: AuthManager.name || 'OPERATOR', coll: {}, ts: Date.now(), created: Date.now() });
-        });
-        if (!silent) say('<b>ROOM ' + esc(code) + ' CREATED</b><br>Seeded from your open note — share the code.', 'coin', 3600);
-      } else {
-        const d = doc.data() || {};
-        md = typeof d.md === 'string' ? d.md : '';
-        self.renderCollab(d.coll || {});
-        if (!silent) say('<b>LINKED TO ROOM ' + esc(code) + '</b><br>Live essay channel bound to #essay-group.', 'coin', 3200);
-      }
-      if (!silent) blip('ok');
-      self.detachRoom(true);
-      self.room = code; self.roomMd = md; self.dirtyLocal = false; NoteSync.dirty = false;
-      try { localStorage.setItem(LS.nbroom, code); } catch (e) {}
-      self.roomUnsub = ref.onSnapshot(function (snap) { self.onRoomSnap(snap); }, function () {});
-      ChatEngine.onRoomChanged(code);
-      if (!silent) self.showRoom(); else { self.renderRoom(); self.renderList(); }
-    }).catch(function () { say('<b>ROOM LINK FAILED</b><br>Relay unreachable — try again.', 'doc', 3000); });
-  },
-  detachRoom: function (keepRoomVar) {
-    if (this.roomUnsub) { try { this.roomUnsub(); } catch (e) {} this.roomUnsub = null; }
-    if (!keepRoomVar) {
-      this.room = null;
-      try { localStorage.removeItem(LS.nbroom); } catch (e) {}
-      ChatEngine.onRoomChanged(null);
-    }
-  },
-  saveRoomCopy: function (code, md) {
-    if (!md || !md.trim()) return null;
-    const title = 'Room ' + code;
-    let n = this.findByTitle(title);
-    if (n) { n.md = md; n.ts = Date.now(); } else { n = this.mk(title, md); this.vault.notes.push(n); }
-    this.persist(); return n;
-  },
-  leaveRoom: function () {
-    const code = this.room; if (!code) return;
-    NoteSync.stop();                                   // flush pending edits while still attached
-    const md = this.roomMd, wasOpen = this.doc === 'room';
-    this.detachRoom(false);
-    this.dirtyLocal = false; this.roomMd = '';
-    const copy = this.saveRoomCopy(code, md);
-    if (wasOpen) { this.doc = 'note'; if (copy) this.vault.active = copy.id; }
-    this.persist(); this.showDoc();
-    say('<b>LEFT ROOM ' + esc(code) + '</b><br>' + (copy ? 'A copy is saved as “' + esc(copy.title) + '”.' : 'Nothing to keep.'), 'doc', 3200);
-    blip('flip');
-  },
-  onRoomSnap: function (snap) {
-    if (!snap.exists) return;
-    const d = snap.data() || {};
-    this.renderCollab(d.coll || {});
-    if (d.updatedBy === AuthManager.uid) return;                       // our own echo
-    const remote = typeof d.md === 'string' ? d.md : '';
-    if (NoteSync.dirty || this.dirtyLocal) {                            // our unsent edits win until the next flush
-      const now = Date.now();
-      if (now - this.remoteNoticeT > 20000) { this.remoteNoticeT = now; say('<b>REMOTE EDIT DETECTED</b><br>' + esc(d.updatedName || 'A collaborator') + ' pushed changes — your pending edits flush in a moment.', 'doc', 3400); }
-      return;
-    }
-    if (remote === this.roomMd) return;
-    this.roomMd = remote;
-    if (this.doc === 'room') {
-      const ed = this.editor(), p = Math.min(ed.selectionStart, remote.length);
-      ed.value = remote; ed.setSelectionRange(p, p);                   // keep the caret where it was
-      this.metrics(); this.previewSoon();
-    }
-  },
-  renderCollab: function (coll) {
-    const now = Date.now(), names = [];
-    Object.keys(coll || {}).forEach(function (uid) {
-      const c = coll[uid];
-      if (c && c.n && (now - (c.ts || 0)) < NotebookManager.COLLAB_FRESH_MS) names.push(c.n);
-    });
-    if (AuthManager.name && names.indexOf(AuthManager.name) < 0) names.push(AuthManager.name);
-    const el = q('#nbCollab');
-    if (el) el.textContent = names.length + ' editing · ' + names.slice(0, 3).join(', ') + (names.length > 3 ? ' +' + (names.length - 3) : '');
-  },
-  flushRoom: function () {
-    const self = this;
-    if (!this.room || !fbOK() || !AuthManager.uid) { this.setSync(this.room ? 'buffering' : 'local'); return; }
-    const md = this.roomMd, uid = AuthManager.uid, name = AuthManager.name || 'OPERATOR';
-    this.setSync('syncing');
-    guardedWrite('note-sync', function () {
-      const coll = {}; coll[uid] = { n: name, ts: Date.now() };
-      return DB.collection('group_notes').doc(self.room).set({ code: self.room, md: md, updatedBy: uid, updatedName: name, coll: coll, ts: Date.now() }, { merge: true });
-    }).then(function (ok) {
-      if (ok) self.dirtyLocal = (self.roomMd !== md);
-      self.setSync(ok ? (self.dirtyLocal ? 'buffering' : 'saved') : 'buffering');
-    });
-  },
-  identityChanged: function () {
-    if (this.pendingRoom && AuthManager.user && fbOK()) { const c = this.pendingRoom; this.pendingRoom = null; this.attachRoom(c, false, true); }
-    this.renderRoom();
-  },
+/* ================= LESSON CLIPS ================= */
+function clip(art) {
+  boot();
+  const sec = art.closest('.screen'), tl = $1('.gl-tldr', art), text = tl ? tl.textContent.replace(/^In short/, '').trim() : '';
+  let v = CUR && CUR.kind === 'local' ? CUR : Object.assign({ kind: 'local' }, ld(K.v + IDX.active, null));
+  if (!v.notes) return;
+  const lab = (SECTORS.find(s => s.id === sec.id) || {}).label || sec.id, title = 'Clips/' + lab;
+  let n = Object.values(v.notes).find(x => x.t === title);
+  if (!n) { n = mk(title, '# ' + lab + '\n\n'); v.notes[n.id] = n; }
+  if (n.md.indexOf('[[lesson:' + art.id + '|') >= 0) return toast('<b>Already clipped</b>', 'check');
+  n.md += '- **' + art.dataset.title + '**' + (text ? ' — ' + text : '') + ' [[lesson:' + art.id + '|open lesson]]\n'; n.ts = Date.now();
+  if (v === CUR) { saveLocal(); if (built) renderTree(); } else { const o = Object.assign({}, v); delete o.kind; sv(K.v + v.id, o); }
+  sfx('ok'); xp(2); { const c = ld('cx_v5_clips', 0) + 1; sv('cx_v5_clips', c); if (c >= 3) bdg('v5_clip'); } toast('<b>Clipped</b><br>' + esc(title) + ' · ' + esc(v.name), 'doc');
+}
 
-  /* ------------------------------ export & clipboard ------------------------------ */
-  exportMd: function () {
-    const ed = this.editor(); if (!ed) return;
-    this.persist();
-    const n = this.cur();
-    const base = this.doc === 'room' ? 'room-' + this.room : String((n && n.title) || 'note').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'note';
-    const name = base + '-' + dayKey() + '.md';
-    try {
-      const blob = new Blob([ed.value], { type: 'text/markdown;charset=utf-8' });
-      const url = URL.createObjectURL(blob), a = document.createElement('a');
-      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      say('<b>EXPORTED</b><br>' + esc(name) + ' written to your downloads.', 'doc', 3200); blip('ok');
-    } catch (e) { say('Export failed — browser blocked the download.', 'doc', 3000); }
+/* ================= PUBLIC API: the contract network.js, chat and the engine rely on ================= */
+function open() { boot(); if (!built) build(); if (P.roomOn && !RM) joinRoom(P.roomOn, false, null, true); renderAll(); }
+const API = {
+  room: null,                                        // read by ChatEngine to bind #essay-group to the open room
+  init: function () {
+    const mt = $1('#mount'); if (mt) mt.addEventListener('click', e => { const b = e.target.closest('.vx-clip'); if (b) clip(b.closest('article.block')); });
+    const m = /room=(\d{4,6})/.exec(location.hash);
+    if (m) { boot(); P.roomOn = m[1]; history.replaceState(null, '', location.pathname + location.search); setTimeout(() => window.showScreen && window.showScreen('notebook'), 400); }
+    else if ($1('#notebook.active')) API.onScreen(true);
   },
-  /* KaTeX → styled HTML for the rich clipboard (Google Docs / Word paste) */
-  katexHTML: function (tex, display) {
-    if (typeof window.katex !== 'undefined') {
-      try {
-        /* mdBlock() HTML-escapes TeX; undo that so & < > reach KaTeX intact */
-        const raw = String(tex).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-        return window.katex.renderToString(raw, { throwOnError: false, output: 'htmlAndMathml', displayMode: !!display });
-      } catch (e) { /* fall through */ }
+  onScreen: function (on) {
+    try { if (on) open(); else if (RM) { stopRoom(); if (CUR.kind === 'room') loadLocal(IDX.active); } } catch (e) { if (window.console) console.error('[notebook]', e); }
+  },
+  identityChanged: function () { try { if (!built) return; if (RM && !AuthManager.uid) exitRoom(); else if (P.roomOn && !RM && $1('#notebook.active')) joinRoom(P.roomOn, false, null, true); } catch (e) {} },
+  saveScratch: function () { if (!IDX) return; clearTimeout(tSave); saveLocal(); if (RM) { if (Object.keys(RM.pending).length || RM.inflight.length) { captureRoom(RM); recoverRoom(RM); } flush(); } },
+  setSync: function () {}, flushRoom: function () { if (RM) flush(); },   // legacy NoteSync hooks, kept harmless
+  list: function () { boot(); return Object.values(CUR.notes).map(n => ({ id: n.id, t: n.t })); },
+  openNote: function (id) { window.showScreen('notebook'); openNote(id); },
+  run: function (a) { window.showScreen('notebook'); if (a === 'quick') quick(); else act(a); },
+  dueCount: function () {
+    try { if (!localStorage.getItem(K.idx)) return 0; boot(); const v = CUR && CUR.kind === 'local' ? CUR : ld(K.v + IDX.active, null); return v ? dueOf(cardsOf(v.notes)).length : 0; } catch (e) { return 0; }
+  },
+  createRecap: function (sid) {
+    const sec = SECTORS.find(s => s.id === sid); if (!sec) return;
+    window.showScreen('notebook'); if (!canEdit()) return toast('<b>View only</b><br>Switch to a vault you can edit.', 'cross');
+    const t = 'Recaps/' + sec.label; let n = Object.values(CUR.notes).find(x => norm(x.t) === norm(t));
+    if (!n) {
+      n = mk(t, '# ' + sec.label + ' recap\n\n## In my own words\n\n\n## Key ideas\n' + (sec.blocks || []).map(b => '- [[lesson:' + b.id + '|' + String(b.title).replace(/[\[\]|]/g, '') + ']]').join('\n') + '\n\n## Flashcards\nTerm :: definition\n\n## Still unsure\n- \n');
+      CUR.notes[n.id] = n; touch(n);
     }
-    return esc((display ? '$$' + tex + '$$' : '$' + tex + '$'));
-  },
-  richHTML: function () {
-    const ed = this.editor();
-    const md = ed ? ed.value : '';
-    let html;
-    if (typeof window.mdBlock === 'function') html = window.mdBlock(NotebookManager.stripLinks(md));
-    else html = '<p>' + esc(md).replace(/\n/g, '<br>') + '</p>';
-    /* render math segments for targets that never load KaTeX css */
-    html = html.replace(/\$\$([\s\S]+?)\$\$/g, (function (m, tx) { return NotebookManager.katexHTML(tx, true); }))
-               .replace(/\$([^$\n]+?)\$/g, (function (m, tx) { return NotebookManager.katexHTML(tx, false); }));
-    /* inline styles — Docs/Word strip <style> blocks but keep inline CSS */
-    const MAP = [
-      ['<h1>', '<h1 style="font-family:Georgia,serif;font-size:26pt;font-weight:700;margin:20pt 0 8pt;color:#111">'],
-      ['<h2>', '<h2 style="font-family:Georgia,serif;font-size:19pt;font-weight:700;margin:16pt 0 6pt;color:#222">'],
-      ['<h3>', '<h3 style="font-family:Georgia,serif;font-size:15pt;font-weight:700;margin:12pt 0 5pt;color:#333">'],
-      ['<blockquote>', '<blockquote style="border-left:4px solid #b39243;margin:10pt 0;padding:2pt 14pt;color:#555">'],
-      ['<code>', '<code style="font-family:Consolas,monospace;background:#f2f2f2;padding:1pt 3pt">'],
-      ['<pre>', '<pre style="font-family:Consolas,monospace;background:#f5f5f5;border:1px solid #ddd;padding:10pt;white-space:pre-wrap">'],
-      ['<table>', '<table style="border-collapse:collapse;margin:12pt 0">'],
-      ['<th>', '<th style="border:1px solid #999;padding:5pt 9pt;background:#eee;text-align:left">'],
-      ['<td>', '<td style="border:1px solid #999;padding:5pt 9pt">'],
-      ['<li>', '<li style="margin:3pt 0">']
-    ];
-    MAP.forEach(function (pair) { html = html.split(pair[0]).join(pair[1]); });
-    return '<div style="font-family:Georgia,serif;font-size:11pt;line-height:1.6;color:#1a1a1a;max-width:660pt">' + html + '</div>';
-  },
-  copyFormatted: function () {
-    const self = this;
-    this.saveScratch();
-    const rich = this.richHTML();
-    const ed = this.editor();
-    const plain = ed ? ed.value : '';
-    const okToast = function () {
-      say('<b>FORMATTED COPY COMPLETE</b><br>Now paste (Ctrl/Cmd+V) straight into Google Docs or Word — headings, tables, bolding and citations ride along.', 'doc', 4600);
-      blip('ok');
-    };
-    const fallback = function () {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = plain;
-        ta.style.cssText = 'position:fixed;left:-999px;top:0';
-        document.body.appendChild(ta); ta.select();
-        const ok = document.execCommand('copy');
-        ta.remove();
-        if (ok) say('<b>PLAIN-TEXT COPY</b><br>This browser withholds the rich clipboard — Markdown source copied instead.', 'doc', 3600);
-        else say('Copy blocked — select the editor text and copy manually.', 'doc', 3200);
-      } catch (e) { say('Copy blocked — select the editor text and copy manually.', 'doc', 3200); }
-    };
-    if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write) {
-      try {
-        const item = new ClipboardItem({
-          'text/html': new Blob([rich], { type: 'text/html' }),
-          'text/plain': new Blob([plain], { type: 'text/plain' })
-        });
-        navigator.clipboard.write([item]).then(okToast).catch(fallback);
-      } catch (e) { fallback(); }
-    } else fallback();
-  },
-
-  onScreen: function (active) {
-    this.active = !!active;
-    if (active) { this.metrics(); this.renderPreview(); this.renderList(); this.renderRoom(); this.backlinkChip(); }
-    else { this.persist(); NoteSync.flush(); this.menuHide(); this.palClose(); }
+    openNote(n.id); setView('split'); sfx('ok');
   }
 };
+return API;
+})();
+
 
 /* ========================= [3b] SUPABASE REALTIME — LOUNGE TRANSPORT =========================
    The observation lounge used to heartbeat every operator's position into
@@ -1282,7 +1089,7 @@ const SupabaseLounge = {
   state: 'idle',                 // idle | joining | live | retry
   WALK_MIN_MS: 120,              // at most ~8 walk messages / second
   REST_MS: 1500,                 // settle time before refreshing our resting position
-  lastWalk: 0, walkT: null, restT: null, hiddenT: null, _vw: false,
+  lastWalk: 0, walkT: null, restT: null, hiddenT: null, retryT: null, _vw: false,
 
   available: function () { return SB_OK && typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function'; },
   label: function () { return this.state === 'live' ? 'REALTIME' : (this.state === 'retry' ? 'RECONNECTING…' : 'CONNECTING…'); },
@@ -1321,7 +1128,14 @@ const SupabaseLounge = {
         if (self.ch !== ch) return;                         // a newer channel replaced this one
         if (status === 'SUBSCRIBED') { self.state = 'live'; try { ch.track(self.meta()); } catch (e) {} }
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') self.state = 'retry';
-        else if (status === 'CLOSED') self.state = 'idle';
+        else if (status === 'CLOSED') {
+          self.ch = null; self.uid = null; self.state = 'idle';
+          try { const removed = self.client.removeChannel(ch); if (removed && removed.catch) removed.catch(function () {}); } catch (e) {}
+          if (LoungeEngine.active && AuthManager.uid) {
+            clearTimeout(self.retryT);
+            self.retryT = setTimeout(function () { self.retryT = null; self.connect(); }, 1000);
+          }
+        }
         LoungeEngine.onTransport();
       });
     this.ch = ch;
@@ -1329,7 +1143,7 @@ const SupabaseLounge = {
   },
 
   disconnect: function () {
-    clearTimeout(this.restT); clearTimeout(this.walkT); this.restT = this.walkT = null;
+    clearTimeout(this.restT); clearTimeout(this.walkT); clearTimeout(this.retryT); this.restT = this.walkT = this.retryT = null;
     const ch = this.ch; this.ch = null; this.uid = null; this.state = 'idle';
     if (ch && this.client) {
       try { ch.untrack(); } catch (e) {}

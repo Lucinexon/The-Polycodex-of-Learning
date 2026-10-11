@@ -90,6 +90,7 @@
 <script defer src="js/engine.js"></script>
 <!-- ===== OVERHAUL LAYER (sound · guided lessons · sim missions · boss fight) — must load after engine.js ===== -->
 <script defer src="js/codex-plus.js"></script>
+<script defer src="js/v5-extras.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -134,7 +135,7 @@
       <button class="tb tnav" data-go="probes" aria-label="Open the Telemetry Bay" title="Telemetry Bay"><span data-sprite="radar" data-px="16"></span><span class="tb-tx">Probes</span></button>
       <button class="tb tnav" data-go="dispatch" aria-label="Open the 0600 Dispatch" title="0600 Dispatch"><span data-sprite="antenna" data-px="16"></span><span class="tb-tx">Daily</span></button>
       <button class="tb tnav" data-go="lobby" aria-label="Open the Observation Lounge" title="Observation Lounge — multiplayer"><span data-sprite="moon" data-px="16"></span><span class="tb-tx">Social</span></button>
-      <button class="tb tnav" data-go="notebook" aria-label="Open the Group Notebook" title="Group Notebook — collaborative essays"><span data-sprite="doc" data-px="16"></span><span class="tb-tx">Notes</span></button>
+      <button class="tb tnav" data-go="notebook" aria-label="Open the Notebook" title="Notebook — vaults and shared rooms"><span data-sprite="doc" data-px="16"></span><span class="tb-tx">Notes</span></button>
     </div>
     <button class="tb" id="badgeBtn" aria-label="Achievement badges" title="Badges"><span data-sprite="trophy" data-px="16"></span><span class="tb-tx">BADGES</span></button>
     <button class="tb" id="byokBtn" aria-label="Open the Operator Console — preferences and BYOK link" title="Operator Console"><span data-sprite="gear" data-px="16"></span><span class="tb-tx">Settings</span></button>
@@ -203,7 +204,7 @@
           <button class="btn" data-go="probes"><span data-sprite="radar" data-px="16"></span> TELEMETRY BAY</button>
           <button class="btn" data-go="dispatch"><span data-sprite="antenna" data-px="16"></span> 0600 DISPATCH</button>
           <button class="btn" data-go="lobby"><span data-sprite="moon" data-px="16"></span> OBSERVATION LOUNGE</button>
-          <button class="btn" data-go="notebook"><span data-sprite="doc" data-px="16"></span> GROUP NOTEBOOK</button>
+          <button class="btn" data-go="notebook"><span data-sprite="doc" data-px="16"></span> NOTEBOOK</button>
           <button class="btn" id="homeFocus"><span data-sprite="eye" data-px="16"></span> FOCUS MODE</button>
           <button class="btn" id="homePrint"><span data-sprite="print" data-px="16"></span> PRINT CODEX</button>
           <button class="btn" id="homeHelp"><span data-sprite="doc" data-px="16"></span> HELP</button>
@@ -212,66 +213,8 @@
     </section>
 
     <!-- ================= GROUP NOTEBOOK (network.js) ================= -->
-    <section id="notebook" class="screen noprintsec nbx" aria-labelledby="h-nb">
+    <section id="notebook" class="screen noprintsec" aria-labelledby="h-nb">
       <h2 class="skip" id="h-nb">Notebook</h2>
-      <div class="nbx-shell" id="nbShell" data-side="1" data-view="edit">
-        <aside class="nbx-side" id="nbSide" aria-label="Notes">
-          <div class="nbx-side-top">
-            <button class="nbx-ibtn" id="nbNew" title="New note (Alt+N)" aria-label="New note"><span data-sprite="plus" data-px="20"></span></button>
-            <label class="skip" for="nbFilter">Filter notes</label>
-            <input id="nbFilter" class="nbx-filter" type="search" placeholder="Filter notes" autocomplete="off">
-          </div>
-          <ul class="nbx-list" id="nbList" role="listbox" aria-label="Notes"></ul>
-          <div class="nbx-room" id="nbRoomBox">
-            <div class="nbx-room-h"><span data-sprite="users" data-px="16"></span> Shared room</div>
-            <div class="nbx-room-idle" id="nbRoomIdle">
-              <input id="nbRoomInput" class="nbx-room-in" type="text" inputmode="numeric" maxlength="4" placeholder="4091" aria-label="4-digit room code" autocomplete="off">
-              <button class="nbx-btn" id="nbJoinBtn">Join</button>
-              <button class="nbx-btn ghost" id="nbCreateBtn" title="Create a room from the open note">New</button>
-            </div>
-            <div class="nbx-room-live" id="nbRoomLive" hidden>
-              <span class="nbx-collab" id="nbCollab"></span>
-              <button class="nbx-btn ghost" id="nbLeaveBtn" title="Leave the room (a copy is kept in your notes)">Leave</button>
-            </div>
-          </div>
-        </aside>
-        <div class="nbx-scrim" id="nbScrim"></div>
-        <div class="nbx-main">
-          <div class="nbx-bar">
-            <button class="nbx-ibtn" id="nbSideBtn" aria-label="Toggle notes list" aria-expanded="true" title="Notes list"><span data-sprite="sidebar" data-px="20"></span></button>
-            <div class="nbx-seg" role="group" aria-label="View">
-              <button type="button" data-nbview="edit" aria-pressed="true" title="Edit (Ctrl+E)" aria-label="Edit"><span data-sprite="edit" data-px="17"></span></button>
-              <button type="button" class="nbx-split" data-nbview="split" aria-pressed="false" title="Edit and read side by side" aria-label="Split view"><span data-sprite="columns" data-px="17"></span></button>
-              <button type="button" data-nbview="read" aria-pressed="false" title="Reading (Ctrl+E)" aria-label="Reading view"><span data-sprite="book" data-px="17"></span></button>
-            </div>
-            <span class="nbx-spacer"></span>
-            <button class="nbx-ibtn" id="nbPalBtn" title="Notes &amp; commands (Ctrl+P)" aria-label="Open command palette"><span data-sprite="search" data-px="19"></span></button>
-            <button class="nbx-ibtn" id="nbMore" title="More" aria-label="More actions"><span data-sprite="dots" data-px="19"></span></button>
-          </div>
-          <div class="nbx-doc">
-            <input id="nbTitle" class="nbx-title" type="text" maxlength="80" placeholder="Untitled" aria-label="Note title" autocomplete="off" spellcheck="false">
-            <div class="nbx-panes">
-              <label class="skip" for="nbEditor">Markdown note</label>
-              <textarea id="nbEditor" class="nbx-editor" spellcheck="true" placeholder="Start writing…   / for commands · [[ to link a note"></textarea>
-              <article id="nbPreview" class="md-body nbx-read" aria-live="polite"></article>
-            </div>
-          </div>
-          <div class="nbx-foot">
-            <span id="nbWords">0 words</span><span id="nbRead"></span>
-            <button class="nbx-chip" id="nbBack" hidden></button>
-            <span class="nbx-spacer"></span>
-            <span class="nbx-sync local" id="nbSync"><i id="nbSyncDot"></i><span id="nbSyncTx">Saved on this device</span></span>
-          </div>
-        </div>
-      </div>
-      <ul class="nbx-menu" id="nbMenu" role="listbox" hidden></ul>
-      <div class="nbx-pal" id="nbPal" hidden>
-        <div class="nbx-pal-card" role="dialog" aria-label="Notes and commands">
-          <label class="skip" for="nbPalIn">Search notes and commands</label>
-          <input id="nbPalIn" type="text" placeholder="Open a note or run a command…" autocomplete="off">
-          <ul id="nbPalList" role="listbox"></ul>
-        </div>
-      </div>
     </section>
 
     <!-- ================= OBSERVATION LOUNGE (network.js) ================= -->
