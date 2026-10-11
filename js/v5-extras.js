@@ -65,6 +65,7 @@ function items() {
 }
 function palOpen() {
   if (window.CodexGuide) window.CodexGuide.close();
+  const selectionMenu = $1('#v6Sel'); if (selectionMenu) selectionMenu.hidden = true;
   if (!pal) {
     pal = document.createElement('div'); pal.id = 'cxPal'; pal.hidden = true;
     pal.innerHTML = '<div class="cx-pbox" role="dialog" aria-label="Command palette"><input id="cxPq" placeholder="Search lessons, notes, screens, actions…" autocomplete="off" aria-label="Command palette"><div id="cxPl" role="listbox"></div><p class="small">↑↓ move · Enter run · Esc close</p></div>';
@@ -77,6 +78,8 @@ function palOpen() {
       else if (e.key === 'Enter') { e.preventDefault(); palRun(pSel); }
     });
   }
+  const header = $1('.topbar'), safeTop = header ? Math.ceil(header.getBoundingClientRect().bottom + 12) : 16;
+  pal.style.setProperty('--cx-top', safeTop + 'px');
   pItems = items(); pal.hidden = false; $1('#cxPq').value = ''; palList(); $1('#cxPq').focus(); sfx('reveal');
 }
 function palClose() { if (pal) pal.hidden = true; }
