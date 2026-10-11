@@ -58,7 +58,7 @@ function items() {
   NAV_ITEMS.forEach(n => L.push({ t: n.label, s: n.sub, k: 'Go to', run: go(n.id) }));
   SECTORS.forEach(sec => (sec.blocks || []).forEach((b, i) => L.push({ t: b.title, s: sec.label, k: 'Lesson', run: () => { window.showScreen(sec.id); const d = $1('#' + sec.id + ' .gl-dot[data-k="' + i + '"]'); if (d) d.click(); } })));
   [['New note', 'new'], ['Today’s daily note', 'daily'], ['Review flashcards from notes', 'cards'], ['Open note graph', 'graph'], ['Jump to a note…', 'quick']].forEach(a => L.push({ t: a[0], s: 'Notebook', k: 'Action', run: () => NM() && NM().run(a[1]) }));
-  L.push({ t: 'Start a Focus Sprint', s: 'Timer + ambient sound', k: 'Action', run: focusDlg }, { t: 'Fight the Void Warden', s: 'Boss exam', k: 'Action', run: go('exam') },
+  L.push({ t: 'Open the Guide', s: 'Context-aware AI tutor', k: 'Action', run: () => window.CodexGuide && CodexGuide.open() }, { t: 'Start a Focus Sprint', s: 'Timer + ambient sound', k: 'Action', run: focusDlg }, { t: 'Fight the Void Warden', s: 'Boss exam', k: 'Action', run: go('exam') },
     { t: 'Toggle smooth mode', s: 'Lighter visual effects', k: 'Action', run: () => { const b = $1('#smoothBtn'); if (b) b.click(); } });
   try { (NM() ? NM().list() : []).forEach(n => L.push({ t: n.t, s: 'Notebook', k: 'Note', run: () => NM().openNote(n.id) })); } catch (e) {}
   return L;
@@ -82,7 +82,9 @@ function palClose() { if (pal) pal.hidden = true; }
 function palList() {
   const q = $1('#cxPq').value.toLowerCase().split(/\s+/).filter(Boolean);
   const sc = it => { const h = (it.t + ' ' + it.s + ' ' + it.k).toLowerCase(); return q.every(w => h.indexOf(w) >= 0) ? (it.t.toLowerCase().indexOf(q[0] || '') === 0 ? 0 : 1) + (it.k === 'Action' ? 0 : .5) : -1; };
-  pView = pItems.map(it => [sc(it), it]).filter(x => x[0] >= 0).sort((a, b) => a[0] - b[0]).slice(0, 9).map(x => x[1]); pSel = 0; palPaint();
+  pView = pItems.map(it => [sc(it), it]).filter(x => x[0] >= 0).sort((a, b) => a[0] - b[0]).slice(0, 9).map(x => x[1]);
+  { const raw = $1('#cxPq').value.trim(); if (raw.length > 2 && window.CodexGuide) pView.unshift({ t: '✦ Ask the Guide: ' + raw.slice(0, 60), s: 'Uses your AI link', k: 'Guide', run: () => CodexGuide.ask(raw) }); }
+  pSel = 0; palPaint();
 }
 function palPaint() {
   $1('#cxPl').innerHTML = pView.length ? pView.map((it, i) => '<div class="cx-pr" role="option" data-i="' + i + '" aria-selected="' + (i === pSel) + '"><b>' + esc(it.t) + '</b><i>' + esc(it.s) + '</i><em>' + it.k + '</em></div>').join('') : '<p class="small" style="padding:8px">No matches.</p>';

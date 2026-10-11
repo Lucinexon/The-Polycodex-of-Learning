@@ -538,18 +538,7 @@ function xp(n) { const d = new Date().toDateString(), r = ld('cx_v5_xp', { d, n:
 function boot() {
   if (IDX) return;
   IDX = ld(K.idx, null); ROOMS = ld(K.rooms, []);
-  const savedP = ld(K.pref, null);
-  P = Object.assign({ font: 'sans', size: 16, width: 'normal', view: 'edit', side: 1, roomOn: null }, savedP || {});
-  if (!savedP) {
-    let migrated = false;
-    try {
-      const oldView = localStorage.getItem('polymath_codex_nbview_v1');
-      if (oldView === 'edit' || oldView === 'split' || oldView === 'read') { P.view = oldView; migrated = true; }
-      const oldRoom = localStorage.getItem('polymath_codex_nbroom_v1');
-      if (/^\d{4}$/.test(oldRoom || '')) { P.roomOn = oldRoom; migrated = true; }
-    } catch (e) {}
-    if (migrated) sp();
-  }
+  P = Object.assign({ font: 'sans', size: 16, width: 'normal', view: 'edit', side: 1, roomOn: null }, ld(K.pref, {}));
   if (!IDX || !IDX.vaults || !IDX.vaults.length) {
     const v = { id: uid8(), name: 'My Vault', icon: '📚', color: COLORS[0], notes: {} };
     try { ((JSON.parse(localStorage.getItem('polymath_codex_vault_v1') || 'null') || {}).notes || []).forEach(n => { v.notes[n.id] = { id: n.id, t: n.title || 'Untitled', md: n.md || '', ts: n.ts || Date.now() }; }); } catch (e) {}
@@ -574,25 +563,6 @@ function touch(n) {
   if (CUR.kind === 'local') { clearTimeout(tSave); tSave = setTimeout(saveLocal, 600); setSync('local'); }
   else if (RM) { RM.pending['vault.notes.' + n.id] = { t: n.t, md: n.md, ts: n.ts, by: me().uid, pin: n.pin ? 1 : 0 }; sched(); }
 }
-function captureRoom(r) {
-  if (!r || !CUR || CUR.kind !== 'room' || CUR.code !== r.code) return;
-  const notes = {};
-  Object.keys(CUR.notes).forEach(id => { notes[id] = Object.assign({}, CUR.notes[id]); });
-  r.snapshot = { name: CUR.name, icon: CUR.icon, color: CUR.color, notes: notes };
-}
-function recoverRoom(r) {
-  if (!r || !r.snapshot || r.recoverySaved) return;
-  const v = { id: uid8(), name: r.snapshot.name + ' (recovery)', icon: r.snapshot.icon, color: r.snapshot.color, notes: r.snapshot.notes };
-  if (!sv(K.v + v.id, v)) return;
-  IDX.vaults.push(meta(v));
-  if (!sv(K.idx, IDX)) {
-    IDX.vaults.pop();
-    try { localStorage.removeItem(K.v + v.id); } catch (e) {}
-    return;
-  }
-  r.recoverySaved = true;
-  toast('<b>Room changes kept locally</b><br>Recovery vault: ' + esc(v.name), 'doc', 5000);
-}
 function setSync(s) { const e = $1('#vxSync'); if (e) { e.textContent = { local: 'Saved on this device', buf: 'Unsynced…', sync: 'Syncing…', ok: 'Synced · live', off: 'Offline · changes kept' }[s] || ''; e.dataset.s = s; } }
 
 /* ================= ROOMS (cloud vaults) ================= */
@@ -602,16 +572,14 @@ function flush() {
   if (!Object.keys(RM.pending).length) return;
   const n = NE(); if (!n.guardedWrite) { setSync('off'); return; }
   const r = RM, up = r.pending; r.pending = {}; up.ts = Date.now(); setSync('sync');
-  r.inflight.push(up);
   n.guardedWrite('vault-sync', () => r.ref.update(up)).then(ok => {
-    r.inflight = r.inflight.filter(item => item !== up);
-    if (RM !== r) { if (!ok) recoverRoom(r); return; }
+    if (RM !== r) return;
     if (ok) setSync(Object.keys(r.pending).length ? 'buf' : 'ok');
     else { delete up.ts; r.pending = Object.assign(up, r.pending); setSync('off'); clearTimeout(r.t); r.t = setTimeout(flush, 15000); }
   });
 }
 function beat() { if (!RM || document.hidden) return; const m = me(); if ((CUR.meta.members || {})[m.uid]) { RM.pending['vault.meta.members.' + m.uid + '.ts'] = Date.now(); RM.pending['vault.meta.members.' + m.uid + '.n'] = m.name; sched(); } }
-function stopRoom() { if (!RM) return; const r = RM; if (Object.keys(r.pending).length || r.inflight.length) captureRoom(r); flush(); try { r.un && r.un(); } catch (e) {} clearInterval(r.hb); clearTimeout(r.t); API.room = null; RM = null; ChatEngine.onRoomChanged(null); }
+function stopRoom() { if (!RM) return; flush(); try { RM.un && RM.un(); } catch (e) {} clearInterval(RM.hb); clearTimeout(RM.t); API.room = null; RM = null; ChatEngine.onRoomChanged(null); }
 function withAuth(cb, silent, i) {
   const A = NE().AuthManager; if (A && A.uid) return cb();
   if (silent) { if ((i || 0) < 6) setTimeout(() => withAuth(cb, true, (i || 0) + 1), 700); return; }
@@ -625,7 +593,6 @@ function joinRoom(code, create, name, silent) {
     const ref = n.db().collection('group_notes').doc(code), m = me(), now = Date.now();
     ref.get().then(doc => {
       const d = doc.exists ? doc.data() : null, v = d && d.vault;
-      if (create && d) return bad('That room code is already in use — try creating the room again.');
       if (!d && !create) return bad('Room ' + code + ' not found');
       if (v && v.meta && v.meta.ban && v.meta.ban[m.uid]) return bad('You were removed from this room');
       if (!v) {   // brand-new room, or a legacy note room upgraded in place
@@ -643,23 +610,15 @@ function joinRoom(code, create, name, silent) {
 function mkRoom(name) {
   const n = NE(); if (!n.db || !n.online || !n.online()) return toast('<b>Rooms need a connection and the updated network.js</b>', 'cross');
   withAuth(() => {
-    const col = n.db().collection('group_notes'), go = i => {
-      const c = String(100000 + Math.floor(Math.random() * 900000));
-      return col.doc(c).get().then(d => {
-        if (!d.exists) return c;
-        if (i >= 5) throw new Error('No unused room code found');
-        return go(i + 1);
-      });
-    };
-    go(0).then(c => { closeModal(); joinRoom(c, true, name); })
-      .catch(() => toast('<b>Could not reserve a room code</b><br>Try creating the room again.', 'cross'));
+    const col = n.db().collection('group_notes'), go = i => { const c = String(100000 + Math.floor(Math.random() * 900000)); return col.doc(c).get().then(d => d.exists && i < 5 ? go(i + 1) : c); };
+    go(0).then(c => { closeModal(); joinRoom(c, true, name); });
   }, false);
 }
 function attach(code, ref) {
   if (CUR && CUR.kind === 'local') saveLocal();
   stopRoom();
   CUR = { kind: 'room', id: code, code, name: 'Room ' + code, icon: '🛰️', color: COLORS[2], notes: {}, meta: { members: {} } }; curId = null;
-  RM = { code, ref, pending: {}, inflight: [], t: 0, hb: 0, un: null }; P.roomOn = code; sp();
+  RM = { code, ref, pending: {}, t: 0, hb: 0, un: null }; P.roomOn = code; sp();
   RM.un = ref.onSnapshot(snap => {
     if (snap.metadata.hasPendingWrites || !RM || RM.code !== code) return;
     const d = snap.data();
@@ -872,6 +831,7 @@ function teamHTML() {
 function moreHTML() {
   const n = cur(), ed = n && canEdit();
   return '<div class="vx-list">' + (ed ? '<button type="button" class="vx-row" data-vx="pin"><b>' + (n.pin ? '★ Unpin note' : '☆ Pin note') + '</b></button><button type="button" class="vx-row" data-vx="dup"><b>⧉ Duplicate</b></button><h4>Insert template</h4><div class="vx-chips">' + Object.keys(TPL).map(k => '<button type="button" class="btn" data-vx="tpl" data-k="' + k + '">' + k + '</button>').join('') + '</div>' : '') +
+    (ed && window.CodexGuide ? '<h4>✦ Guide</h4><div class="vx-chips">' + [['summarize', 'Summarize'], ['flashcards', 'Make flashcards'], ['improve', 'Improve writing'], ['gaps', 'Find gaps']].map(a => '<button type="button" class="btn" data-vx="ai" data-m="' + a[0] + '">' + a[1] + '</button>').join('') + '</div>' : '') +
     '<button type="button" class="vx-row" data-vx="cpnote"><b>🔗 Copy [[link]] to this note</b></button><button type="button" class="vx-row" data-vx="set"><b>🎨 Appearance &amp; vault settings</b></button><button type="button" class="vx-row" data-vx="export"><b>⬇ Export vault (.json)</b></button>' +
     '<label class="vx-row"><b>⬆ Import .json or .md files</b><input type="file" data-vx="import" accept=".json,.md,.txt" multiple hidden></label>' + (ed ? '<button type="button" class="vx-row danger" data-vx="del"><b>🗑 Delete note</b></button>' : '') + '</div>';
 }
@@ -920,6 +880,7 @@ function mact(b, e) {
     case 'cgood': grade(DECK[CI], true); GOT++; xp(1); CI++; FLIP = 0; sfx('ok'); cardUI(); break;
     case 'cagain': grade(DECK[CI], false); DECK.push(DECK[CI]); CI++; FLIP = 0; sfx('flip'); cardUI(); break;
     case 'call': cards(true); break;
+    case 'ai': closeModal(); if (window.CodexGuide) window.CodexGuide.run(d.m); break;
     case 'cdone': closeModal(); break;
   }
 }
@@ -1013,8 +974,20 @@ const API = {
     try { if (on) open(); else if (RM) { stopRoom(); if (CUR.kind === 'room') loadLocal(IDX.active); } } catch (e) { if (window.console) console.error('[notebook]', e); }
   },
   identityChanged: function () { try { if (!built) return; if (RM && !AuthManager.uid) exitRoom(); else if (P.roomOn && !RM && $1('#notebook.active')) joinRoom(P.roomOn, false, null, true); } catch (e) {} },
-  saveScratch: function () { if (!IDX) return; clearTimeout(tSave); saveLocal(); if (RM) { if (Object.keys(RM.pending).length || RM.inflight.length) { captureRoom(RM); recoverRoom(RM); } flush(); } },
+  saveScratch: function () { if (!IDX) return; clearTimeout(tSave); saveLocal(); if (RM) flush(); },
   setSync: function () {}, flushRoom: function () { if (RM) flush(); },   // legacy NoteSync hooks, kept harmless
+  context: function () { try { boot(); const n = cur(); return n ? { vault: CUR.name, t: n.t, md: n.md } : null; } catch (e) { return null; } },
+  insert: function (text) { try { const n = cur(); if (!n || !canEdit()) return false; n.md = n.md.replace(/\s+$/, '') + '\n\n' + String(text).trim() + '\n'; touch(n); loadNote(); renderTree(); return true; } catch (e) { return false; } },
+  capture: function (title, md) {
+    try {
+      boot(); const v = CUR && CUR.kind === 'local' ? CUR : Object.assign({ kind: 'local' }, ld(K.v + IDX.active, null)); if (!v.notes) return false;
+      const t = 'Guide/Saved answers'; let n = Object.values(v.notes).find(x => x.t === t);
+      if (!n) { n = mk(t, '# Saved from the Guide\n\n'); v.notes[n.id] = n; }
+      n.md += '## ' + String(title).replace(/\n/g, ' ') + '\n' + String(md).trim() + '\n\n'; n.ts = Date.now();
+      if (v === CUR) { saveLocal(); if (built) renderTree(); } else { const o = Object.assign({}, v); delete o.kind; sv(K.v + v.id, o); }
+      return true;
+    } catch (e) { return false; }
+  },
   list: function () { boot(); return Object.values(CUR.notes).map(n => ({ id: n.id, t: n.t })); },
   openNote: function (id) { window.showScreen('notebook'); openNote(id); },
   run: function (a) { window.showScreen('notebook'); if (a === 'quick') quick(); else act(a); },
@@ -1089,7 +1062,7 @@ const SupabaseLounge = {
   state: 'idle',                 // idle | joining | live | retry
   WALK_MIN_MS: 120,              // at most ~8 walk messages / second
   REST_MS: 1500,                 // settle time before refreshing our resting position
-  lastWalk: 0, walkT: null, restT: null, hiddenT: null, retryT: null, _vw: false,
+  lastWalk: 0, walkT: null, restT: null, hiddenT: null, _vw: false,
 
   available: function () { return SB_OK && typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function'; },
   label: function () { return this.state === 'live' ? 'REALTIME' : (this.state === 'retry' ? 'RECONNECTING…' : 'CONNECTING…'); },
@@ -1128,14 +1101,7 @@ const SupabaseLounge = {
         if (self.ch !== ch) return;                         // a newer channel replaced this one
         if (status === 'SUBSCRIBED') { self.state = 'live'; try { ch.track(self.meta()); } catch (e) {} }
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') self.state = 'retry';
-        else if (status === 'CLOSED') {
-          self.ch = null; self.uid = null; self.state = 'idle';
-          try { const removed = self.client.removeChannel(ch); if (removed && removed.catch) removed.catch(function () {}); } catch (e) {}
-          if (LoungeEngine.active && AuthManager.uid) {
-            clearTimeout(self.retryT);
-            self.retryT = setTimeout(function () { self.retryT = null; self.connect(); }, 1000);
-          }
-        }
+        else if (status === 'CLOSED') self.state = 'idle';
         LoungeEngine.onTransport();
       });
     this.ch = ch;
@@ -1143,7 +1109,7 @@ const SupabaseLounge = {
   },
 
   disconnect: function () {
-    clearTimeout(this.restT); clearTimeout(this.walkT); clearTimeout(this.retryT); this.restT = this.walkT = this.retryT = null;
+    clearTimeout(this.restT); clearTimeout(this.walkT); this.restT = this.walkT = null;
     const ch = this.ch; this.ch = null; this.uid = null; this.state = 'idle';
     if (ch && this.client) {
       try { ch.untrack(); } catch (e) {}
@@ -1625,6 +1591,12 @@ const LoungeEngine = {
    Multi-channel realtime chat. Listeners are capped at .limit(250) and
    messages older than 7d are dropped client-side (+ sweeper deletes
    expired docs the viewer owns / admin-owned). 1s send rate limiter. */
+/* ---------- messenger helpers (V6) ---------- */
+const CH_EMO = ['👍', '❤️', '😂', '🔥', '🤯'];
+function chHue(s) { let h = 0; s = String(s || '?'); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return h; }
+function chDay(d) { const t = new Date(), y = new Date(Date.now() - 864e5); return d.toDateString() === t.toDateString() ? 'Today' : d.toDateString() === y.toDateString() ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }); }
+function chRich(t) { return esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>').replace(/(^|\s)@([\w-]{2,24})/g, '$1<span class="cmen">@$2</span>'); }
+/* ---------- /messenger helpers ---------- */
 const ChatEngine = {
   channel: 'global', sub: null, dm: null,
   unsub: null, lastDocs: [], lastSend: 0, RATE_MS: 1000, sweepT: null, // 1s cooldown
@@ -1666,8 +1638,9 @@ const ChatEngine = {
     });
     q('#chatSend').addEventListener('click', function () { self.send(); });
     q('#chatInput').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); self.send(); }
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); self.send(); }
     });
+    this.mount();
     this.sweepT = setInterval(function () { self.sweep(); }, 300000);
     this.open('global', null, true);
   },
@@ -1722,6 +1695,7 @@ const ChatEngine = {
 
   attach: function (quiet) {
     const self = this;
+    this.lastId = null; this.unseen = 0;
     if (this.unsub) { try { this.unsub(); } catch (e) {} this.unsub = null; }
     const log = q('#chatLog');
     if (!log) return;
@@ -1760,30 +1734,78 @@ const ChatEngine = {
   render: function (docs) {
     const log = q('#chatLog');
     if (!log) return;
-    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
-    if (!docs.length) {
-      log.innerHTML = '<div class="chat-sys">' + esc(this.chanLabel()) + ' is quiet. Break the silence, operator.</div>';
-      return;
-    }
-    const self = this;
-    const admin = AdminManager.isAdmin();
-    log.innerHTML = docs.map(function (m) {
-      const mine = m.u === AuthManager.uid;
-      return '<div class="cmsg' + (mine ? ' mine' : '') + '">' +
-        '<div class="cmeta">' +
-        '<span class="cwho">' + esc(m.n || 'OP') + '</span>' +
-        (m.a ? '<span class="abadge" title="System administrator">[ADMIN]</span>' : '') +
-        (m.g ? '<span class="gbadge" title="Anonymous guest link">[GUEST]</span>' : '') +
-        '<span class="cts">' + (m.ts ? fmtTime(m.ts) : '') + '</span>' +
-        (admin && m._id ? '<button class="cdel show" data-del="' + esc(m._id) + '" title="Purge message" aria-label="Delete message">×</button>' : '') +
-        '</div>' +
-        '<div class="ctx">' + esc(m.t || '') + '</div>' +
-        '</div>';
-    }).join('');
-    qa('.cdel', log).forEach(function (b) {
-      b.addEventListener('click', function () { self.del(b.dataset.del); });
+    const msgs = docs.filter(function (m) { return m.k !== 'r'; }), RX = {};
+    docs.forEach(function (m) { if (m.k === 'r' && m.to && m.e) { const a = RX[m.to] = RX[m.to] || {}; (a[m.e] = a[m.e] || []).push(m.u); } });
+    if (!msgs.length) { log.innerHTML = '<div class="chat-sys chat-empty"><b>' + esc(this.chanLabel()) + '</b> is quiet.<br>Say hi. The first message sets the tone.</div>'; this.lastId = null; this.unseen = 0; this.jumpUI(); return; }
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 90, first = !this.lastId;
+    const me = AuthManager.uid, admin = AdminManager.isAdmin(), show = msgs.slice(-150);
+    const same = function (a, b) { return !!(a && b && a.u && a.u === b.u && b.ts - a.ts < 300000 && new Date(a.ts).toDateString() === new Date(b.ts).toDateString()); };
+    let h = '', lastDay = '';
+    show.forEach(function (m, i) {
+      const d = new Date(m.ts || Date.now()), dk = d.toDateString();
+      if (dk !== lastDay) { lastDay = dk; h += '<div class="cday"><span>' + chDay(d) + '</span></div>'; }
+      const mine = m.u === me, grp = same(show[i - 1], m), end = !same(m, show[i + 1]), rx = RX[m._id];
+      h += '<div class="cm' + (mine ? ' mine' : '') + (grp ? ' grp' : '') + '" data-id="' + esc(m._id || '') + '">' +
+        (mine ? '' : (grp ? '<span class="cav sp"></span>' : '<span class="cav" style="--h:' + chHue(m.u || m.n) + '">' + esc(String(m.n || 'OP').charAt(0).toUpperCase()) + '</span>')) +
+        '<div class="cbody">' + (!mine && !grp ? '<div class="cwho">' + esc(m.n || 'OP') + (m.a ? '<span class="abadge" title="System administrator">ADMIN</span>' : '') + (m.g ? '<span class="gbadge" title="Anonymous guest link">GUEST</span>' : '') + '</div>' : '') +
+        '<div class="cbub">' + (m.re ? '<button type="button" class="cquote" data-jump="' + esc(m.re.i || '') + '"><b>' + esc(m.re.n || 'OP') + '</b>' + esc(m.re.t || '') + '</button>' : '') + '<div class="ctx">' + chRich(m.t || '') + '</div></div>' +
+        (rx ? '<div class="crxs">' + Object.keys(rx).map(function (e) { return '<button type="button" class="crx' + (rx[e].indexOf(me) >= 0 ? ' me' : '') + '" data-react="' + e + '">' + e + ' ' + rx[e].length + '</button>'; }).join('') + '</div>' : '') +
+        (end && m.ts ? '<div class="cts">' + fmtTime(m.ts) + '</div>' : '') + '</div>' +
+        '<div class="cact"><button type="button" data-reply aria-label="Reply">↩</button><button type="button" data-pick aria-label="React">☺</button>' + (admin && m._id ? '<button type="button" data-del aria-label="Delete message">×</button>' : '') + '</div>' +
+        '<div class="cpick">' + CH_EMO.map(function (e) { return '<button type="button" data-react="' + e + '">' + e + '</button>'; }).join('') + '</div></div>';
     });
-    if (nearBottom) log.scrollTop = log.scrollHeight;
+    log.innerHTML = h;
+    const ids = show.map(function (m) { return m._id; }), li = this.lastId ? ids.indexOf(this.lastId) : -1, lastM = show[show.length - 1];
+    this.lastId = ids[ids.length - 1];
+    if (first || nearBottom || (lastM && lastM.u === me)) { log.scrollTop = log.scrollHeight; this.unseen = 0; }
+    else if (li >= 0) this.unseen = (this.unseen || 0) + (ids.length - 1 - li);
+    this.jumpUI();
+  },
+
+  find: function (id) { return (this.lastDocs || []).filter(function (m) { return m._id === id; })[0]; },
+  setReply: function (r) {
+    this.reply = r || null; const bar = q('#chatReply'); if (!bar) return;
+    bar.hidden = !r;
+    if (r) { bar.firstElementChild.innerHTML = 'Replying to <b>' + esc(r.n) + '</b> · ' + esc(r.t); const i = q('#chatInput'); if (i) i.focus(); }
+  },
+  react: function (id, emo) {
+    const col = this.colOf();
+    if (!col || !fbOK() || !AuthManager.user) { say('<b>Sign in to react</b>', 'speech', 2000); return; }
+    const me = AuthManager.uid;
+    if ((this.lastDocs || []).some(function (m) { return m.k === 'r' && m.to === id && m.e === emo && m.u === me; })) return;
+    const now = Date.now(); if (now - (this.lastReact || 0) < 400) return; this.lastReact = now;
+    guardedWrite('chat', function () { return col.add({ n: AuthManager.name || 'GUEST', u: me, k: 'r', to: id, e: emo, ts: Date.now() }); }).then(function (ok) { if (ok) blip('flip'); });
+  },
+  jumpUI: function () { const j = q('#chatJump'); if (!j) return; const n = this.unseen || 0; j.hidden = n < 1; j.textContent = '↓ ' + n + ' new'; },
+  autosize: function (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; },
+  catchUp: function () {
+    if (!window.CodexGuide) return;
+    const m = (this.lastDocs || []).filter(function (x) { return x.k !== 'r' && x.t; }).slice(-40).map(function (x) { return { n: x.n, t: x.t }; });
+    if (!m.length) { say('Nothing to summarize yet.', 'speech', 2000); return; }
+    window.CodexGuide.run('catchup', { chat: m, channel: this.chanLabel() });
+  },
+  mount: function () {
+    const self = this, log = q('#chatLog');
+    if (!log || log.dataset.v6) return; log.dataset.v6 = '1';
+    const row = q('.chat-input-row'), panel = log.parentNode, input = q('#chatInput');
+    if (row) row.insertAdjacentHTML('beforebegin', '<div class="creplybar" id="chatReply" hidden><span></span><button type="button" aria-label="Cancel reply">×</button></div>');
+    panel.insertAdjacentHTML('beforeend', '<button type="button" class="cjump" id="chatJump" hidden></button>');
+    const ch = q('#chatChannels'); if (ch && window.CodexGuide) ch.insertAdjacentHTML('beforeend', '<button type="button" class="chtool" id="chatCatch" title="Summarize the recent messages">✦ Catch up</button>');
+    const rb = q('#chatReply button'); if (rb) rb.addEventListener('click', function () { self.setReply(null); });
+    q('#chatJump').addEventListener('click', function () { log.scrollTop = log.scrollHeight; self.unseen = 0; self.jumpUI(); });
+    const ct = q('#chatCatch'); if (ct) ct.addEventListener('click', function () { self.catchUp(); });
+    log.addEventListener('scroll', function () { if (self.unseen && log.scrollHeight - log.scrollTop - log.clientHeight < 90) { self.unseen = 0; self.jumpUI(); } }, { passive: true });
+    if (input) input.addEventListener('input', function () { self.autosize(input); });
+    log.addEventListener('click', function (e) {
+      const cm = e.target.closest('.cm'); if (!cm) return; const id = cm.dataset.id;
+      if (e.target.closest('[data-del]')) { self.del(id); return; }
+      if (e.target.closest('[data-reply]')) { const m = self.find(id); if (m) self.setReply({ i: id, n: m.n || 'OP', t: String(m.t || '').slice(0, 70) }); return; }
+      const rb2 = e.target.closest('[data-react]'); if (rb2) { self.react(id, rb2.dataset.react); cm.classList.remove('picking'); return; }
+      if (e.target.closest('[data-pick]')) { cm.classList.toggle('picking'); return; }
+      const qt = e.target.closest('.cquote');
+      if (qt) { const t = log.querySelector('.cm[data-id="' + String(qt.dataset.jump).replace(/"/g, '') + '"]'); if (t) { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.add('flash'); setTimeout(function () { t.classList.remove('flash'); }, 1200); } return; }
+      qa('.cm.sel', log).forEach(function (x) { if (x !== cm) x.classList.remove('sel'); }); cm.classList.toggle('sel');
+    });
   },
 
   send: function () {
@@ -1805,13 +1827,15 @@ const text = String(input.value || '').trim().slice(0, 240);
     this.lastSend = now;
     const self = this;
     guardedWrite('chat', function () {
-      return col.add({
+      const o = {
         n: AuthManager.name || 'GUEST', u: AuthManager.uid,
         t: text, ts: Date.now(),
         a: AuthManager.admin ? 1 : 0, g: AuthManager.guest ? 1 : 0
-      });
+      };
+      if (self.reply) o.re = self.reply;
+      return col.add(o);
     }).then(function (ok) {
-      if (ok) { input.value = ''; blip('flip'); }
+      if (ok) { input.value = ''; self.autosize(input); self.setReply(null); blip('flip'); const lg = q('#chatLog'); if (lg) lg.scrollTop = lg.scrollHeight; }
     });
   },
 

@@ -264,7 +264,8 @@ function answer(i) {
     if (blocked) { G.barrier--; sfx('shield'); } else { G.me--; sfx('hurt'); }
     FX.orbs.push({ p: 0, blocked });
     $1('.bf-fb', root).innerHTML = '<div class="qfb no"><div><b>' + (o ? 'MISS' : 'TIME UP') + (blocked ? ' · Barrier absorbed it' : '') + '.</b> ' + mdInline(G.q.why) + '</div></div>' +
-      '<button type="button" class="btn primary" id="bfNext">Continue</button>';
+      '<button type="button" class="btn primary" id="bfNext">Continue</button>' +
+      (window.CodexGuide && CodexGuide.ready() ? '<button type="button" class="btn v6-qx" data-gm="debrief" data-gq="' + encodeURIComponent(JSON.stringify({ q: G.q.q, correct: G.opts.find(function (x) { return x.ok; }).t, why: G.q.why, opts: G.opts.map(function (x) { return x.t; }) })) + '">✦ Explain</button>' : '');
     typeset(root); hud();
   }
   save(); updateHUD();
@@ -368,7 +369,7 @@ function bossInit() {
   document.addEventListener('keydown', e => {
     if (!G || !active() || e.ctrlKey || e.metaKey || e.altKey) return;
     const i = '1234'.indexOf(e.key); if (G.state === 'ask' && i >= 0 && G.opts[i]) answer(i);
-    else if (G.state === 'result' && (e.key === 'Enter' || e.key === ' ') && $1('#bfNext', root)) { e.preventDefault(); next(); }
+    else if (G.state === 'result' && (e.key === 'Enter' || e.key === ' ') && $1('#bfNext', root) && !(e.target.closest && e.target.closest('.v6-qx'))) { e.preventDefault(); next(); }
   });
 }
 

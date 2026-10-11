@@ -46,6 +46,7 @@
 <!-- App theme -->
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="codex-plus.css">
+<link rel="stylesheet" href="v6.css">
 
 <!-- Firebase v10 (compat build) — multiplayer, auth, chat, notebook sync -->
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -91,6 +92,8 @@
 <!-- ===== OVERHAUL LAYER (sound · guided lessons · sim missions · boss fight) — must load after engine.js ===== -->
 <script defer src="js/codex-plus.js"></script>
 <script defer src="js/v5-extras.js"></script>
+<script defer src="js/guide.js"></script>
+<script defer src="js/v6.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -241,15 +244,15 @@
 
         <div class="panel lobby-chat-panel">
           <div class="chat-channels" id="chatChannels" role="tablist" aria-label="Chat channels">
-            <button class="chtab on" data-ch="global" role="tab" aria-selected="true">#global</button>
-            <button class="chtab" data-ch="essay" role="tab" aria-selected="false">#essay-group</button>
-            <button class="chtab" data-ch="study" role="tab" aria-selected="false">#study-rooms</button>
-            <button class="chtab" data-ch="dm" role="tab" aria-selected="false">#direct-messages</button>
+            <button class="chtab on" data-ch="global" role="tab" aria-selected="true">Everyone</button>
+            <button class="chtab" data-ch="essay" role="tab" aria-selected="false">Room chat</button>
+            <button class="chtab" data-ch="study" role="tab" aria-selected="false">Study rooms</button>
+            <button class="chtab" data-ch="dm" role="tab" aria-selected="false">Direct</button>
           </div>
           <div class="chat-subchips" id="chatSubchips" hidden></div>
           <div class="chat-log" id="chatLog" aria-live="polite"><div class="chat-sys">Booting comms…</div></div>
           <div class="chat-input-row">
-            <input id="chatInput" type="text" maxlength="240" autocomplete="off" placeholder="Transmit on #global…">
+            <textarea id="chatInput" rows="1" maxlength="240" autocomplete="off" placeholder="Message #global…" aria-label="Message"></textarea>
             <button class="btn primary" id="chatSend">SEND</button>
           </div>
           <div class="chat-admin" id="chatAdminBar" hidden>
