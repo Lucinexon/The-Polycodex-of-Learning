@@ -613,26 +613,28 @@ function doSearch() {
   let hits = [];
   if (MS) {
     try {
-      hits = MS.search(q, { fuzzy: 0.3, prefix: true, limit: 12, boost: { title: 3 } })
+      hits = MS.search(q, { fuzzy: 0.3, prefix: true, limit: Object.keys(DOCMAP).length, boost: { title: 3 } })
         .map(res => DOCMAP[res.id]).filter(Boolean);
     } catch (e) { hits = []; }
   }
   if (!hits.length) {  // offline-CDN / no-index fallback
     hits = Object.keys(DOCMAP).map(k => DOCMAP[k]).filter(d =>
-      d.title.toLowerCase().includes(q) || d.text.toLowerCase().includes(q)).slice(0, 14);
+      d.title.toLowerCase().includes(q) || d.text.toLowerCase().includes(q));
   }
-  sItems = hits; sActive = 0;
+  const resultCap = 20;
+  const visibleHits = hits.slice(0, resultCap);
+  sItems = visibleHits; sActive = 0;
   r.classList.remove('ai');
   r.setAttribute('role', 'listbox');
   let list;
-  if (!hits.length) {
+  if (!visibleHits.length) {
     list = '<div class="sr-empty">No packets matched “' + esc(raw) + '” — try another keyword, or ask the link.</div>';
   } else {
     const terms = q.split(/\s+/).filter(Boolean).slice(0, 3)
       .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     const rx = terms.length ? new RegExp('(' + terms.join('|') + ')', 'i') : null;
     const mark = v => rx ? esc(v).replace(rx, '<mark>$1</mark>') : esc(v);
-    list = hits.map((h, i) => {
+    list = visibleHits.map((h, i) => {
       const lq = q, pos = h.text.toLowerCase().indexOf(lq);
       let snip = '';
       if (pos >= 0) { const st = Math.max(0, pos - 30); snip = (st > 0 ? '…' : '') + h.text.slice(st, st + 96) + '…'; }
@@ -641,7 +643,9 @@ function doSearch() {
         '<span class="sr-sec">' + esc(h.secLabel) + '</span>' +
         '<span class="sr-t">' + mark(h.title) + '</span>' +
         (snip ? '<span class="sr-snip">' + mark(snip) + '</span>' : '') + '</button>';
-    }).join('');
+    }).join('') + (hits.length > resultCap
+      ? '<div class="sr-empty">+' + (hits.length - resultCap) + ' more matches available</div>'
+      : '');
   }
   r.innerHTML = '<div class="sr-scroll">' + list + '</div>' + askBar(raw);
   r.hidden = false; input.setAttribute('aria-expanded', 'true');
@@ -740,7 +744,7 @@ function goSearch(i) {
 }
 function bindSearch() {
   const input = sIn(), r = sRes();
-  input.addEventListener('input', () => { sAsk++; clearTimeout(sT); sT = setTimeout(doSearch, 180); });
+  input.addEventListener('input', () => { sAsk++; clearTimeout(sT); sT = setTimeout(doSearch, 120); });
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       if (r.hidden || r.classList.contains('ai')) return; e.preventDefault();
