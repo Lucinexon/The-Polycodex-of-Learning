@@ -6,7 +6,7 @@
 .gl-dot.done{background:rgba(93,242,184,.16);border-color:var(--green);color:var(--green)}
 .gl-dot.on{background:var(--cyan);border-color:var(--cyan);color:#012a36;transform:scale(1.12)}
 .gl-hide{display:none!important}
-.gl-nav{position:sticky;bottom:10px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;border:1px solid var(--line2);border-radius:14px;background:rgba(3,22,33,.93);backdrop-filter:blur(8px)}
+.gl-nav{position:sticky;bottom:10px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;border:1px solid var(--line2);border-radius:14px;background:rgba(3,22,33,.97)}
 .gl-nav[hidden]{display:none}
 .gl-where{flex:1;text-align:center;color:var(--mut);font-size:14px;line-height:1.3}
 .gl-tldr{margin:0 0 14px;padding:10px 14px;border-left:3px solid var(--gold);background:rgba(255,200,116,.08);border-radius:0 10px 10px 0;line-height:1.5}
@@ -18,8 +18,6 @@
 .sx-mission{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:9px 12px;border:1px dashed var(--line2);border-radius:10px;background:rgba(95,208,238,.06);font-size:14px;line-height:1.4}
 .sx-ring{flex:none;padding:3px 10px;border-radius:999px;border:1px solid var(--line2);color:var(--mut);font:700 12px var(--ui)}
 .sx-done .sx-ring{border-color:var(--gold);color:var(--gold)}
-.sx-pulse{animation:sxp .45s ease-out}
-@keyframes sxp{from{box-shadow:0 0 0 0 rgba(95,208,238,.5)}to{box-shadow:0 0 0 14px rgba(95,208,238,0)}}
 /* boss */
 .bf{padding:14px}
 .bf-intro,.bf-end{text-align:center;max-width:620px;margin:0 auto}
@@ -29,9 +27,9 @@
 .bf-me{font-size:20px;letter-spacing:2px} .bf-me .on{color:var(--red)} .bf-me span+span{color:var(--line2)}
 .bf-combo{min-width:86px;font:700 15px var(--ui);color:var(--gold)}
 .bf-boss{flex:1;min-width:200px;--pc:var(--cyan)} .bf-ph{display:block;font:700 12px var(--ui);color:var(--pc);margin-bottom:3px}
-.bf-hpfill{background:var(--pc)!important;transition:width .5s}
+.bf-hpfill{background:var(--pc)!important;transition:width .5s}.bf{contain:layout paint}
 .bf-cv{width:100%;height:auto;max-height:250px;border-radius:12px;border:1px solid var(--line2);display:block;background:#020c14}
-.bf-timer{height:8px;margin:10px 0;border-radius:99px;background:var(--bg2);overflow:hidden} .bf-timer i{display:block;height:100%;width:100%;background:var(--cyan)} .bf-timer.low i{background:var(--red)}
+.bf-timer{height:8px;margin:10px 0;border-radius:99px;background:var(--bg2);overflow:hidden} .bf-timer i{display:block;height:100%;width:100%;background:var(--cyan);transform-origin:0 50%;will-change:transform} .bf-timer.low i{background:var(--red)}
 .bf-q{font-size:1.1em;line-height:1.5;margin:8px 0 12px}
 .bf-opts{display:grid;gap:8px;grid-template-columns:1fr 1fr}
 @media (max-width:640px){.bf-opts{grid-template-columns:1fr}}
@@ -42,4 +40,11 @@
 .bf-pw{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
 .bf-chip{padding:7px 12px;border:1px solid var(--line2);border-radius:999px;color:var(--dim);font-size:14px} .bf-chip.on{color:var(--gold);border-color:var(--gold)}
 .bf-fb{margin-top:10px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
-@media (prefers-reduced-motion:reduce){.sx-pulse{animation:none}.bf-hpfill,.gl-dot,.bf-opt{transition:none}}
+@media (prefers-reduced-motion:reduce){.bf-hpfill,.gl-dot,.bf-opt{transition:none}}
+
+/* Smooth mode (default): drop blur + full-screen blend, which re-render every frame over the animated ocean */
+body.smooth .panel,body.smooth .sec-head,body.smooth .sidebar,body.smooth .sidebar #nav,body.smooth .topbar,body.smooth .nbx-shell{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+body.smooth .panel{background:linear-gradient(180deg,rgba(8,46,64,.82),rgba(4,28,40,.86))}
+body.smooth .sec-head,body.smooth .sidebar #nav{background:rgba(3,30,52,.88)}
+body.smooth .topbar{background:rgba(2,16,25,.95)}
+body.smooth .scanlines{mix-blend-mode:normal;opacity:.5}

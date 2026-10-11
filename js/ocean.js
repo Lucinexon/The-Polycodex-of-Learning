@@ -211,7 +211,7 @@
   }
 
   /* ---------- lifecycle ---------- */
-  function animate() { return !REDUCED && !document.hidden && !document.body.classList.contains('focusmode'); }
+  function animate() { return !REDUCED && !document.hidden && !document.body.classList.contains('focusmode') && !document.body.classList.contains('noocean'); }
   function loop(t) { raf = null; if (!running) return; if (t - last >= 33) { last = t; frame(t, false); } raf = requestAnimationFrame(loop); }
   function resume() { if (running || !layer) return; if (!animate()) { frame(0, true); return; } running = true; last = 0; raf = requestAnimationFrame(loop); }
   function pause() { running = false; if (raf) cancelAnimationFrame(raf); raf = null; }

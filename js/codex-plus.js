@@ -16,8 +16,6 @@ function ac() {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     const comp = ctx.createDynamicsCompressor(); master = ctx.createGain(); master.gain.value = .9;
     master.connect(comp); comp.connect(ctx.destination);
-    nbuf = ctx.createBuffer(1, ctx.sampleRate >> 1, ctx.sampleRate);
-    const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
   if (ctx.state === 'suspended') ctx.resume();
   return ctx;
@@ -34,6 +32,10 @@ function tone(f, at, dur, type, vol, to, lp) {
 }
 function noise(at, dur, vol, freq) {
   const c = ac(), t = c.currentTime + at, s = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+  if (!nbuf) {
+    nbuf = c.createBuffer(1, c.sampleRate >> 1, c.sampleRate);
+    const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
   s.buffer = nbuf; f.type = 'bandpass'; f.frequency.value = freq || 1500; f.Q.value = .8;
   g.gain.setValueAtTime(vol || .1, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
   s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur);
@@ -63,6 +65,7 @@ window.sfx = function (name, a) {
   if (typeof S !== 'undefined' && S.sfx === false) return;
   try { const f = SND[name]; if (f) { ac(); f(a); } } catch (e) { /* audio unavailable */ }
 };
+
 /* ================= GUIDED LESSONS ================= */
 const steps = sec => $A('article.block', sec).concat($1('.qz', sec) || []);
 function markSeen(b) {
@@ -171,7 +174,7 @@ function initSims() {
         if (now - tk > 70) { sfx('tick', (el.value - el.min) / ((el.max - el.min) || 1)); tk = now; }
         if (now - last < 700) { last = now; return; } last = now;
       } else sfx('click');
-      sim.classList.remove('sx-pulse'); void sim.offsetWidth; sim.classList.add('sx-pulse');
+      if (ring.animate && !REDUCED) ring.animate([{ transform: 'scale(1.3)' }, { transform: 'scale(1)' }], { duration: 260 });
       if (n < need && ++n >= need) { done[key] = 1; store.set('cx_sims', done); sfx('power'); gainXP(10, true); toast('<b>Simulation explored</b> +10 XP', 'star'); }
       paint();
     };
@@ -195,6 +198,15 @@ let root, G = null, raf = 0;
 const FX = { shake: 0, flash: 0, hurt: 0, bolts: [], orbs: [], parts: [] };
 const PHASE = ['', 'Phase I · Static', 'Phase II · Surge', 'Phase III · Collapse'], PCOL = ['', '#5fd0ee', '#a99cff', '#ff7b8a'];
 const PHP = 5, active = () => $1('#exam') && $1('#exam').classList.contains('active');
+function resumeBossClock() {
+  if (!G) return;
+  const now = performance.now();
+  const pauses = [G.paused, G.hiddenAt].filter(Boolean);
+  if (G.state === 'ask' && pauses.length) {
+    G.t0 += Math.max(0, now - Math.max(Math.min.apply(null, pauses), G.t0));
+  }
+  G.paused = 0; G.hiddenAt = 0; G.lt = now;
+}
 function bossIntro() {
   const b = S.quizBest && S.quizBest.exam;
   root.innerHTML = '<div class="bf-intro"><h3>The Void Warden awakens</h3>' +
@@ -212,7 +224,14 @@ function bossStart() {
     '<div class="bf-boss"><span class="bf-ph"></span><div class="bar"><i class="bf-hpfill"></i></div></div></div>' +
     '<canvas class="bf-cv" width="640" height="250" aria-hidden="true"></canvas><div class="bf-timer"><i></i></div>' +
     '<p class="bf-q"></p><div class="bf-opts"></div><div class="bf-pw"></div><div class="bf-fb" aria-live="polite"></div>';
+  G.cv = $1('.bf-cv', root); G.ctx = G.cv.getContext('2d'); G.tbar = $1('.bf-timer i', root); G.tbox = G.tbar.parentNode; G.bg = makeBg(G.cv.width, G.cv.height);
+  document.body.classList.add('noocean');
   ask(); cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+}
+function makeBg(W, H) {
+  const o = document.createElement('canvas'); o.width = W; o.height = H; const c = o.getContext('2d');
+  const g = c.createRadialGradient(W / 2, H * .4, 10, W / 2, H * .4, W * .7); g.addColorStop(0, 'rgba(22,66,96,.95)'); g.addColorStop(1, '#020c14');
+  c.fillStyle = g; c.fillRect(0, 0, W, H); return o;
 }
 function ask() {
   if (G.i >= G.deck.length) G.deck = G.deck.concat(shuffle(MASTER_EXAM.qs.slice()));
@@ -274,6 +293,7 @@ function end(win) {
     if (pct >= 75) award('boss75');
     if (!G.bad) { award('boss100'); award('perfect'); celebrate(220); }
   } else sfx('lose');
+  document.body.classList.remove('noocean');
   save(); try { SystemsEngine.onQuizFinish('exam', pct); } catch (e) {} updateHUD(); checkBadges();
   const stars = win ? (pct === 100 ? 3 : pct >= 75 ? 2 : 1) : 0;
   root.innerHTML = '<div class="bf-end ' + (win ? 'win' : 'lose') + '"><h3>' + (win ? 'VOID WARDEN DEFEATED' : 'YOU WERE CONSUMED') + '</h3>' +
@@ -284,46 +304,48 @@ function end(win) {
   drawSprites(root); typeset(root);
 }
 function loop(t) {
-  const cv = $1('.bf-cv', root);
-  if (!cv || !G) { raf = 0; return; }
-  if (!active()) { G.paused = performance.now(); raf = 0; return; }
-  draw(cv, t);
+  if (!G || !G.cv || !G.cv.isConnected) { raf = 0; document.body.classList.remove('noocean'); return; }
+  if (!active()) { G.paused = performance.now(); raf = 0; document.body.classList.remove('noocean'); return; }
+  raf = requestAnimationFrame(loop);
+  const elapsed = G.lt ? t - G.lt : 30;
+  if (elapsed < 30) return;                         // ~33fps cap
+  const frameScale = Math.min(elapsed / 30, 3);
+  G.lt = t; draw(t, frameScale);
   if (G.state === 'ask') {
-    const left = G.tl - (performance.now() - G.t0) / 1000, bar = $1('.bf-timer i', root);
-    bar.style.width = Math.max(0, left / G.tl * 100) + '%'; bar.parentNode.classList.toggle('low', left < 4);
-    if (left < 4 && Math.ceil(left) !== G.tick) { G.tick = Math.ceil(left); sfx('tick', .9); }
+    const left = G.tl - (performance.now() - G.t0) / 1000, low = left < 4;
+    G.tbar.style.transform = 'scaleX(' + Math.max(0, left / G.tl).toFixed(3) + ')';
+    if (low !== G.low) { G.low = low; G.tbox.classList.toggle('low', low); }
+    if (low && Math.ceil(left) !== G.tick) { G.tick = Math.ceil(left); sfx('tick', .9); }
     if (left <= 0) answer(-1);
   }
-  raf = requestAnimationFrame(loop);
 }
-function draw(cv, t) {
-  const c = cv.getContext('2d'), W = cv.width, H = cv.height, col = PCOL[G.phase];
+function draw(t, frameScale) {
+  const c = G.ctx, W = G.cv.width, H = G.cv.height, col = PCOL[G.phase];
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H);
-  const k = REDUCED ? 0 : FX.shake; c.translate((Math.random() - .5) * k, (Math.random() - .5) * k); FX.shake *= .88;
-  const bg = c.createRadialGradient(W / 2, H * .4, 10, W / 2, H * .4, W * .7); bg.addColorStop(0, 'rgba(22,66,96,.95)'); bg.addColorStop(1, '#020c14');
-  c.fillStyle = bg; c.fillRect(-20, -20, W + 40, H + 40);
+  const k = REDUCED ? 0 : FX.shake; c.translate((Math.random() - .5) * k, (Math.random() - .5) * k); FX.shake *= Math.pow(.88, frameScale);
+  c.drawImage(G.bg, -20, -20, W + 40, H + 40);
   const cx = W / 2, cy = H * .42 + Math.sin(t / 600) * 8, r = 54 + Math.sin(t / 300) * 3 + FX.flash * 8;
   c.fillStyle = col; c.globalAlpha = .85;
   for (let j = 0; j < 8; j++) { const a = t / 900 + j * Math.PI / 4, rr = 96 + (j % 2) * 16; c.fillRect(cx + Math.cos(a) * rr * 1.3 - 5, cy + Math.sin(a) * rr * .62 - 5, 10, 10); }
   c.globalAlpha = 1; c.lineWidth = 4; c.strokeStyle = col; c.fillStyle = FX.flash > .15 ? '#fff' : '#06202e';
-  c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill(); c.stroke(); FX.flash *= .85;
+  c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill(); c.stroke(); FX.flash *= Math.pow(.85, frameScale);
   c.fillStyle = col; c.beginPath(); c.arc(cx + Math.sin(t / 700) * 12, cy, 16 + G.phase * 3, 0, 7); c.fill();
   c.fillStyle = '#021017'; c.beginPath(); c.arc(cx + Math.sin(t / 700) * 12, cy, 7, 0, 7); c.fill();
   const me = { x: 64, y: H - 38 };
   c.fillStyle = '#5df2b8'; c.beginPath(); c.moveTo(me.x, me.y - 18); c.lineTo(me.x + 18, me.y + 14); c.lineTo(me.x - 18, me.y + 14); c.fill();
   if (G.barrier) { c.strokeStyle = '#ffc874'; c.lineWidth = 3; c.beginPath(); c.arc(me.x, me.y, 32, 0, 7); c.stroke(); }
   FX.bolts = FX.bolts.filter(b => {
-    b.p += .06; const x = me.x + (cx - me.x) * b.p, y = me.y + (cy - me.y) * b.p;
+    b.p += .1 * frameScale; const x = me.x + (cx - me.x) * b.p, y = me.y + (cy - me.y) * b.p;
     c.fillStyle = '#ffc874'; c.beginPath(); c.arc(x, y, 7, 0, 7); c.fill();
     if (b.p >= 1) { FX.flash = 1; FX.shake = 14; burst(cx, cy, '#ffc874'); return false; } return true;
   });
   FX.orbs = FX.orbs.filter(o => {
-    o.p += .045; const x = cx + (me.x - cx) * o.p, y = cy + (me.y - cy) * o.p;
+    o.p += .07 * frameScale; const x = cx + (me.x - cx) * o.p, y = cy + (me.y - cy) * o.p;
     c.fillStyle = '#ff7b8a'; c.beginPath(); c.arc(x, y, 9, 0, 7); c.fill();
     if (o.p >= 1) { if (o.blocked) burst(me.x, me.y, '#ffc874'); else { FX.hurt = 1; FX.shake = 22; burst(me.x, me.y, '#ff7b8a'); } return false; } return true;
   });
-  FX.parts = FX.parts.filter(p => { p.x += p.vx; p.y += p.vy; p.l -= .03; c.globalAlpha = Math.max(0, p.l); c.fillStyle = p.c; c.fillRect(p.x, p.y, 4, 4); c.globalAlpha = 1; return p.l > 0; });
-  if (FX.hurt > .02) { c.fillStyle = 'rgba(255,60,80,' + FX.hurt * .35 + ')'; c.fillRect(-20, -20, W + 40, H + 40); FX.hurt *= .9; }
+  FX.parts = FX.parts.filter(p => { p.x += p.vx * frameScale; p.y += p.vy * frameScale; p.l -= .03 * frameScale; c.globalAlpha = Math.max(0, p.l); c.fillStyle = p.c; c.fillRect(p.x, p.y, 4, 4); c.globalAlpha = 1; return p.l > 0; });
+  if (FX.hurt > .02) { c.fillStyle = 'rgba(255,60,80,' + FX.hurt * .35 + ')'; c.fillRect(-20, -20, W + 40, H + 40); FX.hurt *= Math.pow(.9, frameScale); }
 }
 function burst(x, y, c) { for (let i = 0; i < 18; i++) { const a = Math.random() * 6.28, s = 1 + Math.random() * 3; FX.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, l: 1, c }); } }
 function bossInit() {
@@ -344,6 +366,18 @@ function bossInit() {
     const i = '1234'.indexOf(e.key); if (G.state === 'ask' && i >= 0 && G.opts[i]) answer(i);
     else if (G.state === 'result' && (e.key === 'Enter' || e.key === ' ') && $1('#bfNext', root)) { e.preventDefault(); next(); }
   });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      if (G && G.state !== 'end') G.hiddenAt = performance.now();
+      document.body.classList.remove('noocean');
+    } else if (G && G.state !== 'end' && active()) {
+      resumeBossClock();
+      document.body.classList.add('noocean');
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+  });
 }
 
 /* ================= INIT ================= */
@@ -352,12 +386,20 @@ function init() {
   if (home) { home.insertAdjacentHTML('afterend', '<div class="nextup" id="nextUp"></div>'); nextUp(); }
   SECTORS.forEach(s => setupLesson(document.getElementById(s.id)));
   bindLessons(); initSims(); bossInit();
+  const sm = store.get('cx_smooth', true); document.body.classList.toggle('smooth', sm);
+  const pb = $1('.prefbar');
+  if (pb) {
+    pb.insertAdjacentHTML('beforeend', '<button type="button" class="tb" id="smoothBtn" aria-pressed="' + sm + '" title="Smooth mode: lighter effects for better speed" aria-label="Smooth mode">⚡</button>');
+    $1('#smoothBtn').onclick = e => { const on = !document.body.classList.contains('smooth'); document.body.classList.toggle('smooth', on); store.set('cx_smooth', on); e.currentTarget.setAttribute('aria-pressed', on); toast(on ? '<b>Smooth mode on</b>' : '<b>Glass effects on</b>', 'bolt'); };
+  }
   const _show = window.showScreen;
   window.showScreen = function (id, ns) {
     _show(id, ns);
     try {
+      if (id !== 'exam' || document.hidden || !G || G.state === 'end') document.body.classList.remove('noocean');
+      else document.body.classList.add('noocean');
       if (id === 'home') nextUp();
-      if (id === 'exam' && G && G.state !== 'end' && !raf) { if (G.paused) { G.t0 += performance.now() - G.paused; G.paused = 0; } raf = requestAnimationFrame(loop); }
+      if (id === 'exam' && G && G.state !== 'end' && !document.hidden && !raf) { resumeBossClock(); raf = requestAnimationFrame(loop); }
     } catch (e) { /* non-fatal */ }
   };
 }
