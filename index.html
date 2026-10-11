@@ -45,6 +45,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css">
 <!-- App theme -->
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="codex-plus.css">
 
 <!-- Firebase v10 (compat build) — multiplayer, auth, chat, notebook sync -->
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -87,6 +88,8 @@
 <script defer src="js/ocean.js"></script>
 <!-- ===== ENGINE (must be last) ===== -->
 <script defer src="js/engine.js"></script>
+<!-- ===== OVERHAUL LAYER (sound · guided lessons · sim missions · boss fight) — must load after engine.js ===== -->
+<script defer src="js/codex-plus.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -128,13 +131,13 @@
   </div>
   <div class="tools">
     <div class="tb-group" role="group" aria-label="Primary tools">
-      <button class="tb tnav" data-go="probes" aria-label="Open the Telemetry Bay" title="Telemetry Bay"><span data-sprite="radar" data-px="16"></span><span class="tb-tx">TELEMETRY</span></button>
-      <button class="tb tnav" data-go="dispatch" aria-label="Open the 0600 Dispatch" title="0600 Dispatch"><span data-sprite="antenna" data-px="16"></span><span class="tb-tx">0600</span></button>
-      <button class="tb tnav" data-go="lobby" aria-label="Open the Observation Lounge" title="Observation Lounge — multiplayer"><span data-sprite="moon" data-px="16"></span><span class="tb-tx">LOUNGE</span></button>
-      <button class="tb tnav" data-go="notebook" aria-label="Open the Group Notebook" title="Group Notebook — collaborative essays"><span data-sprite="doc" data-px="16"></span><span class="tb-tx">NOTEBOOK</span></button>
+      <button class="tb tnav" data-go="probes" aria-label="Open the Telemetry Bay" title="Telemetry Bay"><span data-sprite="radar" data-px="16"></span><span class="tb-tx">Probes</span></button>
+      <button class="tb tnav" data-go="dispatch" aria-label="Open the 0600 Dispatch" title="0600 Dispatch"><span data-sprite="antenna" data-px="16"></span><span class="tb-tx">Daily</span></button>
+      <button class="tb tnav" data-go="lobby" aria-label="Open the Observation Lounge" title="Observation Lounge — multiplayer"><span data-sprite="moon" data-px="16"></span><span class="tb-tx">Social</span></button>
+      <button class="tb tnav" data-go="notebook" aria-label="Open the Group Notebook" title="Group Notebook — collaborative essays"><span data-sprite="doc" data-px="16"></span><span class="tb-tx">Notes</span></button>
     </div>
     <button class="tb" id="badgeBtn" aria-label="Achievement badges" title="Badges"><span data-sprite="trophy" data-px="16"></span><span class="tb-tx">BADGES</span></button>
-    <button class="tb" id="byokBtn" aria-label="Open the Operator Console — preferences and BYOK link" title="Operator Console"><span data-sprite="gear" data-px="16"></span><span class="tb-tx">CONSOLE</span></button>
+    <button class="tb" id="byokBtn" aria-label="Open the Operator Console — preferences and BYOK link" title="Operator Console"><span data-sprite="gear" data-px="16"></span><span class="tb-tx">Settings</span></button>
     <button class="tb tnet" id="authBtn" aria-label="Operator account — login, register or continue as guest" title="Operator Account"><span data-sprite="power" data-px="16"></span><span class="tb-tx" id="authBtnTx">ACCOUNT</span></button>
   </div>
 </header>
@@ -172,7 +175,7 @@
       <div class="hero">
         <h2 class="hero-title" id="h-home">The Polymath<span>Codex</span></h2>
         <p class="hero-tag">Descend through ten sectors of deep lore, harvest XP, and rise from Novice Chronicler to Universal Architect.</p>
-        <button class="btn primary startbtn" data-go="sec1"><span class="tri"></span>ENTER THE CODEX</button>
+        <button class="btn primary startbtn" data-go="sec1"><span class="tri"></span>START LEARNING</button>
         <div class="hero-resume"><button class="btn" id="resumeBtn" data-go="syslog">RESUME: SYS-LOG</button></div>
         <div class="hero-progress">
           <div class="hp-tx"><span>Global quest progress</span><span id="homeBarTx">0/11 quests</span></div>
@@ -181,10 +184,10 @@
       </div>
 
       <div class="grid4" style="margin-top:18px">
-        <button class="card" data-go="sec1"><span data-sprite="net" data-px="26"></span><b>SCAN THE SECTORS</b><span class="cp">10 terminals of lore — engine internals, cryptography, cosmos &amp; culture — tracked block by block.</span></button>
-        <button class="card" data-go="chrono"><span data-sprite="calendar" data-px="26"></span><b>CHRONO MATRIX</b><span class="cp">Cross-epoch timelines from the Big Bang to brainrot, with a hidden-cell recall trainer.</span></button>
-        <button class="card" data-go="flash"><span data-sprite="cards" data-px="26"></span><b>NEURAL MATRIX</b><span class="cp">Flashcard deck for high-yield constants, formulas and folklore. Flip, drill, master.</span></button>
-        <button class="card" data-go="exam"><span data-sprite="qblock" data-px="26"></span><b>THE VOID TRIAL</b><span class="cp">A cross-sector boss exam. Survive the void and claim REALITY ARCHITECT.</span></button>
+        <button class="card" data-go="sec1"><span data-sprite="net" data-px="26"></span><b>LEARN: 10 TOPICS</b><span class="cp">10 terminals of lore — engine internals, cryptography, cosmos &amp; culture — tracked block by block.</span></button>
+        <button class="card" data-go="chrono"><span data-sprite="calendar" data-px="26"></span><b>TIMELINES</b><span class="cp">Cross-epoch timelines from the Big Bang to brainrot, with a hidden-cell recall trainer.</span></button>
+        <button class="card" data-go="flash"><span data-sprite="cards" data-px="26"></span><b>FLASHCARDS</b><span class="cp">Flashcard deck for high-yield constants, formulas and folklore. Flip, drill, master.</span></button>
+        <button class="card" data-go="exam"><span data-sprite="qblock" data-px="26"></span><b>BOSS FIGHT</b><span class="cp">A cross-sector boss exam. Defeat the Void Warden in a timed battle.</span></button>
       </div>
 
       <div class="panel" style="margin-top:18px">

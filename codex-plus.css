@@ -1,0 +1,45 @@
+/* codex-plus.css — styles for codex-plus.js (guided lessons, sim missions, boss fight). Load after style.css. */
+.gl-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 14px;scroll-margin-top:84px}
+.gl-dots{display:flex;gap:6px;flex-wrap:wrap}
+.gl-dot{min-width:36px;height:36px;border-radius:50%;border:1px solid var(--line2);background:var(--panel);color:var(--mut);font:700 13px var(--ui);cursor:pointer;transition:transform .15s}
+.gl-dot:hover{border-color:var(--cyan);color:var(--ink)}
+.gl-dot.done{background:rgba(93,242,184,.16);border-color:var(--green);color:var(--green)}
+.gl-dot.on{background:var(--cyan);border-color:var(--cyan);color:#012a36;transform:scale(1.12)}
+.gl-hide{display:none!important}
+.gl-nav{position:sticky;bottom:10px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;border:1px solid var(--line2);border-radius:14px;background:rgba(3,22,33,.93);backdrop-filter:blur(8px)}
+.gl-nav[hidden]{display:none}
+.gl-where{flex:1;text-align:center;color:var(--mut);font-size:14px;line-height:1.3}
+.gl-tldr{margin:0 0 14px;padding:10px 14px;border-left:3px solid var(--gold);background:rgba(255,200,116,.08);border-radius:0 10px 10px 0;line-height:1.5}
+.gl-tldr b{color:var(--gold);margin-right:10px}
+.gl-time{margin-left:auto;font-size:12px;color:var(--dim)}
+.nextup{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:18px;padding:14px 18px;border:1px solid var(--cyan);border-radius:14px;background:rgba(95,208,238,.08)}
+.nextup div{display:flex;flex-direction:column;gap:2px}
+.nextup span{color:var(--mut);font-size:14px}
+.sx-mission{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:9px 12px;border:1px dashed var(--line2);border-radius:10px;background:rgba(95,208,238,.06);font-size:14px;line-height:1.4}
+.sx-ring{flex:none;padding:3px 10px;border-radius:999px;border:1px solid var(--line2);color:var(--mut);font:700 12px var(--ui)}
+.sx-done .sx-ring{border-color:var(--gold);color:var(--gold)}
+.sx-pulse{animation:sxp .45s ease-out}
+@keyframes sxp{from{box-shadow:0 0 0 0 rgba(95,208,238,.5)}to{box-shadow:0 0 0 14px rgba(95,208,238,0)}}
+/* boss */
+.bf{padding:14px}
+.bf-intro,.bf-end{text-align:center;max-width:620px;margin:0 auto}
+.bf-intro ul{text-align:left;line-height:1.7;padding-left:20px}
+.bf-end.win h3{color:var(--gold)} .bf-end.lose h3{color:var(--red)}
+.bf-hud{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.bf-me{font-size:20px;letter-spacing:2px} .bf-me .on{color:var(--red)} .bf-me span+span{color:var(--line2)}
+.bf-combo{min-width:86px;font:700 15px var(--ui);color:var(--gold)}
+.bf-boss{flex:1;min-width:200px;--pc:var(--cyan)} .bf-ph{display:block;font:700 12px var(--ui);color:var(--pc);margin-bottom:3px}
+.bf-hpfill{background:var(--pc)!important;transition:width .5s}
+.bf-cv{width:100%;height:auto;max-height:250px;border-radius:12px;border:1px solid var(--line2);display:block;background:#020c14}
+.bf-timer{height:8px;margin:10px 0;border-radius:99px;background:var(--bg2);overflow:hidden} .bf-timer i{display:block;height:100%;width:100%;background:var(--cyan)} .bf-timer.low i{background:var(--red)}
+.bf-q{font-size:1.1em;line-height:1.5;margin:8px 0 12px}
+.bf-opts{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+@media (max-width:640px){.bf-opts{grid-template-columns:1fr}}
+.bf-opt{display:flex;gap:10px;align-items:flex-start;text-align:left;padding:11px 13px;border:1px solid var(--line2);border-radius:12px;background:var(--panel2);color:var(--ink);font:inherit;cursor:pointer;transition:transform .12s,border-color .12s}
+.bf-opt:hover:not(:disabled){border-color:var(--cyan);transform:translateY(-1px)}
+.bf-opt b{flex:none;width:24px;height:24px;border-radius:6px;background:var(--bg2);display:grid;place-items:center;font-size:13px;color:var(--cyan)}
+.bf-opt.good{border-color:var(--green);background:rgba(93,242,184,.14)} .bf-opt.bad{border-color:var(--red);background:rgba(255,123,138,.14)} .bf-opt.ghost{opacity:.3}
+.bf-pw{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.bf-chip{padding:7px 12px;border:1px solid var(--line2);border-radius:999px;color:var(--dim);font-size:14px} .bf-chip.on{color:var(--gold);border-color:var(--gold)}
+.bf-fb{margin-top:10px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+@media (prefers-reduced-motion:reduce){.sx-pulse{animation:none}.bf-hpfill,.gl-dot,.bf-opt{transition:none}}
