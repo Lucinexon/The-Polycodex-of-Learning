@@ -3,6 +3,7 @@
 .md-body>p.hook{display:none}
 .md-body h4{margin:1.5em 0 .55em;font-size:1.02rem;letter-spacing:.03em;color:var(--cyan)}
 .md-body ul{padding-left:1.2em}
+.block .md-body{max-width:84ch}
 details.deep{margin:1.6em 0 .6em;border:1px solid var(--line2);border-radius:14px;background:rgba(255,255,255,.03)}
 details.deep>summary{display:flex;align-items:center;gap:8px;padding:12px 16px;list-style:none;cursor:pointer;color:var(--cyan);font:700 .95rem var(--ui)}
 details.deep>summary::-webkit-details-marker{display:none}
@@ -11,6 +12,8 @@ details.deep[open]>summary::before{transform:rotate(90deg)}
 details.deep>*:not(summary){margin-left:16px;margin-right:16px} details.deep[open]{padding-bottom:12px}
 .co details{margin-top:6px} .co summary{cursor:pointer;color:var(--cyan);font-weight:700}
 .co.mem details p{margin:.5em 0 0}
+.block .md-body .co.warn,.block .md-body .co.mem{margin:12px 0;padding:13px 14px 10px}
+.block .md-body .co.warn p,.block .md-body .co.mem p{margin:.3em 0;font-size:.94rem}
 /* ===== declutter: home ===== */
 #home .hero{min-height:min(58vh,500px);padding:18px 0 8px}
 .hero-title{font-size:4rem!important;line-height:1.02}
