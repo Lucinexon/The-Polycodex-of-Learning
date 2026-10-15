@@ -147,11 +147,11 @@ function bubbles(L, c, pos) {
     c.globalAlpha = Math.min(1, (7000 - (now - seen[u].ts)) / 900); c.fillStyle = 'rgba(255,255,255,.96)'; c.fillRect(x, y, w, h); c.fillRect(Math.round(p.x) - 3, y + h, 6, 4); c.fillStyle = '#10222e'; lines.forEach((l, i) => c.fillText(l, x + 5, y + 11 + i * 11)); c.globalAlpha = 1; });
 }
 function draw(t) {
-  const L = LE(), c = L.ctx; if (!c) return; const id = room();
+  const L = LE(), c = L.ctx; if (!c) return; const id = room(), realtime = NE().SupabaseLounge;
   c.imageSmoothingEnabled = false;
   if (id === 'deck') deckBG(L, c, t); else { if (!cache[id]) cache[id] = paintStatic(id); c.drawImage(cache[id], 0, 0); }
   dynRoom(L, c, t, id);
-  let banner = null, red = false; if (!NE().online || !NE().online()) { banner = 'OFFLINE MODE — LOG-IN LINK REQUIRED FOR OTHER OPERATORS'; red = true; } else if (!AM().user) banner = 'ESTABLISHING OPERATOR LINK…'; else if (NE().SupabaseLounge.available() && NE().SupabaseLounge.state === 'retry') banner = 'REALTIME LINK LOST — RETRYING…';
+  let banner = null, red = false; if (!NE().online || !NE().online()) { banner = 'OFFLINE MODE — LOG-IN LINK REQUIRED FOR OTHER OPERATORS'; red = true; } else if (!AM().user) banner = 'ESTABLISHING OPERATOR LINK…'; else if (realtime && typeof realtime.available === 'function' && realtime.available() && realtime.state === 'retry') banner = 'REALTIME LINK LOST — RETRYING…';
   if (banner) { c.fillStyle = 'rgba(2,20,34,.74)'; c.fillRect(0, 78, L.W, 34); c.fillStyle = red ? '#ff8795' : '#ffcb7a'; c.font = 'bold 10px "Atkinson Hyperlegible", sans-serif'; c.textAlign = 'center'; c.fillText(banner, L.W / 2, 98); c.textAlign = 'left'; }
   const list = []; Object.keys(L.players).forEach(u => { const p = L.players[u]; if ((p.r || 'deck') === id) { p.uid = u; list.push(p); } });
   const me = { n: AM().name || 'YOU', lv: (typeof window.levelOf === 'function' && window.S) ? window.levelOf(window.S.xp || 0) + 1 : 1, cx: L.me.cx, cy: L.me.cy, dir: L.me.dir, walk: L.me.walk, a: AM().admin };
@@ -168,16 +168,16 @@ function pt(L, e) { const r = L.cv.getBoundingClientRect(); return { x: (e.clien
 function hotAt(id, x, y) { const hs = HOT[id] || []; for (let i = 0; i < hs.length; i++) { const h = hs[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; } return null; }
 function doorAt(x, y) { return y > 128 && y < 190 ? (x < 34 ? 'prev' : x > 446 ? 'next' : null) : null; }
 function onClick(e) {
-  const L = LE(), p = pt(L, e), id = room(), d = doorAt(p.x, p.y);
+  const L = LE(), p = pt(L, e), id = room(), d = doorAt(p.x, p.y), realtime = NE().SupabaseLounge;
   if (d) { setRoom(ROOMS[id][d]); return; }
   if (AM().user && L.cv) { /* click another operator → mini card */ const keys = Object.keys(L.players); for (let i = 0; i < keys.length; i++) { const o = L.players[keys[i]]; if ((o.r || 'deck') === id && Math.abs(p.x - o.cx) < 16 && Math.abs(p.y - (o.cy - 17)) < 20) { showCard(keys[i], o, e); return; } } }
   hideCard();
   const h = hotAt(id, p.x, p.y); L.me.pose = 0; L.me.pendingSit = null;
   if (h) {
     L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, h.sx)); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, h.sy)); L.me.walk = true; L.me.act = h; if (h.t === 'seat') L.me.pendingSit = h;
-    if (window.sfx) sfx('click'); if (NE().SupabaseLounge.available()) NE().SupabaseLounge.sendWalk(); return;
+    if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk(); return;
   }
-  L.me.act = null; L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, Math.round(p.x))); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, Math.round(p.y))); L.me.walk = true; if (window.sfx) sfx('click'); if (NE().SupabaseLounge.available()) NE().SupabaseLounge.sendWalk();
+  L.me.act = null; L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, Math.round(p.x))); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, Math.round(p.y))); L.me.walk = true; if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk();
 }
 function arrive(L) {
   const a = L.me.act; if (!a || L.me.walk) return; L.me.act = null;
