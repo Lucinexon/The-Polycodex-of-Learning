@@ -8,8 +8,8 @@
                      10s hard sync interval, 15s presence heartbeat throttle,
                      250-message chat caps, 7d message expiry sweep, and a
                      self-imposed daily write budget (19k < 20k Spark limit).
-   AuthManager       Pure username/password ⇄ synthetic email auth, guest
-                     (anonymous) mode, cloud profile sync to players/{uid}.
+  AuthManager       Email/password, legacy synthetic username aliases, Google
+              sign-in, anonymous guest mode, and cloud profile sync.
    NotebookManager   Obsidian-style vaults + 6-digit room vaults, academic toolbar,
                      live metrics, KaTeX preview, .md export, rich-HTML
                      clipboard copy (Google Docs / Word paste-ready).
@@ -230,19 +230,20 @@ const Presence = {
 };
 
 /* ========================= [2] AUTH MANAGER =========================
-   Pure username/password: the handle maps to a synthetic internal address
-   (username.toLowerCase().replace(/[^a-z0-9]/g,'') + '@codex.local') so
-   Firebase Email/Password auth runs with ZERO email friction and zero
-   OAuth popups. Anonymous Firebase auth powers CONTINUE AS GUEST. */
+  Legacy username accounts map to synthetic internal addresses; newer
+  accounts use real email addresses and verification. Google sign-in can link
+  an anonymous guest account without changing its UID. */
 const AuthManager = {
   user: null, uid: null, name: null,
-  guest: true, admin: false, busy: false,
+  guest: true, admin: false, busy: false, viaGoogle: false, verified: false,
   authResolved: false, lastPush: 0, pushPending: false, PUSH_MIN_MS: 30000,
 
   emailOf: function (username) {
     return String(username).toLowerCase().replace(/[^a-z0-9]/g, '') + '@codex.local';
   },
   validName: function (u) { return /^[A-Za-z0-9_]{3,18}$/.test(String(u || '')); },
+  validEmail: function (e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim()); },
+  mailOK: function () { return !!(this.user && !this.guest && (this.viaGoogle || this.verified)); },
 
   init: function () {
     if (!fbOK()) return;
@@ -260,6 +261,8 @@ const AuthManager = {
     this.user = user || null;
     this.uid = user ? user.uid : null;
     this.guest = !user || user.isAnonymous;
+    this.viaGoogle = !!(user && (user.providerData || []).some(function (p) { return p.providerId === 'google.com'; }));
+    this.verified = !!(this.viaGoogle || (user && user.emailVerified && !/@codex\.local$/i.test(user.email || '')));
 
     // Guaranteed username recovery: if displayName is missing, pull handle from the email!
     if (user && !user.isAnonymous) {
@@ -310,14 +313,19 @@ const AuthManager = {
       });
   },
 
-  register: function (uname, pass, done) {
+  register: function (uname, pass, done, email) {
     if (!fbOK()) { done({ err: 'OFFLINE — Firebase link not configured on this deployment.' }); return; }
     if (!this.validName(uname)) { done({ err: 'USERNAME: 3–18 chars, letters / digits / underscore.' }); return; }
     if (!pass || String(pass).length < 6) { done({ err: 'PASSWORD: minimum 6 characters.' }); return; }
+    email = String(email || '').trim();
+    if (email && !this.validEmail(email)) { done({ err: 'Enter a valid email address.' }); return; }
     const self = this;
-    AUTH.createUserWithEmailAndPassword(this.emailOf(uname), String(pass)).then(function (cred) {
+    AUTH.createUserWithEmailAndPassword(email || this.emailOf(uname), String(pass)).then(function (cred) {
       const u = cred.user;
+      self.name = uname; self.viaGoogle = false; self.verified = false;
       return u.updateProfile({ displayName: uname }).then(function () {
+        return email ? u.sendEmailVerification() : null;
+      }).then(function () {
         return guardedWrite('register', function () {
           const seed = self.snapshot();
           return DB.collection('players').doc(u.uid).set(seed, { merge: true }).then(function () {
@@ -331,6 +339,7 @@ const AuthManager = {
           });
         });
       }).then(function () {
+        self.onAuth(AUTH.currentUser);
         blip('level');
         say('<b>OPERATOR REGISTERED</b><br>Welcome, ' + esc(uname) + ' — cloud profile online.', 'coin', 4200);
         done({ ok: true });
@@ -340,9 +349,12 @@ const AuthManager = {
 
   login: function (uname, pass, done) {
     if (!fbOK()) { done({ err: 'OFFLINE — Firebase link not configured on this deployment.' }); return; }
-    if (!this.validName(uname)) { done({ err: 'USERNAME: 3–18 chars, letters / digits / underscore.' }); return; }
-    AUTH.signInWithEmailAndPassword(this.emailOf(uname), String(pass))
-      .then(function () { blip('ok'); say('<b>LINK RESTORED</b><br>Cloud profile hydrated from the orbital archive.', 'coin', 3800); done({ ok: true }); })
+    uname = String(uname || '').trim();
+    const email = this.validEmail(uname) ? uname : (this.validName(uname) ? this.emailOf(uname) : '');
+    if (!email) { done({ err: 'Enter a valid username or email address.' }); return; }
+    const self = this;
+    AUTH.signInWithEmailAndPassword(email, String(pass))
+      .then(function (cred) { self.onAuth(cred.user); blip('ok'); say('<b>LINK RESTORED</b><br>Cloud profile hydrated from the orbital archive.', 'coin', 3800); done({ ok: true }); })
       .catch(function (err) { done({ err: authErr(err) }); });
   },
 
@@ -352,6 +364,92 @@ const AuthManager = {
     const self = this;
     AUTH.signInAnonymously().then(function () { done({ ok: true }); })
       .catch(function (err) { done({ err: authErr(err) }); });
+  },
+
+  google: function (done) {
+    if (!fbOK() || !window.firebase.auth.GoogleAuthProvider) { done({ err: 'Google sign-in is unavailable on this deployment.' }); return; }
+    const self = this, provider = new window.firebase.auth.GoogleAuthProvider();
+    const current = this.user;
+    const request = current && current.isAnonymous ? current.linkWithPopup(provider) : AUTH.signInWithPopup(provider);
+    request.then(function (result) {
+      self.onAuth(result.user); self.viaGoogle = true; self.verified = true; self.updateUI(); done({ ok: true });
+    }).catch(function (err) { done({ err: authErr(err) }); });
+  },
+
+  resetPassword: function (identity, done) {
+    if (!fbOK()) { done({ err: 'OFFLINE — Firebase link not configured on this deployment.' }); return; }
+    identity = String(identity || '').trim();
+    const email = this.validEmail(identity) ? identity : (this.validName(identity) ? this.emailOf(identity) : '');
+    if (!email) { done({ err: 'Enter a valid username or email address.' }); return; }
+    if (/@codex\.local$/i.test(email)) { done({ err: 'This legacy account has no recovery email. Sign in and add a real email first.' }); return; }
+    AUTH.sendPasswordResetEmail(email).then(function () { done({ ok: true }); })
+      .catch(function (err) { done({ err: authErr(err) }); });
+  },
+
+  changeUsername: function (username, password, done) {
+    if (!fbOK() || !this.user || this.guest) { done({ err: 'Sign in to change your username.' }); return; }
+    username = String(username || '').trim();
+    if (!this.validName(username)) { done({ err: 'USERNAME: 3–18 chars, letters / digits / underscore.' }); return; }
+    const self = this, user = this.user, oldEmail = user.email || '';
+    DB.collection('players').where('name', '==', username).limit(2).get().then(function (snap) {
+      const taken = snap.docs.some(function (doc) { return doc.id !== self.uid; });
+      if (taken) { done({ err: 'That username is already in use.' }); return; }
+      let rename = Promise.resolve();
+      if (/@codex\.local$/i.test(oldEmail)) {
+        if (!password) { done({ err: 'Enter your password to confirm this username change.' }); return; }
+        const credential = window.firebase.auth.EmailAuthProvider.credential(oldEmail, String(password));
+        rename = user.reauthenticateWithCredential(credential).then(function () { return user.updateEmail(self.emailOf(username)); });
+      }
+      rename.then(function () { return user.updateProfile({ displayName: username }); }).then(function () {
+        self.name = username; self.pushProfile(true); self.updateUI(); done({ ok: true });
+      }).catch(function (err) { done({ err: authErr(err) }); });
+    }).catch(function (err) { done({ err: authErr(err) }); });
+  },
+
+  addEmail: function (email, password, done) {
+    if (!fbOK() || !this.user) { done({ err: 'Sign in before adding an email.' }); return; }
+    email = String(email || '').trim();
+    if (!this.validEmail(email)) { done({ err: 'Enter a valid email address.' }); return; }
+    const self = this, user = this.user, Auth = window.firebase.auth;
+    let update;
+    if (user.isAnonymous) {
+      if (!password || String(password).length < 6) { done({ err: 'PASSWORD: minimum 6 characters.' }); return; }
+      update = user.linkWithCredential(Auth.EmailAuthProvider.credential(email, String(password))).then(function (result) { self.user = result.user; });
+    } else if (/@codex\.local$/i.test(user.email || '')) {
+      if (!password) { done({ err: 'Enter your password to confirm this email change.' }); return; }
+      const credential = Auth.EmailAuthProvider.credential(user.email, String(password));
+      update = user.reauthenticateWithCredential(credential).then(function () { return user.updateEmail(email); });
+    } else if (user.email === email) update = Promise.resolve();
+    else update = user.updateEmail(email);
+    update.then(function () { return self.user.sendEmailVerification(); }).then(function () {
+      self.verified = false; self.viaGoogle = false; self.updateUI(); done({ ok: true });
+    }).catch(function (err) { done({ err: authErr(err) }); });
+  },
+
+  sendVerify: function (done) {
+    if (!fbOK() || !this.user || this.guest || !this.user.email || /@codex\.local$/i.test(this.user.email)) {
+      done({ err: 'Add a valid email before requesting verification.' }); return;
+    }
+    this.user.sendEmailVerification().then(function () { done({ ok: true }); })
+      .catch(function (err) { done({ err: authErr(err) }); });
+  },
+
+  refreshUser: function (done) {
+    if (!fbOK() || !this.user) { done({ err: 'No signed-in account to refresh.' }); return; }
+    const self = this, user = this.user;
+    user.reload().then(function () { self.onAuth(AUTH.currentUser || user); done({ ok: true }); })
+      .catch(function (err) { done({ err: authErr(err) }); });
+  },
+
+  lookup: function (prefix, done) {
+    prefix = String(prefix || '').trim();
+    if (!fbOK() || !this.user || prefix.length < 2) { done([]); return; }
+    DB.collection('players').orderBy('name').startAt(prefix).endAt(prefix + '\uf8ff').limit(20).get().then(function (snap) {
+      done(snap.docs.map(function (doc) {
+        const data = doc.data() || {};
+        return { uid: doc.id, name: String(data.name || 'Operator'), level: data.level || 1, avatar: String(data.avatar || '') };
+      }).filter(function (player) { return player.uid !== AuthManager.uid; }));
+    }).catch(function () { done([]); });
   },
 
   logout: function () {
@@ -374,7 +472,7 @@ const AuthManager = {
     let level = 1;
     if (typeof window.levelOf === 'function' && typeof st.xp === 'number') level = window.levelOf(st.xp) + 1;
     return {
-      name: this.name || 'OPERATOR', guest: this.guest, admin: this.admin,
+      name: this.name || 'OPERATOR', avatar: window.CodexAvatar ? window.CodexAvatar.mine() || '' : '', guest: this.guest, admin: this.admin,
       xp: st.xp || 0, level: level, streak: st.streak || 0, bestStreak: st.bestStreak || 0,
       known: (st.known || []).slice(0, 2000), badges: (st.badges || []).slice(),
       quizBest: st.quizBest || {}, companion: st.companion || null,
@@ -486,13 +584,16 @@ const AuthManager = {
 
 function authErr(err) {
   const code = (err && err.code) || '';
-  if (code.indexOf('email-already-in-use') >= 0) return 'USERNAME ALREADY REGISTERED — try LOGIN instead.';
-  if (code.indexOf('invalid-email') >= 0) return 'USERNAME EMPTY — handles need at least one letter or digit.';
+  if (code.indexOf('email-already-in-use') >= 0) return 'EMAIL ALREADY REGISTERED — try signing in instead.';
+  if (code.indexOf('invalid-email') >= 0) return 'EMAIL ADDRESS INVALID — check the address and try again.';
   if (code.indexOf('weak-password') >= 0) return 'PASSWORD TOO WEAK — 6 characters minimum.';
   if (code.indexOf('user-not-found') >= 0 || code.indexOf('wrong-password') >= 0 || code.indexOf('invalid-credential') >= 0) return 'ACCESS DENIED — unknown username or wrong password.';
   if (code.indexOf('too-many-requests') >= 0) return 'THROTTLED — too many attempts, wait a moment.';
   if (code.indexOf('network') >= 0) return 'NETWORK UNREACHABLE — check the uplink.';
-  if (code.indexOf('operation-not-allowed') >= 0) return 'FIREBASE CONFIG — enable Email/Password + Anonymous providers in the console.';
+  if (code.indexOf('requires-recent-login') >= 0) return 'SIGN IN AGAIN — Firebase requires a recent login for this change.';
+  if (code.indexOf('popup-closed-by-user') >= 0) return 'Google sign-in was cancelled.';
+  if (code.indexOf('unauthorized-domain') >= 0) return 'FIREBASE CONFIG — authorize this domain for Google sign-in.';
+  if (code.indexOf('operation-not-allowed') >= 0) return 'FIREBASE CONFIG — enable Email/Password, Anonymous, and Google providers in the console.';
   return 'LINK ERROR — ' + (code || 'unknown fault');
 }
 
@@ -1404,7 +1505,7 @@ const LoungeEngine = {
     if (!ro) return;
     const ops = this.onlineOperators();
     if (!fbOK()) {
-      ro.innerHTML = '<span class="small">OFFLINE MODE — configure FIREBASE_CONFIG in js/network.js to meet other operators.</span>';
+      ro.innerHTML = '<span class="small">OFFLINE MODE — configure FIREBASE_CONFIG in js/core/network.js to meet other operators.</span>';
       const chip = q('#lobbyCountChip');
       if (chip) chip.textContent = 'OFFLINE';
       return;
@@ -1701,7 +1802,7 @@ const ChatEngine = {
     if (!log) return;
     const col = this.colOf();
     if (!col) {
-      log.innerHTML = '<div class="chat-sys">OFFLINE MODE — configure FIREBASE_CONFIG in js/network.js to open comms.</div>';
+      log.innerHTML = '<div class="chat-sys">OFFLINE MODE — configure FIREBASE_CONFIG in js/core/network.js to open comms.</div>';
       return;
     }
     if (this.channel === 'dm' && !this.dm) {
@@ -1735,7 +1836,7 @@ const ChatEngine = {
     const log = q('#chatLog');
     if (!log) return;
     const msgs = docs.filter(function (m) { return m.k !== 'r'; }), RX = {};
-    docs.forEach(function (m) { if (m.k === 'r' && m.to && m.e) { const a = RX[m.to] = RX[m.to] || {}; (a[m.e] = a[m.e] || []).push(m.u); } });
+    docs.forEach(function (m) { if (m.k === 'r' && m.to && CH_EMO.indexOf(m.e) >= 0) { const a = RX[m.to] = RX[m.to] || {}; (a[m.e] = a[m.e] || []).push(m.u); } });
     if (!msgs.length) { log.innerHTML = '<div class="chat-sys chat-empty"><b>' + esc(this.chanLabel()) + '</b> is quiet.<br>Say hi. The first message sets the tone.</div>'; this.lastId = null; this.unseen = 0; this.jumpUI(); return; }
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 90, first = !this.lastId;
     const me = AuthManager.uid, admin = AdminManager.isAdmin(), show = msgs.slice(-150);
@@ -1749,7 +1850,7 @@ const ChatEngine = {
         (mine ? '' : (grp ? '<span class="cav sp"></span>' : '<span class="cav" style="--h:' + chHue(m.u || m.n) + '">' + esc(String(m.n || 'OP').charAt(0).toUpperCase()) + '</span>')) +
         '<div class="cbody">' + (!mine && !grp ? '<div class="cwho">' + esc(m.n || 'OP') + (m.a ? '<span class="abadge" title="System administrator">ADMIN</span>' : '') + (m.g ? '<span class="gbadge" title="Anonymous guest link">GUEST</span>' : '') + '</div>' : '') +
         '<div class="cbub">' + (m.re ? '<button type="button" class="cquote" data-jump="' + esc(m.re.i || '') + '"><b>' + esc(m.re.n || 'OP') + '</b>' + esc(m.re.t || '') + '</button>' : '') + '<div class="ctx">' + chRich(m.t || '') + '</div></div>' +
-        (rx ? '<div class="crxs">' + Object.keys(rx).map(function (e) { return '<button type="button" class="crx' + (rx[e].indexOf(me) >= 0 ? ' me' : '') + '" data-react="' + e + '">' + e + ' ' + rx[e].length + '</button>'; }).join('') + '</div>' : '') +
+        (rx ? '<div class="crxs">' + Object.keys(rx).map(function (e) { return '<button type="button" class="crx' + (rx[e].indexOf(me) >= 0 ? ' me' : '') + '" data-react="' + esc(e) + '">' + esc(e) + ' ' + rx[e].length + '</button>'; }).join('') + '</div>' : '') +
         (end && m.ts ? '<div class="cts">' + fmtTime(m.ts) + '</div>' : '') + '</div>' +
         '<div class="cact"><button type="button" data-reply aria-label="Reply">↩</button><button type="button" data-pick aria-label="React">☺</button>' + (admin && m._id ? '<button type="button" data-del aria-label="Delete message">×</button>' : '') + '</div>' +
         '<div class="cpick">' + CH_EMO.map(function (e) { return '<button type="button" data-react="' + e + '">' + e + '</button>'; }).join('') + '</div></div>';
@@ -2042,7 +2143,7 @@ function bindAuthUI() {
       const res = q('#authResult');
       if (res) {
         res.hidden = false; res.className = 'byok-result err';
-        res.textContent = 'OFFLINE MODE — paste your Firebase web config into FIREBASE_CONFIG (js/network.js) to enable accounts, lounge and chat.';
+        res.textContent = 'OFFLINE MODE — paste your Firebase web config into FIREBASE_CONFIG (js/core/network.js) to enable accounts, lounge and chat.';
       }
       return;
     }
@@ -2101,10 +2202,13 @@ window.NetworkEngine = {
   onStateSave: function () { AuthManager.onStateSave(); },
   openAuth: function () { AuthManager.openModal(); },
   online: function () { return fbOK(); },
+  db: function () { return fbOK() ? DB : null; },
+  guardedWrite: guardedWrite,
   quota: function () { return { writes: QuotaGuard.ledger.w, budget: QuotaGuard.BUDGET, left: QuotaGuard.left() }; },
   AuthManager: AuthManager,
   NotebookManager: NotebookManager,
   LoungeEngine: LoungeEngine,
+  SupabaseLounge: SupabaseLounge,
   ChatEngine: ChatEngine,
   AdminManager: AdminManager
 };

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   THE POLYMATH CODEX — js/systems.js  ·  LIVING MAINFRAME UPGRADE
+  THE POLYMATH CODEX — js/core/systems.js  ·  LIVING MAINFRAME UPGRADE
    --------------------------------------------------------------------------
    SystemsEngine — five subsystems, zero new dependencies (no CDNs, no
    modules, no imports). Loaded BEFORE engine.js as a classic script:

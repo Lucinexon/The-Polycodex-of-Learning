@@ -44,9 +44,10 @@
 <!-- Prism (theme is overridden in style.css) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css">
 <!-- App theme -->
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="codex-plus.css?v=20261011-3">
-<link rel="stylesheet" href="v6.css?v=20261011-3">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/codex-plus.css">
+<link rel="stylesheet" href="css/v6.css">
+<link rel="stylesheet" href="css/v7.css">
 
 <!-- Firebase v10 (compat build) — multiplayer, auth, chat, notebook sync -->
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -77,23 +78,28 @@
 <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
 <!-- ===== DATA ===== -->
-<script defer src="js/sectors-part1.js"></script>
-<script defer src="js/sectors-part2.js"></script>
-<script defer src="js/sectors-part3.js"></script>
+<script defer src="js/data/sectors-part1.js"></script>
+<script defer src="js/data/sectors-part2.js"></script>
+<script defer src="js/data/sectors-part3.js"></script>
 <!-- ===== LIVING SYSTEMS (probes · decay · dispatch · BYOK) ===== -->
-<script defer src="js/systems.js"></script>
+<script defer src="js/core/systems.js"></script>
 <!-- ===== NETWORK LAYER (auth · lobby · chat · group notebook · quota armor) ===== -->
-<script defer src="js/network.js"></script>
+<script defer src="js/core/network.js"></script>
 <!-- ===== AMBIENT DEEP-OCEAN BACKGROUND ===== -->
-<script defer src="js/icons.js"></script>
-<script defer src="js/ocean.js"></script>
+<script defer src="js/core/icons.js"></script>
+<script defer src="js/core/ocean.js"></script>
 <!-- ===== ENGINE (must be last) ===== -->
-<script defer src="js/engine.js"></script>
+<script defer src="js/core/engine.js"></script>
 <!-- ===== OVERHAUL LAYER (sound · guided lessons · sim missions · boss fight) — must load after engine.js ===== -->
-<script defer src="js/codex-plus.js"></script>
-<script defer src="js/v5-extras.js?v=20261011-3"></script>
-<script defer src="js/guide.js?v=20261011-3"></script>
-<script defer src="js/v6.js"></script>
+<script defer src="js/features/codex-plus.js"></script>
+<script defer src="js/features/v5-extras.js"></script>
+<script defer src="js/features/guide.js"></script>
+<script defer src="js/features/v6.js"></script>
+<script defer src="js/features/avatar.js"></script>
+<script defer src="js/features/account.js"></script>
+<script defer src="js/features/social.js"></script>
+<script defer src="js/features/lounge2.js"></script>
+<script defer src="js/features/v7.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -115,7 +121,7 @@
 <header class="topbar">
   <button class="tb" id="menuBtn" aria-label="Open navigation menu" aria-controls="sidebar"><span data-sprite="book" data-px="18"></span></button>
   <button class="brand" data-go="home" aria-label="Return to the codex hub">
-    <span class="coin" data-sprite="coin" data-px="28"></span>
+    <span class="coin v7-logo" aria-hidden="true"><img src="assets/polymath-codex-logo.svg" width="26" height="26" alt="" decoding="async"></span>
     <span class="brand-tx"><span class="brand-t">POLYMATH CODEX</span><span class="bsub">SYSTEMS · LORE · COSMOS</span></span>
   </button>
   <div class="searchwrap">
@@ -177,6 +183,7 @@
     <!-- ================= HOME ================= -->
     <section id="home" class="screen active noprintsec" aria-labelledby="h-home">
       <div class="hero">
+        <span class="v7-logo v7-hero-logo" aria-hidden="true"><img src="assets/polymath-codex-logo.svg" width="46" height="46" alt="" decoding="async"></span>
         <h2 class="hero-title" id="h-home">The Polymath<span>Codex</span></h2>
         <p class="hero-tag">Descend through ten sectors of deep lore, harvest XP, and rise from Novice Chronicler to Universal Architect.</p>
         <button class="btn primary startbtn" data-go="sec1"><span class="tri"></span>START LEARNING</button>

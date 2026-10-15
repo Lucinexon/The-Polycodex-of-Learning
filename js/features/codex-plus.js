@@ -101,13 +101,13 @@ function setupLesson(sec) {
   if (!sec) return;
   const blocks = $A('article.block', sec); if (!blocks.length) return;
   blocks.forEach(b => {
-    const body = $1('.md-body', b), p = $1('.md-body > p', b);
-    const words = (body.textContent || '').trim().split(/\s+/).length;
+    const body = $1('.md-body', b), p = $1('.md-body > p.hook', b) || $1('.md-body > p', b);
+    const cb = body.cloneNode(true); $A('details.deep', cb).forEach(d => d.remove()); const words = (cb.textContent || '').trim().split(/\s+/).length;
     $1('.blk-head', b).insertAdjacentHTML('beforeend', '<span class="gl-time">' + Math.max(1, Math.round(words / 200)) + ' min</span>' + clipBtn());
     if (p) {
       const c = p.cloneNode(true); $A('.katex', c).forEach(k => k.remove());
       let t = c.textContent.replace(/\s+/g, ' ').trim();
-      const m = t.match(/^.{40,230}?[.!?](\s|$)/); t = m ? m[0].trim() : t.slice(0, 170) + '…';
+      if (!p.classList.contains('hook')) { const m = t.match(/^.{40,230}?[.!?](\s|$)/); t = m ? m[0].trim() : t.slice(0, 170) + '…'; }
       body.insertAdjacentHTML('beforebegin', '<div class="gl-tldr"><b>In short</b>' + esc(t) + '</div>');
     }
   });

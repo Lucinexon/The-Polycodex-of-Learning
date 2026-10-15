@@ -1,5 +1,5 @@
 /* ==========================================================================
-   THE POLYMATH CODEX — js/icons.js
+  THE POLYMATH CODEX — js/core/icons.js
    Hand-built duotone icon set (46 glyphs, 32×32 grid) that replaces the old
    8×8 pixel sprites. Each glyph is an SVG <symbol> in one hidden sheet and is
    instanced with <use>, so there is no per-icon image to decode and every icon

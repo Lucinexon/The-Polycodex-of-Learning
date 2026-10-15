@@ -14,11 +14,28 @@ window.SECTORS_PART3 = [
   id: 'sec8', num: '08', icon: 'eye', label: 'Psychology',
   kick: 'SECTOR 08 · MIND', title: 'Psychology & Game Theory',
   sub: 'Cognitive armor, Bayesian updates and defection equilibria',
-  intro: String.raw`The brain did not evolve to seek objective truth — it evolved to keep you alive long enough to propagate genetic material. Deep thinking consumes enormous metabolic energy: the brain is ~2% of body mass yet burns ~20% of resting glucose. To prevent starvation, evolution shipped heuristics — cognitive shortcuts trading accuracy for speed. Developing intellectual agency means installing **cognitive armor**: deliberately mapping the structural failure modes of your own primate operating system.`,
+  intro: "Your brain didn't evolve to find truth. It evolved to keep you alive cheaply. Thinking is expensive: the brain is about 2% of body mass but burns about 20% of resting glucose, so evolution gave you **shortcuts**. This sector maps those shortcuts, the biases and bad arguments they create, the math of updating beliefs, and the traps of metrics and cooperation.",
   blocks: [
     {
       id: 's8-1', title: 'Dual-Process Architecture', tags: ['KAHNEMAN', 'SYSTEM 1/2'],
       md: String.raw`
+<p class="hook">You have two thinking modes, a fast autopilot and a slow analyst, and most mistakes happen when the autopilot answers a question that needs the analyst.</p>
+
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>Knowing which mode is driving helps you slow down before big decisions.</p></aside>
+
+#### The core idea
+- **System 1, the autopilot:** fast, automatic, associative and largely unconscious. It runs face recognition and threat detection.
+- **System 2, the analyst:** slow, deliberate and effortful. It handles careful reasoning and costs more energy.
+- **Why two systems:** deep thought is expensive. The brain is about 2% of body mass but burns about 20% of resting glucose, so evolution favors shortcuts (Kahneman and Tversky).
+- **Rule of thumb:** when the stakes are high, or a conclusion feels instantly obvious, pause and engage System 2.
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>Which system makes fast, automatic judgments like spotting a threat?</p>
+<details><summary>Show answer</summary><p>System 1, the autopilot.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
 Kahneman and Tversky split human cognition into two operational modes:
 
 <div class="duo">
@@ -48,13 +65,24 @@ Kahneman and Tversky split human cognition into two operational modes:
   <div class="stat"><span class="stat-n c4">~150</span><span class="stat-l">Tribal scale the status firmware was built for</span></div>
   <div class="stat"><span class="stat-n c4">0.6%</span><span class="stat-l">Gacha base rate — engineered precisely for this architecture</span></div>
 </div>
+
+</details>
 `
     },
     {
       id: 's8-2', title: 'The Bias Armory & the Fallacy Bestiary', tags: ['BIASES', 'FALLACIES'],
       md: String.raw`
-Tap each failure mode to decrypt its mechanics:
+<p class="hook">Biases and fallacies are the brain's shortcuts misfiring, and naming them is the first step to catching them.</p>
 
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>You'll meet these in ads, politics and your own reasoning every day.</p></aside>
+
+#### The core idea
+- **Biases are shortcuts that fail.** For example, confirmation bias: data that agrees with you flows through System 1 with no friction, while data that contradicts you gets filtered out.
+- **Fallacies are broken arguments.** The cheat sheet below pairs each fallacy with its structural flaw and a signature example.
+- **Tap each card** to decrypt the mechanics of each bias.
+
+#### Tap to explore
 <div class="tiles">
   <button class="tile"><span class="t-front"><b>CONFIRMATION BIAS</b><span class="t-hint">CHERRY-PICKING REALITY</span><span class="t-hint">TAP TO DECRYPT</span></span><span class="t-back"><b>Affirming data is frictionless</b><span>System 1 processes confirming evidence cheaply; disconfirming evidence forces System 2 to spend glucose — so it gets ignored, misread, forgotten.</span></span></button>
   <button class="tile"><span class="t-front"><b>AVAILABILITY HEURISTIC</b><span class="t-hint">VIVID ≠ FREQUENT</span><span class="t-hint">TAP TO DECRYPT</span></span><span class="t-back"><b>Plane crashes on the news</b><span>Gauging danger by how easily examples come to mind. Cable-news plane wrecks terrify millions who then drive — statistically far deadlier — without blinking.</span></span></button>
@@ -64,7 +92,7 @@ Tap each failure mode to decrypt its mechanics:
   <button class="tile"><span class="t-front"><b>DUNNING-KRUGER</b><span class="t-hint">SMART ≠ IMMUNE</span><span class="t-hint">TAP TO DECRYPT</span></span><span class="t-back"><b>The intellectual variant</b><span>High IQ does not inoculate against delusion — it supplies better tools for rationalizing emotionally-generated conclusions. Faster rationalization engines, same biases.</span></span></button>
 </div>
 
-#### The rhetorical counterfeit bills (fallacy taxonomy)
+#### Quick reference
 <div class="tblwrap"><table class="tbl">
 <thead><tr><th>Fallacy</th><th>Structural flaw</th><th>Signature example</th></tr></thead>
 <tbody>
@@ -76,13 +104,48 @@ Tap each failure mode to decrypt its mechanics:
 <tr><td><b>Red Herring</b></td><td>Irrelevant topic introduced to distract</td><td>"Why clean the river when the school cafeteria needs better food?"</td></tr>
 </tbody></table></div>
 
+<aside class="co warn"><span class="co-tag"><span data-sprite="shield" data-px="12"></span>WATCH OUT · THE AD HOMINEM COUNTERFEIT</span>
+<p>A bare insult isn't an ad hominem. The fallacy happens only when the insult is used to dismiss the argument, as in "your climate argument is wrong because you are rude."</p></aside>
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>Is "you're rude" by itself an ad hominem fallacy?</p>
+<details><summary>Show answer</summary><p>No. It's a fallacy only when it's used to dismiss the argument.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
+Tap each failure mode to decrypt its mechanics:
+
+#### The rhetorical counterfeit bills (fallacy taxonomy)
+
 <aside class="co warn"><span class="co-tag"><span data-sprite="shield" data-px="12"></span>SYSTEM TRAP · THE AD HOMINEM COUNTERFEIT</span>
 <p>A bare insult ("you're rude") is <b>not</b> an ad hominem fallacy. The fallacy fires only when the insult is used to dismiss the argument: "your climate argument is wrong <i>because</i> you are rude." Mislabeling insults as fallacies is itself a rhetorical counterfeit.</p></aside>
+
+</details>
 `
     },
     {
       id: 's8-3', title: 'Bayesian Updating & Rational Epistemology', tags: ['BAYES', 'PRIORS'],
       md: String.raw`
+<p class="hook">Good thinkers hold beliefs as probabilities and update them as evidence arrives, always starting from how common the thing was in the first place.</p>
+
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>It protects you from scary headlines and from being fooled by rare-event news.</p></aside>
+
+#### The core idea
+- **Bayes' rule:** posterior = likelihood × prior, divided by the probability of the evidence, or P(A|B) = P(B|A) · P(A) / P(B).
+- **Prior:** your baseline belief before seeing the data.
+- **Likelihood:** how expected is this data if the idea is true?
+- **Base-rate neglect:** ignoring the prior is the core failure of irrationality. A scary headline updates nothing if you never knew how rare the event was.
+
+#### Example
+A test is 99% sensitive and 99% specific for a disease that 1 in 1,000 people have. Of everyone who tests positive, only about 9 in 100 are actually sick, because healthy people vastly outnumber sick ones.
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>What is base-rate neglect?</p>
+<details><summary>Show answer</summary><p>Ignoring the prior probability of an event when judging new evidence.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
 A rational thinker does not hold beliefs as binary True/False — beliefs are **subjective probabilities systematically updated as evidence arrives**:
 
 <div class="fx-box">
@@ -99,28 +162,26 @@ $$P(A \mid B) = \frac{P(B \mid A) \cdot P(A)}{P(B)}$$
 </div>
 
 The core cognitive failure of irrationality is **ignoring base rates** — the prior $P(A)$ — when evaluating sensational events. A scary headline updates nothing if you never knew how rare the event was to begin with.
+
+</details>
 `
     },
     {
       id: 's8-4', title: "Goodhart's Law & the Prisoner's Dilemma", tags: ['GOODHART', 'NASH'],
       md: String.raw`
-#### Goodhart's Law
-*"When a measure becomes a target, it ceases to be a good measure."* Evaluate engineers on lines of code → bloated scripts. Rank professors on publication count → minimally publishable units sliced from one result. Once the target is announced, agents **game the metric**, decoupling it from the quality it was meant to proxy.
+<p class="hook">When a measurement becomes a target, people game it, and when rational players each defend themselves, everyone can lose together.</p>
 
-#### The Prisoner's Dilemma
-<div class="tblwrap"><table class="tbl">
-<thead><tr><th></th><th>B cooperates</th><th>B defects</th></tr></thead>
-<tbody>
-<tr><td><b>A cooperates</b></td><td>A: −1 yr · B: −1 yr</td><td>A: −10 yrs · B: 0 yrs</td></tr>
-<tr><td><b>A defects</b></td><td>A: 0 yrs · B: −10 yrs</td><td>A: −5 yrs · B: −5 yrs</td></tr>
-</tbody></table></div>
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>These two ideas explain bad metrics at work and school, arms races, overfishing and price wars.</p></aside>
 
-Mutual cooperation yields the **Pareto-optimal** (−1, −1) — but defection is the **dominant strategy** for both rational actors, trapping them in the **Nash equilibrium** (−5, −5). This single matrix explains arms races, overfishing, climate gridlock and price wars: individually rational, collectively ruinous.
+#### The core idea
+- **Goodhart's Law:** "When a measure becomes a target, it ceases to be a good measure." Judge engineers on lines of code and you get bloated scripts. Rank professors on publication count and you get minimal publishable units.
+- **The Prisoner's Dilemma:** each player does better by defecting whatever the other does, so both end up worse than if both had cooperated. Mutual cooperation is Pareto-optimal (−1, −1) but defection is the dominant strategy, trapping both in the Nash equilibrium (−5, −5).
+- **Real-world versions:** arms races, overfishing, climate gridlock and price wars.
+- **Rage-bait economics:** System 1 prioritizes threats and outrage, so ranking systems tuned for dwell-time amplify polarizing content. You're not angry because you chose to be. You're angry because anger is profitable.
 
-<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>KEY INSIGHT · RAGE-BAIT ECONOMICS</span>
-<p>System 1 prioritizes threats and moral outrage, so recommendation algorithms <b>naturally</b> amplify polarizing content. Users are dragged into online conflict not by choice but because Paleolithic threat-detection is hijacked by ranking systems tuned for dwell-time. You are not angry because you chose to be — you are angry because anger is profitable.</p></aside>
+#### Try it: five rounds against Tit-for-Tat
 
-#### Hands-on: five rounds against Tit-for-Tat
 Axelrod’s tournament champion waits below — nice first, retaliatory second, forgiving third. The payoff matrix is live: R = 3, S = 0, T = 5, P = 1. Can you beat 15?
 
 <div class="interactive-sim" data-sim="dilemma">
@@ -146,6 +207,32 @@ Axelrod’s tournament champion waits below — nice first, retaliatory second, 
 <p class="sim-note dim">TFT opens cooperative, then mirrors your last move. Mutual cooperation all five rounds scores 15 — the honest maximum. Pure defection decays to 9. The equilibrium is not a strategy; it is a relationship.</p>
 </div>
 </div>
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>Why do both players defect in the Prisoner's Dilemma even though cooperating is better?</p>
+<details><summary>Show answer</summary><p>Defection is each player's dominant strategy, so they land in the worse Nash equilibrium.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
+#### Goodhart's Law
+
+*"When a measure becomes a target, it ceases to be a good measure."* Evaluate engineers on lines of code → bloated scripts. Rank professors on publication count → minimally publishable units sliced from one result. Once the target is announced, agents **game the metric**, decoupling it from the quality it was meant to proxy.
+
+#### The Prisoner's Dilemma
+
+<div class="tblwrap"><table class="tbl">
+<thead><tr><th></th><th>B cooperates</th><th>B defects</th></tr></thead>
+<tbody>
+<tr><td><b>A cooperates</b></td><td>A: −1 yr · B: −1 yr</td><td>A: −10 yrs · B: 0 yrs</td></tr>
+<tr><td><b>A defects</b></td><td>A: 0 yrs · B: −10 yrs</td><td>A: −5 yrs · B: −5 yrs</td></tr>
+</tbody></table></div>
+
+Mutual cooperation yields the **Pareto-optimal** (−1, −1) — but defection is the **dominant strategy** for both rational actors, trapping them in the **Nash equilibrium** (−5, −5). This single matrix explains arms races, overfishing, climate gridlock and price wars: individually rational, collectively ruinous.
+
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>KEY INSIGHT · RAGE-BAIT ECONOMICS</span>
+<p>System 1 prioritizes threats and moral outrage, so recommendation algorithms <b>naturally</b> amplify polarizing content. Users are dragged into online conflict not by choice but because Paleolithic threat-detection is hijacked by ranking systems tuned for dwell-time. You are not angry because you chose to be — you are angry because anger is profitable.</p></aside>
+
+</details>
 `
     }
   ],
@@ -168,11 +255,48 @@ Axelrod’s tournament champion waits below — nice first, retaliatory second, 
   id: 'sec9', num: '09', icon: 'hour', label: 'Big History',
   kick: 'SECTOR 09 · COSMIC ARC', title: 'Big History & Civilization Pivots',
   sub: 'Complexity thresholds and the great accelerators',
-  intro: String.raw`The history of the universe is an improbable ascent through ascending thresholds of complexity. The cosmos began as a uniform, searing soup of quarks and leptons; over 13.8 billion years, gravity, chemistry and biology assembled islands of organized structure. Humanity sits atop this pyramid — an instrument through which the universe reflects on itself, holding the power to seed life among the stars or erase itself in a blinding flash.`,
+  intro: "The universe is a staircase of complexity. It began as a hot, uniform soup, and over 13.8 billion years gravity, chemistry and biology built stars, life and then us. Humanity can now seed life among the stars or erase itself. This sector walks the **thresholds** and the **accelerators** that brought us here.",
   blocks: [
     {
       id: 's9-1', title: 'The Four Thresholds of Complexity', tags: ['BIG BANG', 'RNA', 'COLLECTIVE'],
       md: String.raw`
+<p class="hook">Big History sees four jumps in complexity: the Big Bang, stars, life and human culture, each building on the last.</p>
+
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>It's a map for fitting everything you learn, from physics to history, into one story.</p></aside>
+
+#### The core idea
+- **Threshold 1, the Big Bang (13.8 Ga):** during nucleosynthesis (t = 10 s to 20 min), space cooled enough for protons and neutrons to form the first nuclei, locking matter at about 75% hydrogen and 25% helium.
+- **Threshold 2, stars (~13.6 Ga):** gravity builds stars that forge heavier elements.
+- **Threshold 3, life:** the RNA World Hypothesis says RNA both stored genetic information and acted as a catalyst. Self-replication plus mutation was all Darwin needed.
+- **Threshold 4, collective learning:** every other species restarts its knowledge each generation, but humans compound it, moving evolution from slow genes into fast culture.
+
+#### Try it: run the helicase
+
+Life’s copy mechanism, miniaturized. Feed the complementary base at each position of the template strand — <code>5’- A T C G G A T C -3’</code> — and watch hydrogen bonds seal the rungs:
+
+<div class="interactive-sim" data-sim="dna">
+<div class="sim-head"><span class="sim-kick">SIMULATION · MOLECULAR BIOLOGY</span><b class="sim-title">DNA REPLICATION &amp; HELICASE SYNTHESIZER</b><span class="sim-badge">HELICASE ACTIVE · 0/8</span></div>
+<div class="sim-body">
+<div class="dna-stage" data-mg-el="dna-stage"></div>
+<div class="mg-btn-row">
+<button class="btn" data-mg="dna-add" data-base="A">+ A</button>
+<button class="btn" data-mg="dna-add" data-base="T">+ T</button>
+<button class="btn" data-mg="dna-add" data-base="C">+ C</button>
+<button class="btn" data-mg="dna-add" data-base="G">+ G</button>
+<button class="btn danger" data-mg="dna-reset">RESET</button>
+</div>
+<p class="dna-note mono" data-mg-el="dna-note">SELECT THE COMPLEMENTARY BASE — A↔T · C↔G</p>
+<p class="sim-note dim">Template 5’-ATCGGATC-3’. The new strand is built anti-parallel; matched pairs bond (:::) and mismatches stall the helicase. Base pairing is the original collective-learning storage medium — 4 letters, error correction included.</p>
+</div>
+</div>
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>What does "collective learning" mean?</p>
+<details><summary>Show answer</summary><p>Knowledge accumulates across generations, so culture evolves much faster than genes.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
 <div class="flow">
   <div class="fstep"><span class="fwho">THRESHOLD 1</span><span class="fdoc">BIG BANG</span><span class="fsm">13.8 Ga · nucleosynthesis locks matter at ~75% H / 25% He</span></div>
   <div class="farrow"><span class="flab">forges</span></div>
@@ -191,29 +315,30 @@ $$\text{RNA polymerization} \to \text{self-replication} \to \text{lipid compartm
 
 **Collective learning** is the human differentiator: every other species restarts knowledge each generation; ours compounds it — liberating evolution from the slow pace of genes into the fast lane of culture.
 
-#### Hands-on: run the helicase
-Life’s copy mechanism, miniaturized. Feed the complementary base at each position of the template strand — <code>5’- A T C G G A T C -3’</code> — and watch hydrogen bonds seal the rungs:
-
-<div class="interactive-sim" data-sim="dna">
-<div class="sim-head"><span class="sim-kick">SIMULATION · MOLECULAR BIOLOGY</span><b class="sim-title">DNA REPLICATION &amp; HELICASE SYNTHESIZER</b><span class="sim-badge">HELICASE ACTIVE · 0/8</span></div>
-<div class="sim-body">
-<div class="dna-stage" data-mg-el="dna-stage"></div>
-<div class="mg-btn-row">
-<button class="btn" data-mg="dna-add" data-base="A">+ A</button>
-<button class="btn" data-mg="dna-add" data-base="T">+ T</button>
-<button class="btn" data-mg="dna-add" data-base="C">+ C</button>
-<button class="btn" data-mg="dna-add" data-base="G">+ G</button>
-<button class="btn danger" data-mg="dna-reset">RESET</button>
-</div>
-<p class="dna-note mono" data-mg-el="dna-note">SELECT THE COMPLEMENTARY BASE — A↔T · C↔G</p>
-<p class="sim-note dim">Template 5’-ATCGGATC-3’. The new strand is built anti-parallel; matched pairs bond (:::) and mismatches stall the helicase. Base pairing is the original collective-learning storage medium — 4 letters, error correction included.</p>
-</div>
-</div>
+</details>
 `
     },
     {
       id: 's9-2', title: 'The Great Accelerators of Modernity', tags: ['PRESS', 'HABER-BOSCH', 'TRINITY'],
       md: String.raw`
+<p class="hook">A few inventions, like the printing press and the atomic bomb, sped history up, and each came with a shadow side.</p>
+
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>Nearly every powerful technology is dual-use, which is the key to thinking about AI, biotech and energy today.</p></aside>
+
+#### The core idea
+- **The printing press (1440):** Gutenberg combined movable metal type, oil ink and the screw press, making books far cheaper than hand copying.
+- **The Trinity Test (July 16, 1945):** explosive lenses compressed a sub-critical plutonium sphere into a chain reaction at Alamogordo, releasing about 25 kilotons of TNT equivalent.
+- **The Prometheus paradox:** Fritz Haber's chemistry fed billions and also produced chlorine gas for the WWI trenches.
+- **Dual use:** atomic energy can power carbon-neutral cities or incinerate them, and mRNA platforms can cure or engineer pathogens.
+- **The bill:** the Malthusian escape (1.6 to 8+ billion people) arrived with ocean dead zones and ecological overshoot.
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>Why is Fritz Haber's work called dual-use?</p>
+<details><summary>Show answer</summary><p>The same chemistry fed billions through fertilizer and also produced chlorine gas used as a weapon in WWI.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
 <div class="duo">
   <div class="lane c-gold">
     <h4><i class="pixelart-icons-font-chart pi-gold"></i> PRINTING PRESS · 1440</h4>
@@ -230,6 +355,7 @@ Life’s copy mechanism, miniaturized. Feed the complementary base at each posit
 </div>
 
 #### The Trinity Test — July 16, 1945
+
 Explosive lenses compressed a sub-critical plutonium sphere into super-criticality at Alamogordo:
 
 <div class="fx-box">
@@ -239,6 +365,8 @@ $$^{239}\text{Pu} + n \to \text{Fission Fragments} + 2.9\,n + 200 \text{ MeV}$$
 
 <aside class="co warn"><span class="co-tag"><span data-sprite="shield" data-px="12"></span>SYSTEM TRAP · THE PROMETHEUS PARADOX</span>
 <p>Fritz Haber's same chemistry fed billions and weaponized chlorine gas for WWI trenches. <b>Every breakthrough is dual-use:</b> atomic energy powers carbon-neutral cities or incinerates them; mRNA platforms cure or engineer pathogens. The Malthusian escape (1.6 → 8+ billion people) arrived bundled with ocean dead zones and ecological overshoot. Innovation never ships without its shadow.</p></aside>
+
+</details>
 `
     }
   ],
@@ -260,19 +388,39 @@ $$^{239}\text{Pu} + n \to \text{Fission Fragments} + 2.9\,n + 200 \text{ MeV}$$
   id: 'sec10', num: '10', icon: 'music', label: 'Vibes & Aesthetics',
   kick: 'SECTOR 10 · AESTHETICS', title: 'The Evolution of Vibes',
   sub: 'Fashion, music, tech — culture as hardware readout',
-  intro: String.raw`A "vibe" is not an arbitrary mood — it is the **sensory signature of a sociotechnical ecosystem**. Every era's aesthetic is bound to its underlying infrastructure: people wore neon windbreakers and composed with synthesized brass stabs in the 1980s because the microchip made FM synthesis affordable, dye chemistry industrialized textiles, and the Walkman turned music into a continuous personal soundtrack. Culture is a real-time mirror of manufacturing capacity, transmission media and energy systems.`,
+  intro: "A \"vibe\" is the look and sound of an era's technology. Neon and synth brass in the 1980s weren't random: cheap microchips, new dyes and the Walkman made them possible. This sector follows culture from the Gilded Age to algorithmic micro-trends, showing how each era's tools shaped its style.",
   blocks: [
     {
       id: 's10-1', title: 'Electric Jazz to Raw Rebellion (1880–1979)', tags: ['ART DECO', 'PUNK'],
       md: String.raw`
+<p class="hook">Each era's look and sound followed its technology: electric light gave Art Deco, microphones gave crooning and color TV gave psychedelia.</p>
+
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>You can decode today's trends by asking what technology made them possible.</p></aside>
+
+#### The core idea
+- **1880–1929:** the telegraph, electric light, the phonograph and AM radio pushed Victorian soot and dark wool toward Art Deco: chrome, zigzags and skyscraper typography. Western Electric microphones (1925) made crooning intimate and helped launch the Jazz Age (Armstrong, Ellington).
+- **1950s:** Googie architecture, suburban optimism and early rock 'n' roll.
+- **1960s:** color TV carried Vietnam and Civil Rights into living rooms, and culture fractured into psychedelia: tie-dye, paisley, tape loops and liquid projections (Sgt. Pepper, Hendrix).
+- **1970s:** the decade forked into rival scenes, including disco (Studio 54, four-on-the-floor at about 120 BPM).
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>What technology helped create 1920s "crooning"?</p>
+<details><summary>Show answer</summary><p>Western Electric microphones (1925).</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
 #### Gilded Age → Roaring Twenties (1880–1929)
+
 Telegraph, incandescent lighting, the phonograph and AM radio pulled Victorian soot and dark wool toward the geometric optimism of **Art Deco** — chrome, zigzags, skyscraper typography. Acoustic brass and ragtime gave way to the **Jazz Age** (Armstrong, Ellington) when Western Electric microphones (1925) introduced crooning intimacy. Flapper dresses, bob haircuts, visible makeup: post-WWI urban autonomy written on the body.
 
 #### Mid-century split (1950s–1970s)
+
 CRT television and the solid-body Stratocaster fed two decades of divergence:
 - **1950s**: Googie architecture's boomerang geometries, suburban optimism, early rock 'n' roll.
 - **1960s**: color TV streamed Vietnam and Civil Rights into living rooms — culture fractured into **psychedelia**: tie-dye, paisley, bell-bottoms, tape loops and liquid projections (*Sgt. Pepper*, Hendrix).
 - **1970s fork**:
+
 <div class="duo">
   <div class="lane c-gold">
     <h4><i class="pixelart-icons-font-music pi-gold"></i> AVENUE A · DISCO</h4>
@@ -283,25 +431,26 @@ CRT television and the solid-body Stratocaster fed two decades of divergence:
     <p>CBGB and the Sex Pistols: safety pins, torn leather, pawnshop amps, three-chord simplicity, anti-consumerist DIY fanzines — <b>the raw rupture</b>.</p>
   </div>
 </div>
+
+</details>
 `
     },
     {
       id: 's10-2', title: 'Neon, Analog & the Birth of Cyberpunk (1980s)', tags: ['DX7', 'NEUROMANCER'],
       md: String.raw`
-The **Yamaha DX7** made FM synthesis affordable; the TR-808/909 drum machines, MTV's 24-hour broadcast and the Walkman completed the stack:
+<p class="hook">One cheap chip, the Yamaha DX7's FM synthesis, helped create the sound of the 1980s, and cyberpunk gave that decade its story.</p>
 
-<div class="fx-box">
-$$\text{FM Synthesis: } \; y(t) = A \sin\!\left(\omega_c t + I \sin(\omega_m t)\right)$$
-<div class="fx-cap">One cheap chip → the sound of an entire decade</div>
-</div>
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>It's a clean example of technology shaping taste.</p></aside>
 
-The aesthetic: radical synthetic futurism — neon magenta/cyan gradients, grid landscapes, mirrored aviators, power suits with shoulder pads, aerobic spandex, perms. And in 1984, William Gibson published *Neuromancer*, opening with the sentence that defined a genre:
+#### The core idea
+- **The stack:** the Yamaha DX7 made FM synthesis affordable, the TR-808/909 drum machines, MTV's 24-hour broadcast and the Walkman completed it.
+- **The look:** neon magenta and cyan gradients, grid landscapes, mirrored aviators, shoulder-padded power suits, aerobic spandex and perms.
+- **Cyberpunk (1984):** William Gibson's Neuromancer opens with a line about a sky the color of a television tuned to a dead channel. The genre mixes high tech with low life, chrome and decay.
+- **The sound:** gated-reverb snares (Phil Collins), digital FM brass (Depeche Mode, New Order) and early hip-hop built on 808 sub-kicks and breakbeat scratching.
 
-> *"The sky above the port was the color of television, tuned to a dead channel."*
+#### Try it: tune the century
 
-**Cyberpunk** was born: high tech, low life, chrome and decay. Gated reverb snares (Phil Collins' "In the Air Tonight"), digital FM brass (Depeche Mode, New Order), and early hip-hop built on 808 sub-kicks and breakbeat scratching.
-
-#### Hands-on: tune the century
 Every decade’s signature sound, synthesized live by the Web Audio API — and the CRT phosphor re-tints to match. Drag the knob, tap a year, hear the hardware:
 
 <div class="interactive-sim" data-sim="decade">
@@ -326,31 +475,87 @@ Every decade’s signature sound, synthesized live by the Web Audio API — and 
 <p class="sim-note dim">1920s stride piano to 2020s drift-phonk cowbell — FM brass, gated snares, 808 sub-glides and waveshaper distortion, all generated from oscillators at selection time. Sound toggle in the Operator Console silences it.</p>
 </div>
 </div>
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>Which instrument made FM synthesis affordable in the 1980s?</p>
+<details><summary>Show answer</summary><p>The Yamaha DX7.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
+The **Yamaha DX7** made FM synthesis affordable; the TR-808/909 drum machines, MTV's 24-hour broadcast and the Walkman completed the stack:
+
+<div class="fx-box">
+$$\text{FM Synthesis: } \; y(t) = A \sin\!\left(\omega_c t + I \sin(\omega_m t)\right)$$
+<div class="fx-cap">One cheap chip → the sound of an entire decade</div>
+</div>
+
+The aesthetic: radical synthetic futurism — neon magenta/cyan gradients, grid landscapes, mirrored aviators, power suits with shoulder pads, aerobic spandex, perms. And in 1984, William Gibson published *Neuromancer*, opening with the sentence that defined a genre:
+
+> *"The sky above the port was the color of television, tuned to a dead channel."*
+
+**Cyberpunk** was born: high tech, low life, chrome and decay. Gated reverb snares (Phil Collins' "In the Air Tonight"), digital FM brass (Depeche Mode, New Order), and early hip-hop built on 808 sub-kicks and breakbeat scratching.
+
+</details>
 `
     },
     {
       id: 's10-3', title: 'Digital Dawn to Flat Design (1990s–2010s)', tags: ['GRUNGE', 'Y2K', 'TRAP'],
       md: String.raw`
+<p class="hook">From grunge to Frutiger Aero to flat design, each decade's style followed its screens, networks and mood.</p>
+
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>Understanding nostalgia cycles explains why old aesthetics keep coming back.</p></aside>
+
+#### The core idea
+- **1990s:** dial-up, CDs and 3D consoles. Early grunge (thrift flannel, Doc Martens) rejected 80s gloss, then late-90s Y2K euphoria brought translucent iMac plastics and chrome.
+- **2000s:** broadband, the iPod, MySpace. Interfaces imitated physical objects (skeuomorphism): water droplets, faux leather stitching and glossy bevels, a style named Frutiger Aero.
+- **Frutiger Aero (2004–2013):** named around 2017, after Adrian Frutiger's typeface and Windows Vista's "Aero" glass. Bubbles, tropical fish, grass, lens flares and translucent buttons expressed the belief that technology and nature were merging into a clean future.
+- **2010s:** 4G and smartphones pushed out skeuomorphism for flat design (iOS 7, Material, 2013). The 2008 crisis helped end Frutiger Aero, and trap and vaporwave took over music.
+- **A second funeral:** from 2022 Frutiger Aero returned as nostalgia for a techno-utopia that was cancelled before it arrived.
+
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>What replaced skeuomorphic design around 2013?</p>
+<details><summary>Show answer</summary><p>Flat design, as in iOS 7 and Material Design.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
 #### 1990s–2000 · Grunge despair → Y2K euphoria
+
 Dial-up, the World Wide Web, the CD, and 3D polygon consoles (PlayStation, N64). Early 90s: thrift flannel, ripped denim, Doc Martens, tube-amp grit — **Nirvana and Soundgellow rejecting 80s gloss**. Late 90s: the tech-bubble high — translucent iMac G3 plastics, inflatable silver furniture, chrome puffers, rave electronica (The Prodigy, Chemical Brothers).
 
 #### 2000s · Web 2.0 & skeuomorphism
+
 Broadband, the iPod's click-wheel, MySpace and the Razr. Operating systems mirrored physical objects to teach touchscreens: water droplets, faux-leather stitching, glossy bevels — **Frutiger Aero**. Culture fragmented into tribes: emo/scene side-swept hair and screamo; bling-era hip-hop with ringtone synth and Auto-Tune experiments (*808s & Heartbreak*).
 
 #### Frutiger Aero (2004–2013): the glossy decade
+
 The era's defining design language got its name retroactively — coined around 2017 by the aesthetic-revival community, honoring Adrian Frutiger's humanist typeface and Windows Vista's "Aero" glass. Its grammar was pure techno-optimism: **water droplets, soap bubbles, tropical fish, blades of grass, lens flares, aurora gradients, translucent glass buttons** rendered in loving fake-3D. Every OS (Vista, Windows 7), console UI (Wii channels, PS3 XMB) and MP3 player of the era dripped with it — a visual thesis that technology and nature were merging into one clean, hydrated future.
 
 The subtext was the pre-crash idyll: clean-energy optimism, eco-branding, the belief that glossy surfaces implied glossy systems. The 2008 financial crisis and the flat-design revolution (iOS 7, Material, 2013) killed it almost overnight — minimalism as recession aesthetics. Its afterlife is stranger than its life: from 2022 onward, TikTok and YouTube revived it as <b>"the lost future"</b> — nostalgia for a promised techno-utopia that was cancelled before arrival, spun into optimism-punk and consumer-core edits. The only aesthetic on this timeline that got a second funeral.
 
 #### 2010s · Flat design & trap dominance
+
 4G LTE, smartphones, streaming platforms and image feeds killed skeuomorphism for **Flat Design** — solid primary colors, vector icons, Roboto/Helvetica. Athleisure and hypebeast drops replaced hipster flannel. Sonically, **trap** conquered the planet: 808 sub-basses, stuttering 32nd-note hi-hats, SoundCloud rap's distorted DIY vocals. Vaporwave slowed 1980s elevator jazz into nostalgic corporate critique on Bandcamp.
+
+</details>
 `
     },
     {
       id: 's10-4', title: 'Algorithmic Post-Irony & Brainrot (2020s)', tags: ['HYPERPOP', 'PHONK', 'BRAINROT'],
       md: String.raw`
-ByteDance's short-form recommendation engine, 5G, generative AI and spatial audio dissolved the mainstream into **algorithmic micro-cultures** that surge, peak and vanish over ~6-week cycles:
+<p class="hook">Short-video algorithms turned culture into micro-trends that rise and vanish in weeks, and some genres now sound built for a vertical screen.</p>
 
+<aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>WHY IT MATTERS</span>
+<p>You live inside this system, so seeing how it shapes taste gives you some control over it.</p></aside>
+
+#### The core idea
+- **Fast cycles:** ByteDance's recommendation engine, 5G and generative AI split the mainstream into micro-cultures that surge, peak and vanish over about 6 weeks.
+- **The sound:** hyperpop (100 gecs, Sophie), drift phonk (cowbell Memphis rap over distorted bass and drift clips) and 7-second sped-up nightcore loops.
+- **Drift phonk:** the first genre whose structure is optimized for a 9:16 screen: the drop lands on the first clip cut and the cowbell locks to the drift angle.
+- **Corecore and the liminal turn:** the feed commenting on itself, with supercuts of labor, war and consumerism captioned with raw sincerity. Empty malls and hallways became aesthetics, and "anemoia" names nostalgia for places you've never been.
+- **Fisher's slow cancellation:** Mark Fisher argued that around the millennium culture stopped producing new futures and began recycling its own past. When algorithms judge success, risky originality gets penalized.
+
+#### Tap to explore
 <div class="tiles">
   <button class="tile"><span class="t-front"><b>COTTAGECORE</b><span class="t-hint">PASTORAL ESCAPE</span><span class="t-hint">TAP TO DECRYPT</span></span><span class="t-back"><b>Rural cosplay</b><span>Quilted nostalgia and sourdough aesthetics as refuge from hyper-modernity.</span></span></button>
   <button class="tile"><span class="t-front"><b>GORPCORE</b><span class="t-hint">TECHNICAL WEAR</span><span class="t-hint">TAP TO DECRYPT</span></span><span class="t-back"><b>Arc'teryx in the club</b><span>Outdoor technical jackets worn indoors — function drained, silhouette kept.</span></span></button>
@@ -358,18 +563,30 @@ ByteDance's short-form recommendation engine, 5G, generative AI and spatial audi
   <button class="tile"><span class="t-front"><b>LIMINAL SPACES</b><span class="t-hint">EMPTY ROOMS</span><span class="t-hint">TAP TO DECRYPT</span></span><span class="t-back"><b>Eerie emptiness</b><span>Unpopulated fluorescent corridors — nostalgia for places you've never been.</span></span></button>
 </div>
 
+<aside class="co mem"><span class="co-tag"><span data-sprite="bulb" data-px="12"></span>CHECK YOURSELF</span>
+<p>What makes drift phonk native to short video?</p>
+<details><summary>Show answer</summary><p>Its structure is built for a 9:16 screen: the drop lands on the first clip cut and the cowbell is synced to the drift angle.</p></details></aside>
+
+<details class="deep"><summary>Go deeper: the full technical story</summary>
+
+ByteDance's short-form recommendation engine, 5G, generative AI and spatial audio dissolved the mainstream into **algorithmic micro-cultures** that surge, peak and vanish over ~6-week cycles:
+
 **The sound**: hyperpop (100 gecs, Sophie — pitched metallic vocals, 160+ BPM arpeggios), drift phonk (cowbell Memphis rap over distorted bass and street-drift clips), and 7-second sped-up nightcore loops engineered as vertical-video backdrops.
 
 #### Drift phonk: the first genre native to vertical video
+
 Phonk began underground — 2010s Memphis-rap sampling, pitched-down vocals, haze and lo-fi (SpaceGhostPurrp). The algorithm finished it: by 2022 the **drift phonk** variant — an aggressive distorted **cowbell lead** over a half-time sub drop, synced to sped-up footage of cars drifting Japanese mountain highways at night — had conquered every short-form feed simultaneously (Kordhell's "Murder in My Mind", MoonDeity's "NEON BLADE"). It is the first genre whose compositional structure is optimized for a 9:16 screen: drop on the first clip-cut, cowbell locked to the drift angle, everything else cut. Its parent genre never charted; its algorithmic child charted worldwide without ever touching radio.
 
 #### Corecore & the liminal turn
+
 **Corecore** (2021–2023) was the feed commenting on the feed: supercut collages of labor footage, war clips, consumerism and ambient melancholia, cut to slowed ambient audio and captioned with raw sincerity. Critics called it mood-without-politics; defenders called it the first native Gen-Z video essay. It sits at the terminal station of post-irony — a space where sincerity is only speakable through layers of borrowed footage. Around it bloomed the liminal micro-aesthetics (empty malls, hallways, playgrounds at night — the Backrooms' suburban cousins) and "anemoia": nostalgia for places you have never been. The loop closes: Sector 01's lost corridor photo and Sector 10's algorithmic moods are the same grammar — <b>emptiness as an aesthetic object</b>.
 
 **The semiometrics**: "Skibidi", "Rizz", "Gyatt", "Fanum Tax" — a post-ironic patois driven not by generational rebellion but by automated dopamine loops.
 
 <aside class="co key"><span class="co-tag"><span data-sprite="star" data-px="12"></span>KEY INSIGHT · FISHER'S SLOW CANCELLATION</span>
 <p>Mark Fisher (<i>Ghosts of My Life</i>): around the millennium, culture stopped producing genuinely new futures and began <b>recycling polished versions of its own past</b> — 80s nostalgia (synthwave, <i>Stranger Things</i>) handed off to Y2K nostalgia. Meanwhile the homogenization paradox: cafes from Tokyo to Brooklyn feature identical pale-wood interiors and lo-fi playlists, optimized for the same Instagram metrics. When algorithms mediate aesthetic success, the system <b>penalizes risky organic divergence</b> — culture enclosed in an infinite loop of its own digitized past.</p></aside>
+
+</details>
 `
     }
   ],

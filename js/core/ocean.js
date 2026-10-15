@@ -1,5 +1,5 @@
 /* ==========================================================================
-   THE POLYMATH CODEX — js/ocean.js  (v2)
+  THE POLYMATH CODEX — js/core/ocean.js  (v2)
    Ambient deep-ocean scene behind the whole UI, tuned to the reference photo:
    a luminous blue water column with a bright light and a diagonal band of
    nebula-like starlight, thousands of glowing specks suspended in the water,
