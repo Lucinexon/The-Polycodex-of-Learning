@@ -1907,6 +1907,10 @@ const ChatEngine = {
     const me = AuthManager.uid, admin = AdminManager.isAdmin(), show = msgs.slice(-150), A = window.CodexAvatar;
     const same = function (a, b) { return !!(a && b && a.u && a.u === b.u && b.ts - a.ts < 300000 && new Date(a.ts).toDateString() === new Date(b.ts).toDateString()); };
     const self = this;
+    if (!this.avatarListenerBound) {
+      document.addEventListener('cx:avatar', function () { self.scheduleAvatarRefresh(); });
+      this.avatarListenerBound = true;
+    }
     let h = '', lastDay = '';
     show.forEach(function (m, i) {
       const d = new Date(m.ts || Date.now()), dk = d.toDateString();
