@@ -1738,6 +1738,7 @@ const ChatEngine = {
     const keys = Object.keys(A.MAX || {});
     if (raw.length !== keys.length) return '';
     for (let i = 0; i < keys.length; i++) {
+      if (!raw[i] || /[^0-9a-z]/.test(raw[i])) return '';
       const n = parseInt(raw[i], 36);
       if (!isFinite(n) || n < 0 || n >= A.MAX[keys[i]]) return '';
     }
@@ -1929,6 +1930,10 @@ const ChatEngine = {
     const me = AuthManager.uid, admin = AdminManager.isAdmin(), show = msgs.slice(-150), A = window.CodexAvatar;
     const same = function (a, b) { return !!(a && b && a.u && a.u === b.u && b.ts - a.ts < 300000 && new Date(a.ts).toDateString() === new Date(b.ts).toDateString()); };
     const self = this;
+    if (!this.avatarListenerBound) {
+      document.addEventListener('cx:avatar', function () { self.scheduleAvatarRefresh(); });
+      this.avatarListenerBound = true;
+    }
     let h = '', lastDay = '';
     show.forEach(function (m, i) {
       const d = new Date(m.ts || Date.now()), dk = d.toDateString();
