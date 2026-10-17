@@ -492,6 +492,7 @@ const AuthManager = {
     }).catch(function () {});
   },
   hydrate: function (d) {
+    if (typeof d.avatar === 'string' && /^[0-9a-z.]{3,80}$/.test(d.avatar) && window.CodexAvatar && !window.CodexAvatar.mine()) { try { window.CodexAvatar.set(d.avatar, true); } catch (e) {} }   // V8 (optional): avatar was pushed but never restored
     const st = engS();
     if (!st) return;
     let changed = false;
@@ -1158,6 +1159,26 @@ const SB_OK = (function () {
 })();
 function clampN(v, lo, hi, d) { v = +v; return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; }
 
+/* ---- V8: appearance + interaction state riding on presence ----------------------------------------------
+   Compact fields only (no images, no frames): av = avatar code, r = room id, pz = seat id (''=standing), jk = jukebox, em = {k,ts} emote,
+   d = facing. LoungeEngine.extra() (set by lounge2.js) supplies them; everything received is sanitised here before it touches game state.
+   Clients that predate this simply ignore the extra fields; missing fields fall back to the old behaviour. */
+function extraOut() { try { const e = LoungeEngine.extra ? LoungeEngine.extra() : null; return e && typeof e === 'object' ? e : {}; } catch (x) { return {}; } }
+function readExtra(d) {
+  const o = { pose: 0, pz: '', jk: d.jk ? 1 : 0 };
+  if (typeof d.av === 'string' && /^[0-9a-z.]{3,80}$/.test(d.av)) o.av = d.av;
+  if (typeof d.r === 'string' && /^[a-z]{2,12}$/.test(d.r)) o.r = d.r;
+  if (typeof d.pz === 'string' && /^[a-z0-9]{1,8}$/.test(d.pz)) { o.pz = d.pz; o.pose = 1; }
+  if (d.d === 1 || d.d === -1) o.d = d.d;
+  o.em = (d.em && typeof d.em === 'object' && /^[a-z]{2,8}$/.test(String(d.em.k)) && isFinite(+d.em.ts)) ? { k: String(d.em.k), ts: +d.em.ts } : null;
+  return o;
+}
+function applyExtra(n, prev, d, x, y) {
+  const ex = readExtra(d); Object.assign(n, ex);
+  if (prev && prev.r && ex.r && prev.r !== ex.r) { n.x = n.cx = x; n.y = n.cy = y; n.walk = false; }   // changed room: appear at the entry spot instead of gliding across
+  if (ex.d && (ex.pose || !prev)) n.dir = ex.d;                                                          // seated / newly seen: take the announced facing
+}
+
 const SupabaseLounge = {
   client: null, ch: null, uid: null,
   state: 'idle',                 // idle | joining | live | retry
@@ -1184,7 +1205,7 @@ const SupabaseLounge = {
     const st = engS(); let lv = 1;
     if (typeof window.levelOf === 'function' && st) lv = window.levelOf(st.xp || 0) + 1;
     const me = LoungeEngine.me;
-    return { n: String(AuthManager.name || 'GUEST').slice(0, 14), lv: lv, a: AuthManager.admin ? 1 : 0, x: Math.round(me.cx), y: Math.round(me.cy), ts: Date.now() };
+    return Object.assign({ n: String(AuthManager.name || 'GUEST').slice(0, 14), lv: lv, a: AuthManager.admin ? 1 : 0, x: Math.round(me.cx), y: Math.round(me.cy), ts: Date.now() }, extraOut());
   },
 
   connect: function () {
@@ -1382,11 +1403,11 @@ const LoungeEngine = {
     if (typeof window.levelOf === 'function' && st) lv = window.levelOf(st.xp || 0) + 1;
     const uid = AuthManager.uid;
     guardedWrite('presence', function () {
-      return DB.collection('lobby_presence').doc(uid).set({
+      return DB.collection('lobby_presence').doc(uid).set(Object.assign({
         n: AuthManager.name || 'GUEST', lv: lv,
         x: LoungeEngine.me.x, y: LoungeEngine.me.y,
         a: AuthManager.admin ? 1 : 0, ts: Date.now()
-      }, { merge: true });
+      }, extraOut()), { merge: true });
     });
   },
 
@@ -1434,6 +1455,7 @@ const LoungeEngine = {
         _localSeen: localSeen,
         _remoteTs: d.ts
       };
+      applyExtra(next[uid], prev, d, d.x || 240, d.y || 244);
     });
 
     this.players = next;
@@ -1459,6 +1481,7 @@ const LoungeEngine = {
         cx: prev ? prev.cx : x, cy: prev ? prev.cy : y,
         dir: prev ? prev.dir : 1, walk: prev ? prev.walk : false, ts: Date.now()
       };
+      applyExtra(next[uid], prev, d, x, y);
     });
     this.players = next;
     this.renderRoster();

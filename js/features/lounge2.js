@@ -1,4 +1,4 @@
-/* lounge2.js — V7 lounge: four cozy rooms, doors, seats, interactive furniture, jukebox, emotes, companions, speech bubbles, avatars.
+/* [V8: full-body animated characters via CodexRig/CodexAnim; appearance + interaction state synced over presence] lounge2.js — V7 lounge: four cozy rooms, doors, seats, interactive furniture, jukebox, emotes, companions, speech bubbles, avatars.
    Overrides LoungeEngine.draw/onClick/renderRoster/step (rooms + avatars ride on the existing presence channel as extra fields). */
 (function () {
 'use strict';
@@ -7,10 +7,10 @@ const NE = () => window.NetworkEngine || {};
 const ROOMS = { deck: { n: 'Observation Deck', i: '🔭', prev: 'loft', next: 'cafe' }, cafe: { n: 'Starlight Café', i: '☕', prev: 'deck', next: 'garden' }, garden: { n: 'Glow Greenhouse', i: '🌿', prev: 'cafe', next: 'loft' }, loft: { n: 'Library Loft', i: '📚', prev: 'garden', next: 'deck' } };
 const EMO = { wave: ['👋', 'Wave'], dance: ['💃', 'Dance'], heart: ['💖', 'Heart'], cheer: ['🎉', 'Cheer'], sleep: ['💤', 'Nap'], sip: ['☕', 'Sip'], spark: ['✨', 'Sparkle'], warm: ['🔥', 'Warm up'] };
 const HOT = {   /* x,y,w,h = click box; sx,sy = where you stand/sit */
-  deck: [{ id: 'scope', t: 'scope', x: 318, y: 120, w: 44, h: 66, sx: 340, sy: 214, l: 'Telescope → Astronomy' }, { id: 'b1', t: 'seat', x: 52, y: 212, w: 56, h: 26, sx: 80, sy: 232, l: 'Bench' }, { id: 'b2', t: 'seat', x: 372, y: 224, w: 56, h: 26, sx: 400, sy: 244, l: 'Bench' }],
-  cafe: [{ id: 'juke', t: 'juke', x: 14, y: 98, w: 46, h: 88, sx: 70, sy: 222, l: 'Jukebox' }, { id: 'cof', t: 'coffee', x: 262, y: 84, w: 54, h: 46, sx: 288, sy: 214, l: 'Coffee machine' }, { id: 's1', t: 'seat', x: 276, y: 196, w: 28, h: 26, sx: 290, sy: 214, l: 'Stool' }, { id: 's2', t: 'seat', x: 326, y: 196, w: 28, h: 26, sx: 340, sy: 214, l: 'Stool' }, { id: 's3', t: 'seat', x: 376, y: 196, w: 28, h: 26, sx: 390, sy: 214, l: 'Stool' }, { id: 'c1', t: 'seat', x: 100, y: 224, w: 28, h: 30, sx: 114, sy: 244, l: 'Chair' }, { id: 'c2', t: 'seat', x: 182, y: 238, w: 28, h: 30, sx: 196, sy: 258, l: 'Chair' }],
-  garden: [{ id: 'pond', t: 'pond', x: 150, y: 222, w: 180, h: 54, sx: 240, sy: 214, l: 'Pond' }, { id: 'g1', t: 'seat', x: 36, y: 214, w: 62, h: 26, sx: 68, sy: 236, l: 'Bench' }, { id: 'g2', t: 'seat', x: 384, y: 214, w: 62, h: 26, sx: 416, sy: 236, l: 'Bench' }, { id: 'mush', t: 'spark', x: 342, y: 170, w: 36, h: 36, sx: 360, sy: 214, l: 'Glow mushroom' }],
-  loft: [{ id: 'fire', t: 'fire', x: 205, y: 104, w: 72, h: 82, sx: 240, sy: 212, l: 'Fireplace' }, { id: 'shelf', t: 'shelf', x: 24, y: 40, w: 168, h: 130, sx: 110, sy: 214, l: 'Bookshelf → your Notes' }, { id: 'a1', t: 'seat', x: 86, y: 220, w: 50, h: 36, sx: 112, sy: 244, l: 'Armchair' }, { id: 'a2', t: 'seat', x: 346, y: 220, w: 50, h: 36, sx: 372, sy: 244, l: 'Armchair' }]
+  deck: [{ id: 'scope', t: 'scope', x: 318, y: 120, w: 44, h: 66, sx: 340, sy: 214, l: 'Telescope → Astronomy' }, { id: 'b1', t: 'seat', lift: 4, x: 52, y: 212, w: 56, h: 26, sx: 80, sy: 232, l: 'Bench' }, { id: 'b2', t: 'seat', lift: 4, x: 372, y: 224, w: 56, h: 26, sx: 400, sy: 244, l: 'Bench' }],
+  cafe: [{ id: 'juke', t: 'juke', x: 14, y: 98, w: 46, h: 88, sx: 70, sy: 222, l: 'Jukebox' }, { id: 'cof', t: 'coffee', x: 262, y: 84, w: 54, h: 46, sx: 288, sy: 214, l: 'Coffee machine' }, { id: 's1', t: 'seat', lift: 9, x: 276, y: 196, w: 28, h: 26, sx: 290, sy: 214, l: 'Stool' }, { id: 's2', t: 'seat', lift: 9, x: 326, y: 196, w: 28, h: 26, sx: 340, sy: 214, l: 'Stool' }, { id: 's3', t: 'seat', lift: 9, x: 376, y: 196, w: 28, h: 26, sx: 390, sy: 214, l: 'Stool' }, { id: 'c1', t: 'seat', lift: 3, x: 100, y: 224, w: 28, h: 30, sx: 114, sy: 244, l: 'Chair' }, { id: 'c2', t: 'seat', lift: 3, x: 182, y: 238, w: 28, h: 30, sx: 196, sy: 258, l: 'Chair' }],
+  garden: [{ id: 'pond', t: 'pond', x: 150, y: 222, w: 180, h: 54, sx: 240, sy: 214, l: 'Pond' }, { id: 'g1', t: 'seat', lift: 4, x: 36, y: 214, w: 62, h: 26, sx: 68, sy: 236, l: 'Bench' }, { id: 'g2', t: 'seat', lift: 4, x: 384, y: 214, w: 62, h: 26, sx: 416, sy: 236, l: 'Bench' }, { id: 'mush', t: 'spark', x: 342, y: 170, w: 36, h: 36, sx: 360, sy: 214, l: 'Glow mushroom' }],
+  loft: [{ id: 'fire', t: 'fire', x: 205, y: 104, w: 72, h: 82, sx: 240, sy: 212, l: 'Fireplace' }, { id: 'shelf', t: 'shelf', x: 24, y: 40, w: 168, h: 130, sx: 110, sy: 214, l: 'Bookshelf → your Notes' }, { id: 'a1', t: 'seat', lift: 3, x: 86, y: 220, w: 50, h: 36, sx: 112, sy: 244, l: 'Armchair' }, { id: 'a2', t: 'seat', lift: 3, x: 346, y: 220, w: 50, h: 36, sx: 372, sy: 244, l: 'Armchair' }]
 };
 const STATE = { fade: 0, hover: null, fx: [], ripple: [], cards: null, last: 0, lastTrack: 0, steam: [] };
 const EM = {};   /* uid → { ts, at } so emotes survive roster rebuilds */
@@ -60,11 +60,22 @@ function paintStatic(id) {
 /* ---------- helpers ---------- */
 const mineCode = () => (window.CodexAvatar && (CodexAvatar.mine() || CodexAvatar.forName(AM().name || 'operator'))) || '';
 const codeOf = p => (window.CodexAvatar && (p.av || CodexAvatar.forName(p.n || 'op'))) || '';
+const roomOf = p => (p && ROOMS[p.r] ? p.r : 'deck');        /* remote room ids are untrusted */
+const seatDef = (rid, sid) => { const hs = HOT[rid] || []; for (let i = 0; i < hs.length; i++) if (hs[i].id === sid && hs[i].t === 'seat') return hs[i]; return null; };
 function room() { const L = LE(); return (L && L.me.room) || 'deck'; }
-function track(force) { const now = Date.now(); if (!force && now - STATE.lastTrack < 900) return; STATE.lastTrack = now; try { NE().SupabaseLounge.retrack(); } catch (e) {} }
+function track(force) {
+  const now = Date.now(); if (!force && now - STATE.lastTrack < 900) return; STATE.lastTrack = now;
+  try { const S = NE().SupabaseLounge; if (S && typeof S.available === 'function' && S.available()) S.retrack(); else if (LE() && LE().beat && now - (STATE.lastBeat || 0) > 4000) { STATE.lastBeat = now; LE().beat(true); } } catch (e) {}   /* Firestore fallback: push state, rate-limited */
+}
+/* compact state that rides on every presence update (network.js merges it into meta()): appearance, room, seat, jukebox, emote, facing */
+function extraMeta() {
+  const L = LE(), m = L ? L.me : {}, o = { av: mineCode(), r: room(), pz: m.pose && m.seat ? String(m.seat) : '', jk: m.jukebox ? 1 : 0, d: m.dir >= 0 ? 1 : -1 };
+  o.em = m.emote && m.emote.k && Date.now() - m.emote.ts < 6000 ? { k: m.emote.k, ts: m.emote.ts } : null;   /* explicit null clears the field in Firestore merge-writes */
+  return o;
+}
 function setRoom(id, silent) {
   const L = LE(); if (!L || !ROOMS[id] || L.me.room === id) return;
-  L.me.room = id; L.me.pose = 0; L.me.pendingSit = null; L.me.jukebox = 0; const left = id === ROOMS[L.me.room || 'deck'].prev; L.me.x = L.me.cx = 240; L.me.y = L.me.cy = 244; L.me.walk = false;
+  L.me.room = id; L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null; L.me.jukebox = 0; const left = id === ROOMS[L.me.room || 'deck'].prev; L.me.x = L.me.cx = 240; L.me.y = L.me.cy = 244; L.me.walk = false;
   STATE.fade = 1; STATE.hover = null; track(true); if (L.renderRoster) L.renderRoster(); paintBar(); if (!silent && window.sfx) sfx('reveal');
 }
 function doEmote(k) { const L = LE(); if (!L || !EMO[k]) return; L.me.emote = { k: k, ts: Date.now() }; EM[AM().uid || 'me'] = { ts: L.me.emote.ts, at: performance.now() }; if (k === 'sip') STATE.fx.push({ k: 'steam', x: L.me.cx, y: L.me.cy - 30, at: performance.now() }); track(true); if (window.sfx) sfx(k === 'cheer' ? 'combo' : 'click'); }
@@ -122,22 +133,44 @@ function doors(c, id, t) {
   const R = ROOMS[id]; [['L', 6, R.prev], ['R', 450, R.next]].forEach(d => { const x = d[1]; c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(x, 132, 24, 53); c.fillStyle = 'rgba(255,214,120,' + (.5 + .3 * Math.sin(t / 500)) + ')'; c.fillRect(x, 132, 24, 2); c.fillRect(x, 132, 2, 53); c.fillRect(x + 22, 132, 2, 53); c.font = '12px sans-serif'; c.textAlign = 'center'; c.fillText(ROOMS[d[2]].i, x + 12, 164); c.font = 'bold 7px "Atkinson Hyperlegible",sans-serif'; c.fillStyle = 'rgba(255,240,200,.9)'; c.fillText(ROOMS[d[2]].n.split(' ')[1] ? ROOMS[d[2]].n.split(' ')[0].toUpperCase() : ROOMS[d[2]].n.toUpperCase(), x + 12, 178); c.textAlign = 'left'; });
 }
 function wrap(c, text, max) { const w = String(text).split(/\s+/), out = []; let cur = ''; w.forEach(x => { if (c.measureText(cur + ' ' + x).width > max && cur) { out.push(cur); cur = x; } else cur = (cur ? cur + ' ' : '') + x; }); if (cur) out.push(cur); return out.slice(0, 3); }
+/* ---------- animated characters ---------- */
+const ACT = {};                         /* uid → { an: Animator, seen, pet:{x,y} } — one shared state machine per character, local or remote */
+const AURC = ['', '#ffe29a', '#ffffff', '#ff7ec9', '#a99cff', '#ff9a3c'];
+const actor = uid => ACT[uid] || (ACT[uid] = { an: new window.CodexAnim.Animator(), seen: 0, pet: { x: 0, y: 0, on: 0 } });
+const emoteFor = (uid, now) => { const e = EM[uid]; if (!e) return null; const em = uid === (AM().uid || 'me') ? (LE().me.emote) : (LE().players[uid] || {}).em; if (!em || !em.k || !window.CodexAnim || !CodexAnim.CLIPS[em.k]) return null; return now - e.at < CodexAnim.durOf(em.k) + 300 ? { k: em.k, ts: em.ts } : null; };
+/* advance every visible character's animation (called from the engine step; dt already clamped by the engine) */
+function tick(L, dt) {
+  if (!window.CodexAnim || !window.CodexAvatar) return; const id = room(), now = performance.now(), red = !!L.REDUCED, myId = AM().uid || 'me';
+  const feed = (uid, p, isMe) => {
+    const a = actor(uid); a.seen = now;
+    if (!isMe && p.em) { const e = EM[uid]; if (!e || e.ts !== p.em.ts) EM[uid] = { ts: p.em.ts, at: (!e && Date.now() - p.em.ts > 8000) ? -1e9 : now }; }   /* joining mid-way: don't replay an old emote */
+    const seated = isMe ? L.me.pose : p.pose, em = emoteFor(uid, now);
+    a.an.update(dt, { walk: !!p.walk, dx: p.x - p.cx, dy: p.y - p.cy, dir: p.dir, speed: isMe ? 62 : 46, seated: !!seated, emote: em, reduced: red });
+    const code = isMe ? mineCode() : codeOf(p);
+    if (window.CodexAvatar.parse(code).p > 0) { const tx = p.cx + (p.dir >= 0 ? -17 : 17), ty = p.cy - 7, pt = a.pet; if (!pt.on) { pt.x = tx; pt.y = ty; pt.on = 1; } const k = red ? 1 : 1 - Math.exp(-dt / 140); pt.x += (tx - pt.x) * k; pt.y += (ty - pt.y) * k; }
+  };
+  feed(myId, L.me, true);
+  Object.keys(L.players).forEach(u => { const p = L.players[u]; if (roomOf(p) === id) feed(u, p, false); });
+  Object.keys(ACT).forEach(k => { if (now - ACT[k].seen > 4000) delete ACT[k]; });
+}
 function token(L, c, p, isMe, t) {
-  const em = EM[isMe ? (AM().uid || 'me') : p.uid], emo = em && performance.now() - em.at < 4200 ? em : null, k = isMe ? (L.me.emote && emo ? L.me.emote.k : null) : (p.em && emo ? p.em.k : null);
-  const seated = isMe ? L.me.pose : p.pose, dance = k === 'dance' && !L.REDUCED;
-  const bob = (!L.REDUCED && p.walk) ? Math.sin(t / 90) * 1.8 : (dance ? Math.abs(Math.sin(t / 130)) * -5 : (k === 'cheer' ? Math.abs(Math.sin(t / 160)) * -4 : 0));
-  const x = Math.round(p.cx), y = Math.round(p.cy) + (seated ? 8 : 0) + Math.round(bob), code = isMe ? mineCode() : codeOf(p), S = 34;
-  c.fillStyle = 'rgba(0,0,0,.28)'; c.beginPath(); c.ellipse(x, Math.round(p.cy) + 3, 12, 4, 0, 0, 7); c.fill();
-  const code2 = code, pc = window.CodexAvatar && CodexAvatar.parse(code2).p > 0;
-  if (pc) { const fx = x + (p.dir >= 0 ? -22 : 22) + Math.sin(t / 500 + x) * 2; const pi = CodexAvatar.img(code2, 16); /* companion pet is part of the portrait; draw a tiny trailing copy */ }
-  c.save(); c.beginPath(); c.arc(x, y - 17, S / 2, 0, 7); c.clip(); const im = window.CodexAvatar ? CodexAvatar.img(code, 48) : null;
-  c.imageSmoothingEnabled = true; if (im && im.complete && im.naturalWidth) c.drawImage(im, x - S / 2, y - 17 - S / 2, S, S); else { c.fillStyle = '#0e4a6c'; c.fillRect(x - S / 2, y - 34, S, S); } c.restore(); c.imageSmoothingEnabled = false;
-  c.strokeStyle = isMe ? '#5fd0ee' : (p.a ? '#ffc874' : 'rgba(230,251,255,.85)'); c.lineWidth = 2; c.beginPath(); c.arc(x, y - 17, S / 2, 0, 7); c.stroke();
+  const A = window.CodexAvatar, uid = isMe ? (AM().uid || 'me') : p.uid, code = isMe ? mineCode() : codeOf(p), a = actor(uid), an = a.an, o = A.parse(code);
+  const em = EM[uid], emo = em && performance.now() - em.at < 4200 ? em : null, k = isMe ? (L.me.emote && emo ? L.me.emote.k : null) : (p.em && emo ? p.em.k : null);
+  const sd = (isMe ? L.me.pose : p.pose) ? seatDef(isMe ? room() : roomOf(p), isMe ? L.me.seat : p.pz) : null, st = Math.max(0, Math.min(1, an.cur.st || 0));
+  const x = Math.round(p.cx), gy = Math.round(p.cy), y = gy - (sd && sd.lift ? Math.round(sd.lift * st) : 0), pose = an.pose();
+  c.imageSmoothingEnabled = false;
+  if (o.au > 0 && AURC[o.au]) { c.save(); c.globalAlpha = .28 + (L.REDUCED ? 0 : .1 * Math.sin(t / 320)); c.strokeStyle = AURC[o.au]; c.lineWidth = 2; c.beginPath(); c.ellipse(x, gy + 2, 16, 5.5, 0, 0, 7); c.stroke(); c.restore(); }
+  c.fillStyle = 'rgba(0,0,0,.28)'; c.beginPath(); c.ellipse(x, gy + 2, 12, 4, 0, 0, 7); c.fill();
+  if (o.p > 0 && a.pet.on) { const pi = A.petImg(code); if (pi && pi.complete && pi.naturalWidth) { c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(Math.round(a.pet.x), gy + 2, 6, 2, 0, 0, 7); c.fill(); c.drawImage(pi, Math.round(a.pet.x) - 8, Math.round(a.pet.y) - 8 + (L.REDUCED || p.walk ? 0 : Math.round(Math.sin(t / 380 + x))), 16, 16); } }
+  let fr = A.sprite(code, pose, true); if (fr) a.last = fr; else fr = a.last;     /* soft: over the per-tick build budget → keep showing the previous frame */
+  if (fr && fr.cv) c.drawImage(fr.cv, x - A.rig.OX, y - A.rig.OY); else { c.fillStyle = '#0e4a6c'; c.fillRect(x - 8, y - 40, 16, 40); }
+  const top = y - 50 - (o.t > 0 ? 8 : 0) - (o.t === 4 || o.t === 6 || o.t === 12 ? 8 : 0) - (o.h === 5 ? 4 : 0) + Math.min(0, Math.round(an.cur.by || 0)), py = top - 13;
   const name = String(p.n || 'OP').slice(0, 14), lv = 'LV' + (p.lv || 1); c.font = 'bold 8px "Atkinson Hyperlegible", sans-serif';
-  const tw = Math.max(34, c.measureText(name).width + c.measureText(lv).width + 8); c.fillStyle = 'rgba(3,20,30,.86)'; c.fillRect(x - tw / 2, y - 47, tw, 11); c.fillStyle = p.a ? '#ffc874' : (isMe ? '#5fd0ee' : '#e6fbff'); c.fillText(name, x - tw / 2 + 3, y - 38.5); c.fillStyle = '#ffc874'; c.fillText(lv, x - tw / 2 + c.measureText(name).width + 6, y - 38.5);
-  if (k && EMO[k]) { c.font = '15px sans-serif'; c.textAlign = 'center'; const age = (performance.now() - emo.at) / 4200; c.globalAlpha = 1 - age * age; c.fillText(EMO[k][0], x + 14, y - 52 - age * 12); c.globalAlpha = 1; c.textAlign = 'left'; }
-  if (isMe) { c.fillStyle = 'rgba(95,208,238,.5)'; c.fillRect(x - 8, Math.round(p.cy) + 5, 16, 2); }
-  return { x: x, y: y - 56, top: y - 56 };
+  const tw = Math.max(34, c.measureText(name).width + c.measureText(lv).width + 8); c.fillStyle = isMe ? 'rgba(6,52,72,.9)' : 'rgba(3,20,30,.86)'; c.fillRect(x - tw / 2, py, tw, 11);
+  c.fillStyle = p.a ? '#ffc874' : (isMe ? '#5fd0ee' : '#e6fbff'); c.fillText(name, x - tw / 2 + 3, py + 8.5); c.fillStyle = '#ffc874'; c.fillText(lv, x - tw / 2 + c.measureText(name).width + 6, py + 8.5);
+  if (k && EMO[k]) { c.font = '15px sans-serif'; c.textAlign = 'center'; const age = (performance.now() - emo.at) / 4200; c.globalAlpha = 1 - age * age; c.fillText(EMO[k][0], x + 16, py - 2 - age * 12); c.globalAlpha = 1; c.textAlign = 'left'; }
+  if (isMe) { c.fillStyle = 'rgba(95,208,238,.5)'; c.fillRect(x - 8, gy + 5, 16, 2); }
+  return { x: x, y: py - 2, top: py - 2 };
 }
 function bubbles(L, c, pos) {
   const CE = NE().ChatEngine; if (!CE || CE.channel !== 'global') return; const now = Date.now(), seen = {};
@@ -148,12 +181,13 @@ function bubbles(L, c, pos) {
 }
 function draw(t) {
   const L = LE(), c = L.ctx; if (!c) return; const id = room(), realtime = NE().SupabaseLounge;
+  try { if (window.CodexAvatar && CodexAvatar.rig) CodexAvatar.rig.budget(6); } catch (e) {}      /* ≤ ~6 ms of new sprite composition per tick */
   c.imageSmoothingEnabled = false;
   if (id === 'deck') deckBG(L, c, t); else { if (!cache[id]) cache[id] = paintStatic(id); c.drawImage(cache[id], 0, 0); }
   dynRoom(L, c, t, id);
   let banner = null, red = false; if (!NE().online || !NE().online()) { banner = 'OFFLINE MODE — LOG-IN LINK REQUIRED FOR OTHER OPERATORS'; red = true; } else if (!AM().user) banner = 'ESTABLISHING OPERATOR LINK…'; else if (realtime && typeof realtime.available === 'function' && realtime.available() && realtime.state === 'retry') banner = 'REALTIME LINK LOST — RETRYING…';
   if (banner) { c.fillStyle = 'rgba(2,20,34,.74)'; c.fillRect(0, 78, L.W, 34); c.fillStyle = red ? '#ff8795' : '#ffcb7a'; c.font = 'bold 10px "Atkinson Hyperlegible", sans-serif'; c.textAlign = 'center'; c.fillText(banner, L.W / 2, 98); c.textAlign = 'left'; }
-  const list = []; Object.keys(L.players).forEach(u => { const p = L.players[u]; if ((p.r || 'deck') === id) { p.uid = u; list.push(p); } });
+  const list = []; Object.keys(L.players).forEach(u => { const p = L.players[u]; if (roomOf(p) === id) { p.uid = u; list.push(p); } });
   const me = { n: AM().name || 'YOU', lv: (typeof window.levelOf === 'function' && window.S) ? window.levelOf(window.S.xp || 0) + 1 : 1, cx: L.me.cx, cy: L.me.cy, dir: L.me.dir, walk: L.me.walk, a: AM().admin };
   list.push(me); list.sort((a, b) => a.cy - b.cy); const pos = {};
   list.forEach(p => { const isMe = p === me; const r = token(L, c, p, isMe, t); pos[isMe ? AM().uid : p.uid] = r; });
@@ -170,9 +204,9 @@ function doorAt(x, y) { return y > 128 && y < 190 ? (x < 34 ? 'prev' : x > 446 ?
 function onClick(e) {
   const L = LE(), p = pt(L, e), id = room(), d = doorAt(p.x, p.y), realtime = NE().SupabaseLounge;
   if (d) { setRoom(ROOMS[id][d]); return; }
-  if (AM().user && L.cv) { /* click another operator → mini card */ const keys = Object.keys(L.players); for (let i = 0; i < keys.length; i++) { const o = L.players[keys[i]]; if ((o.r || 'deck') === id && Math.abs(p.x - o.cx) < 16 && Math.abs(p.y - (o.cy - 17)) < 20) { showCard(keys[i], o, e); return; } } }
+  if (AM().user && L.cv) { /* click another operator → mini card */ const keys = Object.keys(L.players); for (let i = 0; i < keys.length; i++) { const o = L.players[keys[i]]; if (roomOf(o) === id && Math.abs(p.x - o.cx) < 14 && p.y > o.cy - 52 && p.y < o.cy + 5) { showCard(keys[i], o, e); return; } } }
   hideCard();
-  const h = hotAt(id, p.x, p.y); L.me.pose = 0; L.me.pendingSit = null;
+  const h = hotAt(id, p.x, p.y); L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null;
   if (h) {
     L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, h.sx)); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, h.sy)); L.me.walk = true; L.me.act = h; if (h.t === 'seat') L.me.pendingSit = h;
     if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk(); return;
@@ -181,7 +215,7 @@ function onClick(e) {
 }
 function arrive(L) {
   const a = L.me.act; if (!a || L.me.walk) return; L.me.act = null;
-  if (a.t === 'seat') { L.me.pose = 1; L.me.dir = a.sx < 240 ? 1 : -1; track(true); }
+  if (a.t === 'seat') { L.me.pose = 1; L.me.seat = a.id; L.me.dir = a.sx < 240 ? 1 : -1; track(true); }
   else if (a.t === 'juke') { L.me.jukebox = L.me.jukebox ? 0 : 1; track(true); toast('<b>Jukebox ' + (L.me.jukebox ? 'on' : 'off') + '</b><br>' + (L.me.jukebox ? 'Everyone in the café hears it.' : ''), 'speech', 1800); if (L.me.jukebox) musicStart(); }
   else if (a.t === 'coffee') doEmote('sip');
   else if (a.t === 'fire') doEmote('warm');
@@ -193,7 +227,7 @@ function arrive(L) {
 function showCard(uid, o, e) {
   hideCard(); const wrapEl = LE().cv.parentNode; wrapEl.style.position = 'relative';
   const r = LE().cv.getBoundingClientRect(), wr = wrapEl.getBoundingClientRect(), div = document.createElement('div'); div.className = 'lg-card';
-  div.innerHTML = (window.CodexAvatar ? CodexAvatar.el(codeOf(o), 56, 'sq') : '') + '<div><b>' + esc(o.n || 'OP') + '</b><small>LV' + (o.lv || 1) + ' · ' + esc((ROOMS[o.r || 'deck'] || ROOMS.deck).n) + '</small><div class="lg-cb"><button type="button" class="btn" data-lg="wave">👋 Wave</button><button type="button" class="btn primary" data-lg="dm" data-u="' + esc(uid) + '" data-n="' + esc(o.n || '') + '">💬 Message</button></div></div>';
+  div.innerHTML = (window.CodexAvatar ? CodexAvatar.el(codeOf(o), 56, 'sq') : '') + '<div><b>' + esc(o.n || 'OP') + '</b><small>LV' + (o.lv || 1) + ' · ' + esc(ROOMS[roomOf(o)].n) + '</small><div class="lg-cb"><button type="button" class="btn" data-lg="wave">👋 Wave</button><button type="button" class="btn primary" data-lg="dm" data-u="' + esc(uid) + '" data-n="' + esc(o.n || '') + '">💬 Message</button></div></div>';
   wrapEl.appendChild(div); div.style.left = Math.max(6, Math.min(wr.width - 250, e.clientX - wr.left - 20)) + 'px'; div.style.top = Math.max(6, e.clientY - wr.top - 100) + 'px'; STATE.cards = div;
   div.addEventListener('click', ev => { const b = ev.target.closest('[data-lg]'); if (!b) return; if (b.dataset.lg === 'wave') doEmote('wave'); else if (NE().ChatEngine) NE().ChatEngine.openDM(b.dataset.u, b.dataset.n); hideCard(); });
 }
@@ -202,8 +236,8 @@ function roster() {
   const L = LE(), ro = $1('#lobbyRoster'); if (!ro) return; const N = NE();
   if (!N.online || !N.online()) { ro.innerHTML = '<span class="small">OFFLINE MODE — sign in link needed to meet other operators.</span>'; const ch = $1('#lobbyCountChip'); if (ch) ch.textContent = 'OFFLINE'; return; }
   if (!AM().user) { ro.innerHTML = '<span class="small">Establishing operator link…</span>'; return; }
-  const me = { uid: AM().uid, n: AM().name || 'GUEST', lv: 1, r: room(), a: AM().admin, av: mineCode(), me: 1 }, all = [me].concat(Object.keys(L.players).map(u => Object.assign({ uid: u }, L.players[u]))), here = all.filter(p => (p.r || 'deck') === room()), away = all.filter(p => (p.r || 'deck') !== room());
-  const row = p => '<button class="lro' + (p.me ? ' me' : '') + (p.a ? ' admin' : '') + '" data-dmuid="' + esc(p.uid) + '" data-dmname="' + esc(p.n) + '" title="' + (p.me ? 'You' : 'Message ' + esc(p.n)) + '"><span class="lro-av">' + (window.CodexAvatar ? CodexAvatar.el(codeOf(p), 22) : '') + '</span>' + esc(p.n) + (p.a ? ' ★' : '') + (p.jk ? ' ♪' : '') + (p.pose ? ' 🪑' : '') + '<span class="lv">' + (p.me ? 'YOU' : ROOMS[p.r || 'deck'].i) + '</span></button>';
+  const me = { uid: AM().uid, n: AM().name || 'GUEST', lv: 1, r: room(), a: AM().admin, av: mineCode(), me: 1 }, all = [me].concat(Object.keys(L.players).map(u => Object.assign({ uid: u }, L.players[u]))), here = all.filter(p => roomOf(p) === room()), away = all.filter(p => roomOf(p) !== room());
+  const row = p => '<button class="lro' + (p.me ? ' me' : '') + (p.a ? ' admin' : '') + '" data-dmuid="' + esc(p.uid) + '" data-dmname="' + esc(p.n) + '" title="' + (p.me ? 'You' : 'Message ' + esc(p.n)) + '"><span class="lro-av">' + (window.CodexAvatar ? CodexAvatar.el(codeOf(p), 22) : '') + '</span>' + esc(p.n) + (p.a ? ' ★' : '') + (p.jk ? ' ♪' : '') + (p.pose ? ' 🪑' : '') + '<span class="lv">' + (p.me ? 'YOU' : ROOMS[roomOf(p)].i) + '</span></button>';
   ro.innerHTML = '<div class="lro-sec">Here · ' + here.length + '</div>' + here.map(row).join('') + (away.length ? '<div class="lro-sec">Elsewhere · ' + away.length + '</div>' + away.map(row).join('') : '');
   $A('.lro', ro).forEach(b => b.addEventListener('click', () => { if (b.dataset.dmuid !== AM().uid) NE().ChatEngine.openDM(b.dataset.dmuid, b.dataset.dmname); }));
   const ch = $1('#lobbyCountChip'); if (ch) ch.textContent = all.length + ' ONLINE';
@@ -214,10 +248,12 @@ function paintBar() {
 }
 function init() {
   const L = LE(); if (!L || !L.cv) return;
-  Object.assign(L.me, { room: 'deck', pose: 0, emote: null, jukebox: 0, act: null, pendingSit: null });
+  Object.assign(L.me, { room: 'deck', pose: 0, seat: null, emote: null, jukebox: 0, act: null, pendingSit: null });
+  L.extra = extraMeta;                /* network.js merges this into presence meta */
+  L.actors = ACT;                     /* read-only handle for diagnostics */
   L.draw = draw; L.onClick = onClick; L.renderRoster = roster;
-  const step0 = L.step; L.step = function (dt, t) { step0.call(this, dt, t); arrive(this); if (L.me.emote && Date.now() - L.me.emote.ts > 4300) L.me.emote = null; STATE.last += dt; if (STATE.last > 1000) { STATE.last = 0; if (wantMusic()) musicStart(); else if (MUS.on) musicStop(); } };
-  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); } };
+  const step0 = L.step; L.step = function (dt, t) { step0.call(this, dt, t); arrive(this); try { tick(this, dt); } catch (e) { if (window.console && !STATE.warned) { STATE.warned = 1; console.error('[lounge2:tick]', e); } } if (L.me.emote && Date.now() - L.me.emote.ts > 4300) L.me.emote = null; STATE.last += dt; if (STATE.last > 1000) { STATE.last = 0; if (wantMusic()) musicStart(); else if (MUS.on) musicStop(); } };
+  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); } };
   L.cv.insertAdjacentHTML('afterend', '<div id="lgBar" class="lg-bar"></div>'); paintBar();
   $1('#lgBar').addEventListener('click', e => {
     const r = e.target.closest('[data-room]'), m = e.target.closest('[data-emo]'), g = e.target.closest('[data-lg2]');
@@ -228,7 +264,7 @@ function init() {
   L.cv.addEventListener('mousemove', e => { const p = pt(L, e), id = room(), d = doorAt(p.x, p.y), h = d ? { l: 'Go to ' + ROOMS[ROOMS[id][d]].n, x: d === 'prev' ? 6 : 450, y: 132, w: 24 } : hotAt(id, p.x, p.y); STATE.hover = h; L.cv.style.cursor = h ? 'pointer' : 'default'; });
   L.cv.addEventListener('mouseleave', () => { STATE.hover = null; });
   document.addEventListener('cx:avatar', () => { Object.keys(cache).length; track(true); roster(); });
-  setInterval(() => { Object.keys(L.players).forEach(u => { const p = L.players[u], e = EM[u]; if (p.em && (!e || e.ts !== p.em.ts)) EM[u] = { ts: p.em.ts, at: performance.now() }; }); }, 400);
+  /* remote emote detection now lives in tick(): it only runs while the lounge is active */
   roster();
 }
 document.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { if (window.console) console.error('[lounge2]', e); } });
