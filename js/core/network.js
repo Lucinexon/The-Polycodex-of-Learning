@@ -1735,7 +1735,7 @@ const ChatEngine = {
   },
   loadAvatar: function (uid) {
     const self = this;
-    if (!uid || !fbOK()) return Promise.resolve('');
+    if (typeof uid !== 'string' || !uid || uid.indexOf('/') !== -1 || !fbOK()) return Promise.resolve('');
     if (Object.prototype.hasOwnProperty.call(this.avatarCache, uid)) {
       return this.avatarCache[uid] && typeof this.avatarCache[uid].then === 'function'
         ? this.avatarCache[uid] : Promise.resolve(this.avatarCache[uid] || '');
