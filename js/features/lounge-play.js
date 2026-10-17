@@ -101,6 +101,7 @@ function placeHot(L, a, npc) {
 }
 function removeHots() { const G = LG(); if (!G) return; Object.keys(HOTS).forEach(k => { const h = HOTS[k]; if (h._r && G.HOT[h._r]) { const i = G.HOT[h._r].indexOf(h); if (i >= 0) G.HOT[h._r].splice(i, 1); } h._r = ''; }); }
 function update(L) {
+  if (dead) return;                                                                /* after teardown no frame may place hotspots or draw NPCs */
   ensureActors(); const now = Date.now(), rooms = {}, A = root.CodexAnim;
   const myEm = L.me && L.me.emote && L.me.emote.ts !== lastEmoteTs ? (lastEmoteTs = L.me.emote.ts, L.me.emote.k) : null;
   NPCS.forEach(n => {
@@ -171,10 +172,10 @@ function encounter(npc, scene, now) {
 }
 
 /* ---------- dialogue card ---------- */
-let DLG = null, GAME = null;
+let DLG = null, GAME = null, dead = false, W = null;   /* dead: permanent teardown flag · W: this module's live wiring (for teardown) */
 function closeDialog() { if (!DLG) return; DLG.dead = true; document.removeEventListener('keydown', DLG.key, true); if (DLG.el.parentNode) DLG.el.parentNode.removeChild(DLG.el); DLG = null; }
 function openDialog(npcId) {
-  const L = LE(), npc = NPC_BY[npcId], a = ACTORS[npcId]; if (!L || !L.cv || !npc || !a || a.r !== L.me.room || GAME) return;
+  const L = LE(), npc = NPC_BY[npcId], a = ACTORS[npcId]; if (dead || !L || !L.cv || !npc || !a || a.r !== L.me.room || GAME) return;
   closeDialog(); const wrapEl = L.cv.parentNode; wrapEl.style.position = 'relative';
   const el = document.createElement('div'); el.className = 'lgd'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Talking to ' + npc.n);
   el.innerHTML = '<span class="lgd-av"></span><div class="lgd-b"><b class="lgd-n"></b><small class="lgd-r"></small><p class="lgd-t" aria-live="polite"></p><div class="lgd-a"><button type="button" class="btn primary" data-d="chat">Chat</button>' + (npc.game ? '<button type="button" class="btn" data-d="game">Play Order Up</button>' : '') + '<button type="button" class="btn" data-d="bye">Bye</button></div></div>';
@@ -199,10 +200,20 @@ function openDialog(npcId) {
 }
 
 /* ---------- minigame host ---------- */
+/* A game is tracked from start() until its overlay is *destroyed*, not until it finishes: a completed run keeps its replay/close card
+   mounted, so GAME must keep pointing at that controller (otherwise abortGame can no longer close it and a second controller could be
+   started on top). onEnd fires once per run for rewards; onClose fires once when the controller is really gone. The identity guard makes
+   a stale onClose a no-op and never lets it clear a newer game's controller. */
 function abortGame(why) { if (GAME) { const g = GAME; GAME = null; g.quit(why); } }
 function playGame(npc) {
-  const G = root.CodexLoungeGames; if (!G || !G[npc.game] || GAME) return; closeDialog();
-  GAME = G[npc.game].start({ npc: npc.n, onEnd: r => { GAME = null; finishGame(npc, r); } });
+  const G = root.CodexLoungeGames; if (dead || !G || !G[npc.game] || GAME) return; closeDialog();
+  let ctl = null;
+  ctl = G[npc.game].start({
+    npc: npc.n,
+    onEnd: r => finishGame(npc, r),
+    onClose: () => { if (GAME === ctl) GAME = null; }
+  });
+  GAME = ctl;
 }
 function finishGame(npc, r) {
   if (r.quit && !r.rounds) return;                                               /* quit before clearing a ticket: nothing to reward */
@@ -220,17 +231,45 @@ function finishGame(npc, r) {
 
 /* ---------- wiring ---------- */
 function init() {
-  const L = LE(), G = LG(); if (!L || !L.cv || !G) return;
-  const h = G.hooks; h.npcs = id => BY_ROOM[id] || EMPTY; h.byUid = uid => BY_UID[uid]; h.over = over;
-  h.arrive = (a, Lx) => { if (a && a.t === 'npc') openDialog(a.npc); };
-  const s0 = L.step; L.step = function (dt, t) { s0.call(this, dt, t); try { update(this); } catch (e) { if (root.console && !init.warned) { init.warned = 1; console.error('[lounge-play]', e); } } };
-  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { closeDialog(); abortGame('inactive'); } };
-  document.addEventListener('click', e => { if (DLG && !DLG.el.contains(e.target) && !(L.cv && L.cv.contains(e.target))) closeDialog(); });
+  const L = LE(), G = LG(); if (!L || !L.cv || !G || W || dead) return;           /* teardown is permanent: never re-wire after it */
+  const h = G.hooks || (G.hooks = {});
+  const hooks = {
+    npcs: id => BY_ROOM[id] || EMPTY,
+    byUid: uid => BY_UID[uid],
+    over: over,
+    arrive: a => { if (a && a.t === 'npc') openDialog(a.npc); }
+  };
+  Object.keys(hooks).forEach(k => { h[k] = hooks[k]; });
+  const s0 = L.step;
+  const step = function (dt, t) { s0.call(this, dt, t); if (dead) return; try { update(this); } catch (e) { if (root.console && !init.warned) { init.warned = 1; console.error('[lounge-play]', e); } } };
+  const sa0 = L.setActive;
+  const setActive = function (on) { sa0.call(this, on); if (!on) { closeDialog(); abortGame('inactive'); } };
+  const onDocClick = e => { if (DLG && !DLG.el.contains(e.target) && !(L.cv && L.cv.contains(e.target))) closeDialog(); };
+  L.step = step; L.setActive = setActive;
+  document.addEventListener('click', onDocClick);
+  W = { L: L, G: G, s0: s0, step: step, sa0: sa0, setActive: setActive, hooks: hooks, onDocClick: onDocClick };
 }
+
+/* Permanent, idempotent teardown: closes the dialogue and the game overlay, drops the NPC hotspots, then unwinds exactly the hooks,
+   wrappers and listeners this module installed. Restoration is identity-checked — a wrapper added by another module on top of ours is
+   left in place and simply bounces off the `dead` flag, so hotspots cannot be recreated; hooks owned by other modules are untouched.
+   Once torn down the module refuses to re-initialise (init() bails while `dead`). */
+function teardown() {
+  if (dead) return;
+  dead = true;
+  closeDialog(); abortGame('teardown'); removeHots();
+  if (!W) return;
+  const w = W; W = null;
+  if (w.L.step === w.step) w.L.step = w.s0;
+  if (w.L.setActive === w.setActive) w.L.setActive = w.sa0;
+  document.removeEventListener('click', w.onDocClick);
+  if (w.G && w.G.hooks) Object.keys(w.hooks).forEach(k => { if (w.G.hooks[k] === w.hooks[k]) delete w.G.hooks[k]; });
+}
+
 document.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { if (root.console) console.error('[lounge-play]', e); } });
 root.CodexLoungePlay = {
-  config: CFG, npcs: NPCS, ai: { stats: () => AIG.stats(), gate: AIG, encounter: encounter }, openDialog: openDialog, closeDialog: closeDialog, teardown: () => { closeDialog(); abortGame('teardown'); removeHots(); },
-  _t: { stateAt: stateAt, AIG: AIG, encounter: encounter, cleanText: cleanText, store: store, scripted: scripted, lookCode: lookCode, setRng: f => { rng = f || Math.random; }, resetSession: () => { AIG.s = { calls: 0, last: -Infinity, byNpc: {}, busy: false }; } }
+  config: CFG, npcs: NPCS, ai: { stats: () => AIG.stats(), gate: AIG, encounter: encounter }, openDialog: openDialog, closeDialog: closeDialog, teardown: teardown,
+  _t: { stateAt: stateAt, AIG: AIG, encounter: encounter, cleanText: cleanText, store: store, scripted: scripted, lookCode: lookCode, init: init, setRng: f => { rng = f || Math.random; }, resetSession: () => { AIG.s = { calls: 0, last: -Infinity, byNpc: {}, busy: false }; } }
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.CodexLoungePlay;
 })(typeof window !== 'undefined' ? window : globalThis);

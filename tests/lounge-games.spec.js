@@ -71,6 +71,23 @@ test('destroy() releases timers, listeners and the overlay; nothing fires afterw
   expect(page.__errs).toEqual([]);
 });
 
+test('finish keeps the controller alive; onClose fires exactly once — replay re-arms, close/quit never double-report', async ({ page }) => {
+  const errs = []; page.on('pageerror', e => errs.push(String(e)));
+  await page.clock.install({ time: new Date('2026-10-17T12:00:00Z') });
+  await page.goto(URL); await page.clock.pauseAt(new Date('2026-10-17T12:00:30Z'));
+  await page.evaluate(() => { window.__end = []; window.__closed = 0; window.__ctl = CodexLoungeGames.orderUp.start({ rng: mulberry32(5), onEnd: r => __end.push(r), onClose: () => { __closed++; } }); });
+  for (let k = 0; k < 3; k++) { await page.locator('[data-a=ready]').click(); await wrongPress(page); if (k < 2) await page.clock.runFor(1300); }
+  await expect(page.locator('.lgx-msg')).toContainText('Out of lives');
+  expect(await page.evaluate(() => ({ end: __end.length, closed: __closed, mounted: !!document.querySelector('.lgx') }))).toEqual({ end: 1, closed: 0, mounted: true });
+  await page.locator('[data-a=again]').click();                      /* same controller: onClose must NOT fire yet */
+  await page.locator('[data-a=quit]').click();                       /* abandoning the replay destroys the overlay once */
+  expect(await page.evaluate(() => ({ end: __end.length, quit: __end[1].quit, closed: __closed, mounted: !!document.querySelector('.lgx') }))).toEqual({ end: 2, quit: true, closed: 1, mounted: false });
+  await page.evaluate(() => { __ctl.destroy(); __ctl.quit('again'); });
+  await page.clock.runFor(5000);
+  expect(await page.evaluate(() => __closed)).toBe(1);               /* repeated destroy/quit are safe no-ops */
+  expect(errs).toEqual([]);
+});
+
 test('reduced motion: no animated bar and a doubled memorize window', async ({ page }) => {
   await begin(page, { reduced: true });
   expect(await page.evaluate(() => __ctl.reduced)).toBe(true); await expect(page.locator('.lgx-bar')).toBeHidden();

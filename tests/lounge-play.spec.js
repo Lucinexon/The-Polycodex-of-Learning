@@ -113,6 +113,16 @@ test.describe('AI gate: budget invariants', () => {
 test.describe('on the real lounge2.js render path', () => {
   const gotoCafe = async page => { await page.evaluate(() => { const L = NetworkEngine.LoungeEngine, r = L.cv.getBoundingClientRect(); window.__click = (x, y) => L.cv.dispatchEvent(new MouseEvent('click', { clientX: r.left + x * r.width / L.W, clientY: r.top + y * r.height / L.H, bubbles: true })); __click(466, 160); }); await page.clock.runFor(300); };
   const mira = page => page.evaluate(() => { const h = CodexLounge.HOT.cafe.find(x => x.id === 'npc:mira'); return h && { x: h.x, y: h.y, w: h.w, h: h.h, sx: h.sx, sy: h.sy }; });
+  const startOrderUp = async page => {
+    const m = await mira(page); await page.evaluate(m => __click(m.x + m.w / 2, m.y + m.h / 2), m);
+    for (let i = 0; i < 80 && !(await page.locator('.lgd').count()); i++) await page.clock.runFor(250);
+    await page.locator('[data-d=game]').click(); await expect(page.locator('.lgx')).toBeVisible();
+  };
+  const clearAllTickets = async page => {
+    const idx = { Espresso: 0, Matcha: 1, Boba: 2, Croissant: 3, Cake: 4, Milk: 5 };
+    for (let r = 0; r < 6; r++) { const names = (await page.locator('.lgx-ticket li').allTextContents()).map(t => idx[t.split(' ').pop()]); await page.locator('[data-a=ready]').click(); for (const i of names) await page.locator('.lgx-it[data-i="' + i + '"]').click(); if (r < 5) await page.clock.runFor(1000); }
+    await expect(page.locator('.lgx-msg')).toContainText('Shift complete');
+  };
   test.beforeEach(async ({ page }) => { await open(page); await page.evaluate(() => { window.__calls = { n: 0, inflight: 0, max: 0, log: [] }; }); });
 
   test('NPCs are drawn and animated by the shared token/tick path (and absent when hooks are off)', async ({ page }) => {
@@ -174,6 +184,100 @@ test.describe('on the real lounge2.js render path', () => {
     await page.clock.runFor(5000); await playOnce(); await page.clock.runFor(100);
     expect(await page.evaluate(() => __xp)).toEqual([30]);                         /* cap reached: no further XP, best unchanged */
     expect(await page.evaluate(() => __toasts.pop())).toContain('cap reached');
+  });
+
+  test('a finished game stays tracked: replay is the same controller, deactivation closes it once, cleanup never mints XP', async ({ page }) => {
+    await page.evaluate(() => { CodexLoungePlay.config.xpPerDayCap = 1000; });   /* raise the cap so duplication would be visible */
+    await gotoCafe(page); await page.clock.runFor(4000);
+    await startOrderUp(page); await clearAllTickets(page);
+    await expect(page.locator('.lgx')).toHaveCount(1); await expect(page.locator('[data-a=again]')).toBeVisible();
+    expect(await page.evaluate(() => __xp)).toEqual([35]);                       /* one completed run → exactly one reward */
+    await page.evaluate(() => CodexLoungePlay.openDialog('mira'));              /* post-game controller still owns the lounge */
+    await expect(page.locator('.lgd')).toHaveCount(0);
+    await page.locator('[data-a=again]').click();                               /* replay keeps the same overlay and listener */
+    await expect(page.locator('.lgx')).toHaveCount(1); await expect(page.locator('.lgx-round')).toContainText('Ticket 1 of 6');
+    expect(await page.evaluate(() => __xp)).toEqual([35]);                       /* restarting must not re-reward the first run */
+    await page.evaluate(() => NetworkEngine.LoungeEngine.setActive(false));     /* abandoning the replay closes it */
+    await expect(page.locator('.lgx')).toHaveCount(0);
+    await page.evaluate(() => NetworkEngine.LoungeEngine.setActive(false));     /* repeated cleanup is safe */
+    await page.clock.runFor(20000);
+    await page.keyboard.press('1'); await page.keyboard.press('Escape');
+    await expect(page.locator('.lgx')).toHaveCount(0);
+    expect(await page.evaluate(() => __xp)).toEqual([35]);
+    expect(page.__errs).toEqual([]);
+  });
+
+  test('a replay runs as a fresh game: second win earns its own reward, closing it adds nothing', async ({ page }) => {
+    await page.evaluate(() => { CodexLoungePlay.config.xpPerDayCap = 1000; });
+    await gotoCafe(page); await page.clock.runFor(4000);
+    await startOrderUp(page); await clearAllTickets(page);
+    await page.locator('[data-a=again]').click(); await clearAllTickets(page);
+    expect(await page.evaluate(() => __xp)).toEqual([35, 35]);                  /* one reward per completed run, never two for one */
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cx_lounge_v1')).best.orderUp)).toBe(141);
+    await page.locator('[data-a=quit]').click(); await expect(page.locator('.lgx')).toHaveCount(0);
+    await page.clock.runFor(5000);
+    expect(await page.evaluate(() => __xp)).toEqual([35, 35]);                  /* closing a finished run never re-rewards */
+    await page.evaluate(() => CodexLoungePlay.openDialog('mira'));              /* the closed controller released the lounge */
+    await expect(page.locator('.lgd')).toBeVisible();
+    expect(page.__errs).toEqual([]);
+  });
+
+  test('deactivating the lounge after a win removes the overlay and its keyboard input', async ({ page }) => {
+    await gotoCafe(page); await page.clock.runFor(4000);
+    await startOrderUp(page); await clearAllTickets(page);
+    await expect(page.locator('.lgx')).toBeVisible();
+    await page.evaluate(() => NetworkEngine.LoungeEngine.setActive(false));
+    await expect(page.locator('.lgx')).toHaveCount(0);
+    await page.clock.runFor(10000); await page.keyboard.press('1'); await page.keyboard.press('Escape');
+    await expect(page.locator('.lgx')).toHaveCount(0);
+    expect(page.__errs).toEqual([]);
+  });
+
+  test('teardown is permanent and idempotent: closes game + dialogue, unwinds hooks/wrappers, no hotspot can come back', async ({ page }) => {
+    await gotoCafe(page); await page.clock.runFor(4000);
+    await startOrderUp(page);                                                   /* a live game must be closed by teardown too */
+    const r = await page.evaluate(() => {
+      const L = NetworkEngine.LoungeEngine, G = CodexLounge;
+      const step0 = L.step, sa0 = L.setActive;
+      const hotsBefore = (G.HOT.cafe || []).filter(h => h.t === 'npc').length;
+      CodexLoungePlay.teardown();
+      const step1 = L.step, sa1 = L.setActive;
+      CodexLoungePlay.teardown(); CodexLoungePlay.closeDialog();                /* repeat calls are no-ops */
+      CodexLoungePlay._t.init();                                               /* re-initialisation is refused after teardown */
+      CodexLoungePlay.openDialog('mira');                                      /* and the dialogue cannot be reopened */
+      return {
+        hotsBefore: hotsBefore,
+        stepRestored: step1 !== step0, setActiveRestored: sa1 !== sa0, wrappersStable: L.step === step1 && L.setActive === sa1,
+        hooks: ['npcs', 'byUid', 'over', 'arrive'].map(k => typeof G.hooks[k]),
+        hotsAfter: (G.HOT.cafe || []).filter(h => h.t === 'npc').length,
+        overlays: document.querySelectorAll('.lgx,.lgd').length
+      };
+    });
+    expect(r.hotsBefore).toBeGreaterThan(0);
+    expect(r).toEqual({ hotsBefore: r.hotsBefore, stepRestored: true, setActiveRestored: true, wrappersStable: true, hooks: ['undefined', 'undefined', 'undefined', 'undefined'], hotsAfter: 0, overlays: 0 });
+    await page.clock.runFor(20000);                                             /* the lounge still runs on lounge2's own wrapper */
+    const post = await page.evaluate(() => ({ hots: (CodexLounge.HOT.cafe || []).filter(h => h.t === 'npc').length, room: NetworkEngine.LoungeEngine.me.room, actors: Object.keys(NetworkEngine.LoungeEngine.actors || {}).filter(k => k.indexOf('npc:') === 0).length }));
+    expect(post).toEqual({ hots: 0, room: 'cafe', actors: 0 });
+    expect(page.__errs).toEqual([]);
+  });
+
+  test('teardown keeps wrappers owned by a later module and blocks our update through them', async ({ page }) => {
+    await gotoCafe(page); await page.clock.runFor(2000);
+    const r = await page.evaluate(() => {
+      const L = NetworkEngine.LoungeEngine, G = CodexLounge;
+      const ours = L.step;
+      window.__outer = 0;
+      const outer = function (dt, t) { ours.call(this, dt, t); window.__outer++; };
+      L.step = outer;                                                           /* a later module wraps ours, as lounge2 did */
+      CodexLoungePlay.teardown();
+      return { keptOuter: L.step === outer, hots: (G.HOT.cafe || []).filter(h => h.t === 'npc').length, npcsHook: typeof G.hooks.npcs };
+    });
+    expect(r).toEqual({ keptOuter: true, hots: 0, npcsHook: 'undefined' });
+    await page.clock.runFor(20000);
+    const post = await page.evaluate(() => ({ outer: window.__outer, hots: (CodexLounge.HOT.cafe || []).filter(h => h.t === 'npc').length }));
+    expect(post.outer).toBeGreaterThan(0);                                      /* the foreign wrapper keeps running… */
+    expect(post.hots).toBe(0);                                                  /* …but the dead flag stops hotspot recreation */
+    expect(page.__errs).toEqual([]);
   });
 
   test('leaving the room or deactivating the lounge tears down the dialogue and the minigame', async ({ page }) => {

@@ -1,6 +1,9 @@
 /* lounge-games.js — CodexLoungeGames: self-contained lounge minigames. DOM overlays only: no canvas, no network, no globals beyond the
    optional sfx(). Every game is start(opts) → controller; the controller owns its overlay, timers and key listener and releases all of
    them in destroy(). Pure rules live in a separate Core class so they can be tested without a DOM.
+   Lifecycle: a run ends → opts.onEnd(score) fires once per run while the controller (and its replay/close UI) stays alive; the overlay
+   is only released by destroy()/quit()/Escape/Close, at which point opts.onClose() fires exactly once. Hosts must keep tracking a
+   controller after onEnd and clear it from onClose — never from onEnd.
    Game 1 — Order Up (Starlight Café): memorize the ticket, tap it back. 6 orders (3→8 items), 3 lives. */
 (function (root) {
 'use strict';
@@ -111,11 +114,12 @@ function startOrderUp(opts) {
     core: core, el: el, reduced: reduced, showMs: showMs, get dead() { return dead; },
     /* leave early: reported once as a quit (never as a win/loss) unless the run already ended */
     quit: function (why) { if (dead) return; const was = finished; this.destroy(); if (!was && opts.onEnd) opts.onEnd(result({ quit: true, aborted: why || '' })); },
-    /* release everything this game created; safe to call repeatedly */
+    /* release everything this game created; safe to call repeatedly. onClose fires exactly once, on the transition dead→destroyed */
     destroy: function () {
       if (dead) return; dead = true; timers.forEach(t => clearTimeout(t)); timers.clear(); hold = 0;
       doc.removeEventListener('keydown', onKey, true); if (el.parentNode) el.parentNode.removeChild(el);
       try { if (prevFocus && prevFocus.focus && doc.contains(prevFocus)) prevFocus.focus(); } catch (e) {}
+      try { if (opts.onClose) opts.onClose(ctl); } catch (e) {}
     }
   };
   showOrder(true);
