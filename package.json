@@ -1,0 +1,23 @@
+{
+  "name": "the-polycodex-of-learning",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lucinexon/The-Polycodex-of-Learning.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Lucinexon/The-Polycodex-of-Learning/issues"
+  },
+  "homepage": "https://github.com/Lucinexon/The-Polycodex-of-Learning#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5"
+  }
+}

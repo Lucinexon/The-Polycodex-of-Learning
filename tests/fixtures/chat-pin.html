@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>chat-pin fixture</title>
+<!-- Loads the REAL stylesheets and the REAL social.js; only the network layer is stubbed. -->
+<link rel="stylesheet" href="../../css/style.css"><link rel="stylesheet" href="../../css/v6.css"><link rel="stylesheet" href="../../css/v7.css">
+</head><body>
+<!-- same structure as index.html (#chatLog inside .lobby-chat-panel) -->
+<div id="mainWrap" style="width:520px;margin:10px"><div class="panel lobby-chat-panel" id="mainPanel"><div class="chat-channels"></div>
+<div class="chat-log" id="chatLog"></div><div class="chat-input-row"><textarea id="chatInput"></textarea></div></div></div>
+<!-- same structure as social.js paintDock() builds -->
+<section id="cxDock" class="dk" role="dialog" aria-label="Chats"><header class="dk-h"><b class="dk-t">Everyone</b></header>
+<div class="dk-body"><div class="dk-chat"><div class="dk-log" tabindex="0" aria-live="polite"></div></div><div class="dk-comp"><textarea id="dkIn" rows="1"></textarea></div></div></section>
+<script>
+window.esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/* in-memory stand-in for the Firestore collection; `add` is what social.js evt() calls */
+window.CX = { docs: [], seq: 0, replies: [], emit() { CX.paintAll(); } };
+CX.col = { path: 'fixture', add(doc) { CX.docs.push(Object.assign({ _id: 'd' + (++CX.seq) }, doc)); setTimeout(() => CX.paintAll(), 0); return Promise.resolve({}); } };
+window.NetworkEngine = { AuthManager: { uid: 'u-admin', name: 'ROOT', admin: true, user: {}, mailOK: () => true }, online: () => true, db: () => null, guardedWrite: (l, f) => Promise.resolve(f()).then(() => true) };
+</script>
+<script src="../../js/features/social.js"></script>
+<script>
+(function () {
+  const many = /[?&]many=1/.test(location.search), now = Date.now();
+  CX.docs = [
+    { _id: 'm1', n: 'ADA', u: 'u-ada', t: 'Anyone tried the observatory room yet?', ts: now - 600000 },
+    { _id: 'm2', n: 'ROOT', u: 'u-admin', t: 'Study room opens at 8pm. Bring snacks, and a long enough message that it has to wrap inside the bubble.', ts: now - 500000 },
+    { _id: 'm3', n: 'ADA', u: 'u-ada', t: 'See you there', ts: now - 400000 }
+  ];
+  if (many) for (let i = 0; i < 40; i++) CX.docs.push({ _id: 'x' + i, n: i % 2 ? 'ADA' : 'ROOT', u: i % 2 ? 'u-ada' : 'u-admin', t: 'filler message number ' + i, ts: now - 300000 + i * 1000 });
+  CX.ad = () => ({ kind: () => 'room', docs: () => CX.docs, label: () => 'Everyone', col: () => CX.col, peer: () => null, convoId: () => 'g', setReply: r => { CX.replies.push(r); }, input: () => null });
+  CX.paintAll = () => { ['#chatLog', '.dk-log'].forEach(sel => CodexChat.paint(document.querySelector(sel), CX.docs, null, CX.ad())); };
+  ['#chatLog', '.dk-log'].forEach(sel => CodexChat.bind(document.querySelector(sel), CX.ad()));
+  CX.paintAll();
+})();
+</script></body></html>

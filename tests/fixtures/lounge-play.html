@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>lounge-play fixture</title>
+<link rel="stylesheet" href="../../css/style.css"><link rel="stylesheet" href="../../css/v6.css"><link rel="stylesheet" href="../../css/v7.css"><link rel="stylesheet" href="../../css/lounge-play.css"></head>
+<body><div id="loungeWrap" style="width:480px;margin:8px"><canvas id="loungeCanvas" width="480" height="300" style="width:480px;height:300px;display:block"></canvas></div>
+<script>
+/* Test doubles ONLY for the network/engine layer. lounge2.js, avatar-*.js, lounge-games.js and lounge-play.js below are the real files,
+   loaded in index.html order. The stub mirrors the real LoungeEngine's geometry and movement (network.js ~1290-1580). */
+window.esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+window.__sfx = []; window.sfx = n => window.__sfx.push(n);
+window.__xp = []; window.gainXP = (n, silent) => window.__xp.push(n);
+window.__toasts = []; window.toast = m => window.__toasts.push(m);
+window.NetworkEngine = { online: () => true, AuthManager: { user: {}, uid: 'me', name: 'TESTER', admin: false }, SupabaseLounge: null, ChatEngine: null };
+const L = window.NetworkEngine.LoungeEngine = {
+  W: 480, H: 300, FLOOR_Y: 185, MIN_X: 16, MAX_X: 464, MIN_Y: 205, MAX_Y: 282, cv: null, ctx: null, active: false, raf: null, lastT: 0, players: {},
+  me: { x: 240, y: 244, cx: 240, cy: 244, dir: 1, walk: false }, REDUCED: false,
+  stars: Array.from({ length: 20 }, (_, i) => ({ x: i * 23, y: (i * 37) % 160, s: 1 + (i % 4 === 0), v: .01, tw: i })), sat: { x: 40, y: 46, v: .02 },
+  init() { this.cv = document.getElementById('loungeCanvas'); this.ctx = this.cv.getContext('2d'); this.cv.addEventListener('click', e => this.onClick(e)); },
+  setActive(on) { this.active = !!on; if (on && !this.raf) { this.lastT = 0; const f = t => { this.frame(t); this.raf = this.active ? requestAnimationFrame(f) : null; }; this.raf = requestAnimationFrame(f); } },
+  frame(t) { const dt = this.lastT ? Math.min(100, t - this.lastT) : 16; this.lastT = t; this.step(dt, t); this.draw(t); },
+  step(dt) { const p = this.me, dx = p.x - p.cx, dy = p.y - p.cy, d = Math.hypot(dx, dy); if (d < 1.2) { p.cx = p.x; p.cy = p.y; p.walk = false; return; } const k = Math.min(1, (62 * dt / 1000) / d); if (Math.abs(dx) > 1) p.dir = dx > 0 ? 1 : -1; p.cx += dx * k; p.cy += dy * k; p.walk = true; },
+  draw() {}, drawGlow() {}, drawWhale() {}, drawSat() {}, onClick() {}, renderRoster() {}, beat() {}
+};
+L.init();
+</script>
+<script src="../../js/features/avatar-rig.js"></script><script src="../../js/features/avatar-anim.js"></script><script src="../../js/features/avatar.js"></script>
+<script src="../../js/features/lounge2.js"></script><script src="../../js/features/lounge-games.js"></script><script src="../../js/features/lounge-play.js"></script>
+<script>window.addEventListener('load', () => L.setActive(true));</script></body></html>
