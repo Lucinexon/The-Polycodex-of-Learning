@@ -1716,6 +1716,7 @@ const ChatEngine = {
     const keys = Object.keys(A.MAX || {});
     if (raw.length !== keys.length) return '';
     for (let i = 0; i < keys.length; i++) {
+      if (!raw[i] || /[^0-9a-z]/.test(raw[i])) return '';
       const n = parseInt(raw[i], 36);
       if (!isFinite(n) || n < 0 || n >= A.MAX[keys[i]]) return '';
     }
