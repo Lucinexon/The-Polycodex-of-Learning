@@ -492,7 +492,10 @@ const AuthManager = {
     }).catch(function () {});
   },
   hydrate: function (d) {
-    if (typeof d.avatar === 'string' && /^[0-9a-z.]{3,80}$/.test(d.avatar) && window.CodexAvatar && !window.CodexAvatar.mine()) { try { window.CodexAvatar.set(d.avatar, true); } catch (e) {} }   // V8 (optional): avatar was pushed but never restored
+    if (window.CodexAvatar && this.uid && d.avatar) {
+      const code = ChatEngine.normalizeAvatar(d.avatar);
+      if (code) window.CodexAvatar.set(code, true);
+    }
     const st = engS();
     if (!st) return;
     let changed = false;
@@ -1724,8 +1727,70 @@ function chRich(t) { return esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1
 const ChatEngine = {
   channel: 'global', sub: null, dm: null,
   unsub: null, lastDocs: [], lastSend: 0, RATE_MS: 1000, sweepT: null, // 1s cooldown
+  avatarCache: Object.create(null), avatarRefreshT: null,
   EXPIRE_MS: 7 * 86400000, // Keeps chat history for 7 full days
   TOPICS: ['astronomy', 'physics', 'gaming-lore', 'mathematics', 'history', 'psychology'],
+
+  normalizeAvatar: function (code) {
+    const A = window.CodexAvatar;
+    if (!A || !code) return '';
+    const raw = String(code).trim().toLowerCase().split('.');
+    const keys = Object.keys(A.MAX || {});
+    if (raw.length !== keys.length) return '';
+    for (let i = 0; i < keys.length; i++) {
+      if (!raw[i] || /[^0-9a-z]/.test(raw[i])) return '';
+      const n = parseInt(raw[i], 36);
+      if (!isFinite(n) || n < 0 || n >= A.MAX[keys[i]]) return '';
+    }
+    try { return A.enc(A.parse(raw.join('.'))); } catch (e) { return ''; }
+  },
+  fallbackAvatar: function (name) {
+    const A = window.CodexAvatar;
+    return A ? this.normalizeAvatar(A.forName(name || 'OP')) : '';
+  },
+  scheduleAvatarRefresh: function () {
+    const self = this;
+    if (this.avatarRefreshT) return;
+    this.avatarRefreshT = setTimeout(function () {
+      self.avatarRefreshT = null;
+      if (self.lastDocs.length) self.render(self.lastDocs);
+    }, 0);
+  },
+  loadAvatar: function (uid) {
+    const self = this;
+    if (typeof uid !== 'string' || !uid || uid.indexOf('/') !== -1 || !fbOK()) return Promise.resolve('');
+    if (Object.prototype.hasOwnProperty.call(this.avatarCache, uid)) {
+      return this.avatarCache[uid] && typeof this.avatarCache[uid].then === 'function'
+        ? this.avatarCache[uid] : Promise.resolve(this.avatarCache[uid] || '');
+    }
+    this.avatarCache[uid] = DB.collection('players').doc(uid).get().then(function (doc) {
+      const d = doc.exists ? (doc.data() || {}) : {};
+      const code = self.normalizeAvatar(d.avatar);
+      self.avatarCache[uid] = code;
+      self.scheduleAvatarRefresh();
+      return code;
+    }).catch(function () {
+      self.avatarCache[uid] = '';
+      self.scheduleAvatarRefresh();
+      return '';
+    });
+    return this.avatarCache[uid];
+  },
+  avatarFor: function (m) {
+    const A = window.CodexAvatar;
+    if (!A) return '';
+    const uid = String(m.u || '');
+    if (uid && uid === AuthManager.uid) {
+      const mine = this.normalizeAvatar(A.mine());
+      if (mine) return mine;
+    }
+    const messageAvatar = this.normalizeAvatar(m.av);
+    if (messageAvatar) return messageAvatar;
+    const cached = uid && this.avatarCache[uid];
+    if (cached && typeof cached.then !== 'function') return cached;
+    if (uid) this.loadAvatar(uid);
+    return this.fallbackAvatar(m.n || 'OP');
+  },
 
   colOf: function () {
     if (!fbOK()) return null;
@@ -1862,15 +1927,21 @@ const ChatEngine = {
     docs.forEach(function (m) { if (m.k === 'r' && m.to && CH_EMO.indexOf(m.e) >= 0) { const a = RX[m.to] = RX[m.to] || {}; (a[m.e] = a[m.e] || []).push(m.u); } });
     if (!msgs.length) { log.innerHTML = '<div class="chat-sys chat-empty"><b>' + esc(this.chanLabel()) + '</b> is quiet.<br>Say hi. The first message sets the tone.</div>'; this.lastId = null; this.unseen = 0; this.jumpUI(); return; }
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 90, first = !this.lastId;
-    const me = AuthManager.uid, admin = AdminManager.isAdmin(), show = msgs.slice(-150);
+    const me = AuthManager.uid, admin = AdminManager.isAdmin(), show = msgs.slice(-150), A = window.CodexAvatar;
     const same = function (a, b) { return !!(a && b && a.u && a.u === b.u && b.ts - a.ts < 300000 && new Date(a.ts).toDateString() === new Date(b.ts).toDateString()); };
+    const self = this;
+    if (!this.avatarListenerBound) {
+      document.addEventListener('cx:avatar', function () { self.scheduleAvatarRefresh(); });
+      this.avatarListenerBound = true;
+    }
     let h = '', lastDay = '';
     show.forEach(function (m, i) {
       const d = new Date(m.ts || Date.now()), dk = d.toDateString();
       if (dk !== lastDay) { lastDay = dk; h += '<div class="cday"><span>' + chDay(d) + '</span></div>'; }
       const mine = m.u === me, grp = same(show[i - 1], m), end = !same(m, show[i + 1]), rx = RX[m._id];
+      const av = self.avatarFor(m);
       h += '<div class="cm' + (mine ? ' mine' : '') + (grp ? ' grp' : '') + '" data-id="' + esc(m._id || '') + '">' +
-        (mine ? '' : (grp ? '<span class="cav sp"></span>' : '<span class="cav" style="--h:' + chHue(m.u || m.n) + '">' + esc(String(m.n || 'OP').charAt(0).toUpperCase()) + '</span>')) +
+        (grp ? '<span class="cav sp" aria-hidden="true"></span>' : '<span class="cav' + (mine ? ' mine-av' : '') + '">' + (av ? A.el(av, 32) : '') + '</span>') +
         '<div class="cbody">' + (!mine && !grp ? '<div class="cwho">' + esc(m.n || 'OP') + (m.a ? '<span class="abadge" title="System administrator">ADMIN</span>' : '') + (m.g ? '<span class="gbadge" title="Anonymous guest link">GUEST</span>' : '') + '</div>' : '') +
         '<div class="cbub">' + (m.re ? '<button type="button" class="cquote" data-jump="' + esc(m.re.i || '') + '"><b>' + esc(m.re.n || 'OP') + '</b>' + esc(m.re.t || '') + '</button>' : '') + '<div class="ctx">' + chRich(m.t || '') + '</div></div>' +
         (rx ? '<div class="crxs">' + Object.keys(rx).map(function (e) { return '<button type="button" class="crx' + (rx[e].indexOf(me) >= 0 ? ' me' : '') + '" data-react="' + esc(e) + '">' + esc(e) + ' ' + rx[e].length + '</button>'; }).join('') + '</div>' : '') +
@@ -1956,6 +2027,8 @@ const text = String(input.value || '').trim().slice(0, 240);
         t: text, ts: Date.now(),
         a: AuthManager.admin ? 1 : 0, g: AuthManager.guest ? 1 : 0
       };
+      const avatar = window.CodexAvatar && ChatEngine.normalizeAvatar(window.CodexAvatar.mine());
+      if (avatar) o.av = avatar;
       if (self.reply) o.re = self.reply;
       return col.add(o);
     }).then(function (ok) {
