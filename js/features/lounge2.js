@@ -14,6 +14,7 @@ const HOT = {   /* x,y,w,h = click box; sx,sy = where you stand/sit */
 };
 const STATE = { fade: 0, hover: null, fx: [], ripple: [], cards: null, last: 0, lastTrack: 0, steam: [] };
 const EM = {};   /* uid → { ts, at } so emotes survive roster rebuilds */
+const EXT = {};  /* extension hooks (set by lounge-play.js): npcs(roomId) → player-shaped actors, byUid(uid), arrive(hotspot, L), over(L, c, pos, t, wrap) */
 const LE = () => NE().LoungeEngine, AM = () => NE().AuthManager || {};
 const seedR = n => { let s = n; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; };
 const cache = {};
@@ -137,7 +138,7 @@ function wrap(c, text, max) { const w = String(text).split(/\s+/), out = []; let
 const ACT = {};                         /* uid → { an: Animator, seen, pet:{x,y} } — one shared state machine per character, local or remote */
 const AURC = ['', '#ffe29a', '#ffffff', '#ff7ec9', '#a99cff', '#ff9a3c'];
 const actor = uid => ACT[uid] || (ACT[uid] = { an: new window.CodexAnim.Animator(), seen: 0, pet: { x: 0, y: 0, on: 0 } });
-const emoteFor = (uid, now) => { const e = EM[uid]; if (!e) return null; const em = uid === (AM().uid || 'me') ? (LE().me.emote) : (LE().players[uid] || {}).em; if (!em || !em.k || !window.CodexAnim || !CodexAnim.CLIPS[em.k]) return null; return now - e.at < CodexAnim.durOf(em.k) + 300 ? { k: em.k, ts: em.ts } : null; };
+const emoteFor = (uid, now) => { const e = EM[uid]; if (!e) return null; const em = uid === (AM().uid || 'me') ? (LE().me.emote) : (LE().players[uid] || (EXT.byUid && EXT.byUid(uid)) || {}).em; if (!em || !em.k || !window.CodexAnim || !CodexAnim.CLIPS[em.k]) return null; return now - e.at < CodexAnim.durOf(em.k) + 300 ? { k: em.k, ts: em.ts } : null; };
 /* advance every visible character's animation (called from the engine step; dt already clamped by the engine) */
 function tick(L, dt) {
   if (!window.CodexAnim || !window.CodexAvatar) return; const id = room(), now = performance.now(), red = !!L.REDUCED, myId = AM().uid || 'me';
@@ -151,6 +152,7 @@ function tick(L, dt) {
   };
   feed(myId, L.me, true);
   Object.keys(L.players).forEach(u => { const p = L.players[u]; if (roomOf(p) === id) feed(u, p, false); });
+  if (EXT.npcs) EXT.npcs(id).forEach(p => feed(p.uid, p, false));
   Object.keys(ACT).forEach(k => { if (now - ACT[k].seen > 4000) delete ACT[k]; });
 }
 function token(L, c, p, isMe, t) {
@@ -165,7 +167,7 @@ function token(L, c, p, isMe, t) {
   let fr = A.sprite(code, pose, true); if (fr) a.last = fr; else fr = a.last;     /* soft: over the per-tick build budget → keep showing the previous frame */
   if (fr && fr.cv) c.drawImage(fr.cv, x - A.rig.OX, y - A.rig.OY); else { c.fillStyle = '#0e4a6c'; c.fillRect(x - 8, y - 40, 16, 40); }
   const top = y - 50 - (o.t > 0 ? 8 : 0) - (o.t === 4 || o.t === 6 || o.t === 12 ? 8 : 0) - (o.h === 5 ? 4 : 0) + Math.min(0, Math.round(an.cur.by || 0)), py = top - 13;
-  const name = String(p.n || 'OP').slice(0, 14), lv = 'LV' + (p.lv || 1); c.font = 'bold 8px "Atkinson Hyperlegible", sans-serif';
+  const name = String(p.n || 'OP').slice(0, 14), lv = p.tag || ('LV' + (p.lv || 1)); c.font = 'bold 8px "Atkinson Hyperlegible", sans-serif';
   const tw = Math.max(34, c.measureText(name).width + c.measureText(lv).width + 8); c.fillStyle = isMe ? 'rgba(6,52,72,.9)' : 'rgba(3,20,30,.86)'; c.fillRect(x - tw / 2, py, tw, 11);
   c.fillStyle = p.a ? '#ffc874' : (isMe ? '#5fd0ee' : '#e6fbff'); c.fillText(name, x - tw / 2 + 3, py + 8.5); c.fillStyle = '#ffc874'; c.fillText(lv, x - tw / 2 + c.measureText(name).width + 6, py + 8.5);
   if (k && EMO[k]) { c.font = '15px sans-serif'; c.textAlign = 'center'; const age = (performance.now() - emo.at) / 4200; c.globalAlpha = 1 - age * age; c.fillText(EMO[k][0], x + 16, py - 2 - age * 12); c.globalAlpha = 1; c.textAlign = 'left'; }
@@ -188,10 +190,11 @@ function draw(t) {
   let banner = null, red = false; if (!NE().online || !NE().online()) { banner = 'OFFLINE MODE — LOG-IN LINK REQUIRED FOR OTHER OPERATORS'; red = true; } else if (!AM().user) banner = 'ESTABLISHING OPERATOR LINK…'; else if (realtime && typeof realtime.available === 'function' && realtime.available() && realtime.state === 'retry') banner = 'REALTIME LINK LOST — RETRYING…';
   if (banner) { c.fillStyle = 'rgba(2,20,34,.74)'; c.fillRect(0, 78, L.W, 34); c.fillStyle = red ? '#ff8795' : '#ffcb7a'; c.font = 'bold 10px "Atkinson Hyperlegible", sans-serif'; c.textAlign = 'center'; c.fillText(banner, L.W / 2, 98); c.textAlign = 'left'; }
   const list = []; Object.keys(L.players).forEach(u => { const p = L.players[u]; if (roomOf(p) === id) { p.uid = u; list.push(p); } });
-  const me = { n: AM().name || 'YOU', lv: (typeof window.levelOf === 'function' && window.S) ? window.levelOf(window.S.xp || 0) + 1 : 1, cx: L.me.cx, cy: L.me.cy, dir: L.me.dir, walk: L.me.walk, a: AM().admin };
-  list.push(me); list.sort((a, b) => a.cy - b.cy); const pos = {};
+  const me = { n: AM().name || 'YOU', lv: (typeof window.levelOf === 'function' && typeof S !== 'undefined') ? window.levelOf(S.xp || 0) + 1 : 1, cx: L.me.cx, cy: L.me.cy, dir: L.me.dir, walk: L.me.walk, a: AM().admin };   /* `S` is engine.js's module-scoped let binding, not a window property */
+  list.push(me); if (EXT.npcs) EXT.npcs(id).forEach(p => list.push(p)); list.sort((a, b) => a.cy - b.cy); const pos = {};
   list.forEach(p => { const isMe = p === me; const r = token(L, c, p, isMe, t); pos[isMe ? AM().uid : p.uid] = r; });
   lightOverlay(c, id); doors(c, id, t); bubbles(L, c, pos);
+  if (EXT.over) { try { EXT.over(L, c, pos, t, wrap); } catch (e) { if (window.console && !STATE.warnedOver) { STATE.warnedOver = 1; console.error('[lounge2:over]', e); } } }
   STATE.fx = STATE.fx.filter(f => performance.now() - f.at < 1800); STATE.fx.forEach(f => { const a = (performance.now() - f.at) / 1800; c.fillStyle = 'rgba(255,255,255,' + (.7 * (1 - a)) + ')'; c.beginPath(); c.arc(f.x + Math.sin(a * 6) * 3, f.y - a * 24, 2 + a * 3, 0, 7); c.fill(); });
   const h = STATE.hover; if (h) { c.font = 'bold 9px "Atkinson Hyperlegible", sans-serif'; const w = c.measureText(h.l).width + 10, x = Math.max(4, Math.min(L.W - w - 4, h.x + h.w / 2 - w / 2)), y = Math.max(4, h.y - 16); c.fillStyle = 'rgba(3,20,30,.92)'; c.fillRect(x, y, w, 14); c.strokeStyle = '#ffc874'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, w - 1, 13); c.fillStyle = '#ffe9b0'; c.fillText(h.l, x + 5, y + 10); }
   if (STATE.fade > 0.01) { c.fillStyle = 'rgba(2,12,20,' + STATE.fade + ')'; c.fillRect(0, 0, L.W, L.H); STATE.fade *= .88; }
@@ -223,6 +226,7 @@ function arrive(L) {
   else if (a.t === 'pond') { STATE.ripple.push({ x: L.me.cx, y: 250, at: performance.now() }); if (window.sfx) sfx('flip'); }
   else if (a.t === 'shelf') { if (window.showScreen) showScreen('notebook'); }
   else if (a.t === 'scope') { if (window.showScreen) showScreen('sec7'); }
+  else if (EXT.arrive) EXT.arrive(a, L);
 }
 function showCard(uid, o, e) {
   hideCard(); const wrapEl = LE().cv.parentNode; wrapEl.style.position = 'relative';
@@ -251,6 +255,7 @@ function init() {
   Object.assign(L.me, { room: 'deck', pose: 0, seat: null, emote: null, jukebox: 0, act: null, pendingSit: null });
   L.extra = extraMeta;                /* network.js merges this into presence meta */
   L.actors = ACT;                     /* read-only handle for diagnostics */
+  window.CodexLounge = { HOT: HOT, ROOMS: ROOMS, hooks: EXT, room: room, doEmote: doEmote, track: track };   /* seam for lounge-play.js */
   L.draw = draw; L.onClick = onClick; L.renderRoster = roster;
   const step0 = L.step; L.step = function (dt, t) { step0.call(this, dt, t); arrive(this); try { tick(this, dt); } catch (e) { if (window.console && !STATE.warned) { STATE.warned = 1; console.error('[lounge2:tick]', e); } } if (L.me.emote && Date.now() - L.me.emote.ts > 4300) L.me.emote = null; STATE.last += dt; if (STATE.last > 1000) { STATE.last = 0; if (wantMusic()) musicStart(); else if (MUS.on) musicStop(); } };
   const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); } };

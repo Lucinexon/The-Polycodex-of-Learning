@@ -18,7 +18,9 @@ test('main chat renders saved and fallback avatars without breaking grouping', a
     ]);
     const log = document.querySelector('#chatLog');
     return {
-      avatarCount: log.querySelectorAll('.cm:not(.grp) .cav svg').length,
+      /* one portrait per avatar: the v8 rig composes a nested character <svg> inside the avatar's outer <svg>
+         (avatar.js svg()/body()), so count the `.av` root svg, not every descendant svg */
+      avatarCount: log.querySelectorAll('.cm:not(.grp) .cav .av > svg').length,
       placeholderCount: log.querySelectorAll('.cm.grp .cav.sp').length,
       savedCode: chat.avatarFor({ u: 'saved-uid', n: 'Saved operator', av: saved }),
       fallbackCode: chat.avatarFor({ u: 'fallback-uid', n: 'Fallback operator', av: '' }),
