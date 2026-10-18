@@ -4,7 +4,12 @@
 'use strict';
 const $1 = (s, r) => (r || document).querySelector(s), $A = (s, r) => Array.from((r || document).querySelectorAll(s));
 const NE = () => window.NetworkEngine || {};
-const ROOMS = { deck: { n: 'Observation Deck', i: '🔭', prev: 'loft', next: 'cafe' }, cafe: { n: 'Starlight Café', i: '☕', prev: 'deck', next: 'garden' }, garden: { n: 'Glow Greenhouse', i: '🌿', prev: 'cafe', next: 'loft' }, loft: { n: 'Library Loft', i: '📚', prev: 'garden', next: 'deck' } };
+const ROOMS = {
+  deck: { n: 'Observation Deck', i: '🔭', prev: 'loft', next: 'cafe', k: 'DECK 07 · ABYSSAL VIEWPORT', d: 'A glass-walled deck beneath the surface. The telescope is tuned to the night sky above the water, and the whales drift past the windows.' },
+  cafe: { n: 'Starlight Café', i: '☕', prev: 'deck', next: 'garden', k: 'DECK 04 · STARLIGHT CAFÉ', d: 'Warm lamps, a humming espresso machine and a jukebox that plays whatever the room is feeling. Mira keeps the tickets.' },
+  garden: { n: 'Glow Greenhouse', i: '🌿', prev: 'cafe', next: 'loft', k: 'DECK 09 · GLOW GREENHOUSE', d: 'Bioluminescent plants, a koi pond and benches among the ferns. Quiet enough to hear the water.' },
+  loft: { n: 'Library Loft', i: '📚', prev: 'garden', next: 'deck', k: 'DECK 11 · LIBRARY LOFT', d: 'Floor-to-ceiling shelves, a crackling fireplace and a keeper of unfinished books. Your own notes live behind the left bookcase.' }
+};
 const EMO = { wave: ['👋', 'Wave'], dance: ['💃', 'Dance'], heart: ['💖', 'Heart'], cheer: ['🎉', 'Cheer'], sleep: ['💤', 'Nap'], sip: ['☕', 'Sip'], spark: ['✨', 'Sparkle'], warm: ['🔥', 'Warm up'] };
 const HOT = {   /* x,y,w,h = click box; sx,sy = where you stand/sit */
   deck: [{ id: 'scope', t: 'scope', x: 318, y: 120, w: 44, h: 66, sx: 340, sy: 214, l: 'Telescope → Astronomy' }, { id: 'b1', t: 'seat', lift: 4, x: 52, y: 212, w: 56, h: 26, sx: 80, sy: 232, l: 'Bench' }, { id: 'b2', t: 'seat', lift: 4, x: 372, y: 224, w: 56, h: 26, sx: 400, sy: 244, l: 'Bench' }],
@@ -12,6 +17,10 @@ const HOT = {   /* x,y,w,h = click box; sx,sy = where you stand/sit */
   garden: [{ id: 'pond', t: 'pond', x: 150, y: 222, w: 180, h: 54, sx: 240, sy: 214, l: 'Pond' }, { id: 'g1', t: 'seat', lift: 4, x: 36, y: 214, w: 62, h: 26, sx: 68, sy: 236, l: 'Bench' }, { id: 'g2', t: 'seat', lift: 4, x: 384, y: 214, w: 62, h: 26, sx: 416, sy: 236, l: 'Bench' }, { id: 'mush', t: 'spark', x: 342, y: 170, w: 36, h: 36, sx: 360, sy: 214, l: 'Glow mushroom' }],
   loft: [{ id: 'fire', t: 'fire', x: 205, y: 104, w: 72, h: 82, sx: 240, sy: 212, l: 'Fireplace' }, { id: 'shelf', t: 'shelf', x: 24, y: 40, w: 168, h: 130, sx: 110, sy: 214, l: 'Bookshelf → your Notes' }, { id: 'a1', t: 'seat', lift: 3, x: 86, y: 220, w: 50, h: 36, sx: 112, sy: 244, l: 'Armchair' }, { id: 'a2', t: 'seat', lift: 3, x: 346, y: 220, w: 50, h: 36, sx: 372, sy: 244, l: 'Armchair' }]
 };
+const BUS = {};   /* evt → [fn]; handlers are isolated so one bad listener cannot break the render loop */
+const on = (evt, fn) => { (BUS[evt] || (BUS[evt] = [])).push(fn); return () => off(evt, fn); };
+const off = (evt, fn) => { BUS[evt] = (BUS[evt] || []).filter(f => f !== fn); };
+const emit = (evt, d) => { (BUS[evt] || []).slice().forEach(f => { try { f(d); } catch (e) { if (window.console) console.error('[lounge2:' + evt + ']', e); } }); };
 const STATE = { fade: 0, hover: null, fx: [], ripple: [], cards: null, last: 0, lastTrack: 0, steam: [] };
 const EM = {};   /* uid → { ts, at } so emotes survive roster rebuilds */
 const EXT = {};  /* extension hooks (set by lounge-play.js): npcs(roomId) → player-shaped actors, byUid(uid), arrive(hotspot, L), over(L, c, pos, t, wrap) */
@@ -76,10 +85,10 @@ function extraMeta() {
 }
 function setRoom(id, silent) {
   const L = LE(); if (!L || !ROOMS[id] || L.me.room === id) return;
-  L.me.room = id; L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null; L.me.jukebox = 0; const left = id === ROOMS[L.me.room || 'deck'].prev; L.me.x = L.me.cx = 240; L.me.y = L.me.cy = 244; L.me.walk = false;
-  STATE.fade = 1; STATE.hover = null; track(true); if (L.renderRoster) L.renderRoster(); paintBar(); if (!silent && window.sfx) sfx('reveal');
+  const from = L.me.room || 'deck'; L.me.room = id; L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null; L.me.jukebox = 0; const left = id === ROOMS[L.me.room || 'deck'].prev; L.me.x = L.me.cx = 240; L.me.y = L.me.cy = 244; L.me.walk = false;
+  STATE.fade = 1; STATE.hover = null; track(true); if (L.renderRoster) L.renderRoster(); paintBar(); if (!silent && window.sfx) sfx('reveal'); emit('room', { from: from, to: id });
 }
-function doEmote(k) { const L = LE(); if (!L || !EMO[k]) return; L.me.emote = { k: k, ts: Date.now() }; EM[AM().uid || 'me'] = { ts: L.me.emote.ts, at: performance.now() }; if (k === 'sip') STATE.fx.push({ k: 'steam', x: L.me.cx, y: L.me.cy - 30, at: performance.now() }); track(true); if (window.sfx) sfx(k === 'cheer' ? 'combo' : 'click'); }
+function doEmote(k) { const L = LE(); if (!L || !EMO[k]) return; L.me.emote = { k: k, ts: Date.now() }; EM[AM().uid || 'me'] = { ts: L.me.emote.ts, at: performance.now() }; if (k === 'sip') STATE.fx.push({ k: 'steam', x: L.me.cx, y: L.me.cy - 30, at: performance.now() }); track(true); if (window.sfx) sfx(k === 'cheer' ? 'combo' : 'click'); emit('emote', { k: k }); }
 /* ---------- jukebox (generated lofi) ---------- */
 const MUS = { A: null, on: false, t: 0, step: 0, out: null };
 const muted = () => { try { return localStorage.getItem('cx_v7_mute') === '1'; } catch (e) { return false; } };
@@ -204,20 +213,33 @@ function draw(t) {
 function pt(L, e) { const r = L.cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (L.W / r.width), y: (e.clientY - r.top) * (L.H / r.height) }; }
 function hotAt(id, x, y) { const hs = HOT[id] || []; for (let i = 0; i < hs.length; i++) { const h = hs[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; } return null; }
 function doorAt(x, y) { return y > 128 && y < 190 ? (x < 34 ? 'prev' : x > 446 ? 'next' : null) : null; }
+/* walk to a hotspot's stand point and act on arrival — the single path used by mouse clicks, the Activity Console and keyboard play */
+function walkToHot(L, h) {
+  const realtime = NE().SupabaseLounge;
+  L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null;
+  L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, h.sx)); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, h.sy)); L.me.walk = true; L.me.act = h; if (h.t === 'seat') L.me.pendingSit = h;
+  if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk();
+}
+function walkTo(hotId) { const L = LE(); if (!L || !L.active) return false; const h = (HOT[room()] || []).filter(x => x.id === hotId)[0]; if (!h) return false; hideCard(); walkToHot(L, h); return true; }
+/* everyone visible in a room: remote operators (uid), NPCs, and the local player — used by the console's Room tab */
+function who(rid) {
+  const L = LE(), out = []; if (!L) return out; rid = rid || room();
+  out.push({ me: 1, n: AM().name || 'YOU', code: mineCode() });
+  Object.keys(L.players || {}).forEach(u => { const p = L.players[u]; if (roomOf(p) === rid) out.push({ uid: u, n: p.n || 'OP', code: codeOf(p), a: !!p.a }); });
+  if (EXT.npcs) { try { EXT.npcs(rid).forEach(p => out.push({ npc: 1, uid: p.uid, n: p.n, tag: p.tag, code: codeOf(p) })); } catch (e) {} }
+  return out;
+}
 function onClick(e) {
   const L = LE(), p = pt(L, e), id = room(), d = doorAt(p.x, p.y), realtime = NE().SupabaseLounge;
   if (d) { setRoom(ROOMS[id][d]); return; }
   if (AM().user && L.cv) { /* click another operator → mini card */ const keys = Object.keys(L.players); for (let i = 0; i < keys.length; i++) { const o = L.players[keys[i]]; if (roomOf(o) === id && Math.abs(p.x - o.cx) < 14 && p.y > o.cy - 52 && p.y < o.cy + 5) { showCard(keys[i], o, e); return; } } }
   hideCard();
   const h = hotAt(id, p.x, p.y); L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null;
-  if (h) {
-    L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, h.sx)); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, h.sy)); L.me.walk = true; L.me.act = h; if (h.t === 'seat') L.me.pendingSit = h;
-    if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk(); return;
-  }
+  if (h) { walkToHot(L, h); return; }
   L.me.act = null; L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, Math.round(p.x))); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, Math.round(p.y))); L.me.walk = true; if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk();
 }
 function arrive(L) {
-  const a = L.me.act; if (!a || L.me.walk) return; L.me.act = null;
+  const a = L.me.act; if (!a || L.me.walk) return; L.me.act = null; emit('arrive', { id: a.id, t: a.t, room: room() });
   if (a.t === 'seat') { L.me.pose = 1; L.me.seat = a.id; L.me.dir = a.sx < 240 ? 1 : -1; track(true); }
   else if (a.t === 'juke') { L.me.jukebox = L.me.jukebox ? 0 : 1; track(true); toast('<b>Jukebox ' + (L.me.jukebox ? 'on' : 'off') + '</b><br>' + (L.me.jukebox ? 'Everyone in the café hears it.' : ''), 'speech', 1800); if (L.me.jukebox) musicStart(); }
   else if (a.t === 'coffee') doEmote('sip');
@@ -255,10 +277,10 @@ function init() {
   Object.assign(L.me, { room: 'deck', pose: 0, seat: null, emote: null, jukebox: 0, act: null, pendingSit: null });
   L.extra = extraMeta;                /* network.js merges this into presence meta */
   L.actors = ACT;                     /* read-only handle for diagnostics */
-  window.CodexLounge = { HOT: HOT, ROOMS: ROOMS, hooks: EXT, room: room, doEmote: doEmote, track: track };   /* seam for lounge-play.js */
+  window.CodexLounge = { HOT: HOT, ROOMS: ROOMS, hooks: EXT, room: room, doEmote: doEmote, track: track, setRoom: setRoom, who: who, walkTo: walkTo, on: on, off: off, emit: emit };   /* seam for lounge-play.js */
   L.draw = draw; L.onClick = onClick; L.renderRoster = roster;
   const step0 = L.step; L.step = function (dt, t) { step0.call(this, dt, t); arrive(this); try { tick(this, dt); } catch (e) { if (window.console && !STATE.warned) { STATE.warned = 1; console.error('[lounge2:tick]', e); } } if (L.me.emote && Date.now() - L.me.emote.ts > 4300) L.me.emote = null; STATE.last += dt; if (STATE.last > 1000) { STATE.last = 0; if (wantMusic()) musicStart(); else if (MUS.on) musicStop(); } };
-  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); } };
+  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); } emit('active', { on: !!on }); };
   L.cv.insertAdjacentHTML('afterend', '<div id="lgBar" class="lg-bar"></div>'); paintBar();
   $1('#lgBar').addEventListener('click', e => {
     const r = e.target.closest('[data-room]'), m = e.target.closest('[data-emo]'), g = e.target.closest('[data-lg2]');

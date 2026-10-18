@@ -1,0 +1,113 @@
+/* lounge-world.css — Observation Lounge layout: stage + Activity Console, world-focus mode, mobile bottom sheet.
+   Stacking (keep in sync with style.css/v7.css): chat dock .dk = 78, game overlay .lgx = 84, top bar = 130.
+   World focus (70) and the mobile sheet (72) sit BELOW the dock so messaging is always reachable while playing. */
+
+/* ---- the lounge opts out of the 960px screen cap and of the app-wide reading-mode column (body.focusmode) ---- */
+#lobby.screen { max-width: none; }
+body.focusmode #lobby.screen { max-width: none; margin: 0; }
+#lobby .lounge { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 380px); gap: 16px; align-items: start; }
+body.focusmode #lobby .lounge { max-width: none; margin: 0; grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 380px); }
+#lobby .lounge[data-console="closed"] { grid-template-columns: minmax(0, 1fr); }
+#lobby .lounge > .lobby-roster { grid-column: 1 / -1; }          /* only visible if the console script never ran */
+.chat-mount[hidden] { display: none !important; }
+
+/* ---- stage toolbar ---- */
+.lounge-toolbar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.lounge-tools { display: flex; gap: 6px; margin-left: auto; }
+.lounge-ident { order: 3; flex-basis: 100%; margin: -4px 0 0; color: var(--dim); }
+.is-world-focus .lounge-ident { order: 0; flex-basis: auto; margin: 0 0 0 auto; }
+.is-world-focus .lounge-tools { margin-left: 0; }
+.lg-tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 13px; border: 1px solid var(--line2); border-radius: 999px;
+  background: rgba(10, 56, 78, .5); color: var(--mut); font: 700 12.5px var(--ui); letter-spacing: .04em; cursor: pointer; transition: background .15s, border-color .15s, color .15s, transform .12s; }
+.lg-tool:hover { border-color: var(--cyan); color: var(--ink); background: rgba(95, 208, 238, .16); }
+.lg-tool:active { transform: scale(.96); }
+.lg-tool[aria-pressed="true"] { background: rgba(95, 208, 238, .2); border-color: var(--cyan); color: var(--ink); }
+.lg-tool:focus-visible, .lc-tab:focus-visible, .lc-act:focus-visible, .lc-res-i:focus-visible, .lc-exit:focus-visible, .lc-go:focus-visible, .lc-reset:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+@media (pointer: coarse) { .lg-tool { min-height: 44px; padding: 8px 16px; } }
+
+/* ---- Activity Console ---- */
+.lounge-console { display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 320px; max-height: min(78vh, 760px); overflow: hidden; }
+.lounge-console[hidden] { display: none !important; }
+.lc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lc-title { margin: 0; font: 700 13px var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); }
+.lc-close { min-height: 32px; width: 32px; padding: 0; }
+.lc-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.lc-tab { position: relative; flex: 1; min-height: 40px; padding: 8px 6px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--mut); font: 700 13px var(--ui); letter-spacing: .04em; cursor: pointer; }
+.lc-tab:hover { color: var(--ink); }
+.lc-tab.on { color: var(--cyan); border-bottom-color: var(--cyan); }
+.lc-badge { margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: var(--gold); color: #2b1b00; font: 700 10px var(--ui); }
+.lc-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 2px; }
+.lc-panel[hidden] { display: none; }
+.lc-foot:empty, .lc-foot:has(> [hidden]:only-child) { display: none; }
+.lc-foot .chat-admin { border-radius: 12px; border: 1px solid #5c470e; }
+
+.lc-room-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.lc-room-ic { font-size: 26px; }
+.lc-room-name { display: block; font: 700 16px var(--ui); color: var(--ink); }
+.lc-room-kick { display: block; font: 700 11px var(--ui); letter-spacing: .1em; color: var(--teal); }
+.lc-desc { margin: 0 0 4px; font: 400 13.5px/1.5 var(--ui); color: var(--mut); }
+.lc-h { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; font: 700 11px var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.lc-count { padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line2); color: var(--cyan); letter-spacing: .04em; }
+.lc-things, .lc-res, .lc-exits, .lc-chips { display: flex; flex-direction: column; gap: 6px; }
+.lc-exits, .lc-chips { flex-direction: row; flex-wrap: wrap; }
+.lc-act, .lc-res-i { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 7px 10px; text-align: left; cursor: pointer; border: 1px solid var(--line2); border-radius: 14px; background: rgba(255, 255, 255, .03); color: var(--ink); font: 400 13px var(--ui); transition: background .15s, border-color .15s, transform .12s; }
+.lc-act:hover, .lc-res-i:hover { background: rgba(95, 208, 238, .12); border-color: var(--cyan); }
+.lc-act:active, .lc-res-i:active { transform: translateY(1px); }
+.lc-act-l { display: flex; flex-direction: column; min-width: 0; }
+.lc-act-l b { font-weight: 700; }
+.lc-act-l small { color: var(--dim); font-size: 11.5px; }
+.lc-av { display: inline-flex; flex: none; }
+.lc-exit { min-height: 40px; padding: 6px 12px; border: 1px solid var(--line2); border-radius: 999px; background: rgba(255, 255, 255, .04); color: var(--mut); font: 700 12.5px var(--ui); cursor: pointer; }
+.lc-exit:hover { border-color: var(--cyan); color: var(--ink); }
+.lc-empty { margin: 4px 0; color: var(--dim); font: 400 12.5px var(--ui); }
+.lc-warn { margin: 0 0 8px; padding: 8px 10px; border: 1px solid #5c470e; border-radius: 10px; background: #120d02; color: var(--gold); font: 400 12.5px/1.4 var(--ui); }
+.lc-roster-slot .lobby-roster { min-height: 0; }
+.lc-game { padding: 12px; margin-bottom: 10px; border: 1px solid var(--line2); border-radius: 16px; background: rgba(255, 255, 255, .03); }
+.lc-game h4 { margin: 0 0 4px; font: 700 15px var(--ui); color: var(--ink); }
+.lc-game p { margin: 0 0 6px; font: 400 13px/1.45 var(--ui); color: var(--mut); }
+.lc-meta { color: var(--dim) !important; font-size: 12px !important; }
+.lc-stats { display: flex; gap: 14px; }
+.lc-stats span { color: var(--dim); font: 400 12px var(--ui); }
+.lc-stats b { color: var(--gold); font-weight: 700; }
+.lc-chip { padding: 4px 10px; border: 1px dashed var(--line2); border-radius: 99px; color: var(--dim); font: 700 12px var(--ui); }
+.lc-chip.on { border-style: solid; border-color: var(--teal); color: var(--teal); }
+.lc-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lc-log li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, .03); color: var(--mut); font: 400 12.5px var(--ui); }
+.lc-log time { color: var(--dim); flex: none; }
+.lc-reset { margin-top: 14px; padding: 6px 12px; border: 1px solid var(--line2); border-radius: 999px; background: none; color: var(--dim); font: 700 12px var(--ui); cursor: pointer; }
+.lc-reset:hover { color: var(--red); border-color: var(--red); }
+
+/* ---- world focus: the lounge fills the viewport under the top bar; the canvas takes the largest 16:10 box that fits (--stage-w from JS) ---- */
+body.lounge-world-focus { overflow: hidden; }
+body.lounge-world-focus .btt { display: none; }
+#lobby.screen.active.is-world-focus { position: fixed; left: 0; right: 0; bottom: var(--v6-bar, 0px); top: var(--lounge-top, 0px); z-index: 70; max-width: none; margin: 0; overflow: auto;
+  padding: 10px clamp(10px, 2vw, 28px) calc(12px + var(--console-h, 0px)); animation: none;
+  background: linear-gradient(180deg, #02101a, #020a12); }
+.is-world-focus .lounge-head { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.is-world-focus .lobby-hint { display: none; }
+.is-world-focus .lounge-stage { padding: 6px 8px; background: transparent; border-color: transparent; box-shadow: none; }
+.is-world-focus .lobby-cv-wrap { width: var(--stage-w, 100%); max-width: 100%; margin-inline: auto; }
+.is-world-focus .lounge-console { max-height: calc(100dvh - var(--lounge-top, 0px) - 28px); }
+
+/* ---- small screens: console becomes a bottom sheet over the world ---- */
+@media (max-width: 900px) {
+  #lobby .lounge, body.focusmode #lobby .lounge { grid-template-columns: minmax(0, 1fr); }
+  #lobby.screen.active { padding-bottom: var(--console-h, 0px); }
+  /* #lobby prefix: must out-rank `body.smooth .panel` (translucent background) and `.is-world-focus .lounge-console` (max-height) */
+  #lobby .lounge-console { position: fixed; left: 0; right: 0; bottom: var(--v6-bar, 0px); z-index: 72; min-height: 0; max-height: min(46dvh, 400px); border-radius: 22px 22px 0 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -18px 50px -10px rgba(0, 0, 0, .7);
+    background: linear-gradient(180deg, #0a3448, #051e2c); }   /* opaque: it overlays page text, unlike the translucent .panel */
+  /* room + emote strips scroll sideways instead of wrapping into 3+ rows (the room list will grow) */
+  .lobby-cv-wrap .lg-rooms, .lobby-cv-wrap .lg-emo { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; padding-bottom: 2px; }
+  .lobby-cv-wrap .lg-rooms::-webkit-scrollbar, .lobby-cv-wrap .lg-emo::-webkit-scrollbar { display: none; }
+  .lobby-cv-wrap .lg-rooms > *, .lobby-cv-wrap .lg-emo > * { flex: none; scroll-snap-align: start; }
+  .lounge-ident { display: none; }
+  .lounge-toolbar { flex-wrap: nowrap; }
+  .lounge-kicker { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lounge-tools { margin-left: auto; flex: none; }
+  .lg-tool { min-width: 44px; min-height: 44px; padding: 0 12px; }
+  .lg-tool-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* icon-only on phones; the text stays for screen readers */
+}
+
+@media (prefers-reduced-motion: reduce) { .lg-tool, .lc-act, .lc-res-i { transition: none; } }
+@media print { .lounge-console, .chat-mount { display: none !important; } }

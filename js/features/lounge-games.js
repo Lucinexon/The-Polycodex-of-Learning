@@ -91,7 +91,7 @@ function startOrderUp(opts) {
   function finish(won) {
     if (finished) return; finished = true; clearHold(); setItems(false); ready.hidden = true; again.hidden = false; quit.textContent = 'Close'; $('.lgx-bar').hidden = true;
     say(won ? 'Shift complete! Score ' + core.score + '. ' + who + ' is thrilled.' : 'Out of lives after ' + core.cleared + ' of ' + ROUNDS + ' tickets. Score ' + core.score + '.'); sfx(won ? 'ok' : 'bad'); again.focus();
-    if (opts.onEnd) opts.onEnd(result({ won: won }));
+    const res = result({ won: won }); notify('orderUp', res); if (opts.onEnd) opts.onEnd(res);
   }
   function onKey(e) {
     if (dead) return;
@@ -113,7 +113,7 @@ function startOrderUp(opts) {
   const ctl = {
     core: core, el: el, reduced: reduced, showMs: showMs, get dead() { return dead; },
     /* leave early: reported once as a quit (never as a win/loss) unless the run already ended */
-    quit: function (why) { if (dead) return; const was = finished; this.destroy(); if (!was && opts.onEnd) opts.onEnd(result({ quit: true, aborted: why || '' })); },
+    quit: function (why) { if (dead) return; const was = finished; this.destroy(); if (!was) { const res = result({ quit: true, aborted: why || '' }); notify('orderUp', res); if (opts.onEnd) opts.onEnd(res); } },
     /* release everything this game created; safe to call repeatedly. onClose fires exactly once, on the transition dead→destroyed */
     destroy: function () {
       if (dead) return; dead = true; timers.forEach(t => clearTimeout(t)); timers.clear(); hold = 0;
@@ -126,6 +126,10 @@ function startOrderUp(opts) {
   return ctl;
 }
 
-root.CodexLoungeGames = { orderUp: { start: startOrderUp, Core: Core, ITEMS: ITEMS, ROUNDS: ROUNDS, LIVES: LIVES, showMs: showMs, makeSeq: makeSeq }, list: ['orderUp'] };
+/* result observers (progress ledger, console): fn(gameId, result). Isolated from the game: a throwing observer never affects play or rewards. */
+const OBS = [];
+function notify(id, r) { OBS.slice().forEach(f => { try { f(id, r); } catch (e) { if (root.console) console.error('[lounge-games:observer]', e); } }); }
+function observe(fn) { if (typeof fn === 'function') OBS.push(fn); return () => { const i = OBS.indexOf(fn); if (i >= 0) OBS.splice(i, 1); }; }
+root.CodexLoungeGames = { observe: observe, orderUp: { start: startOrderUp, Core: Core, ITEMS: ITEMS, ROUNDS: ROUNDS, LIVES: LIVES, showMs: showMs, makeSeq: makeSeq }, list: ['orderUp'] };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.CodexLoungeGames;
 })(typeof window !== 'undefined' ? window : globalThis);

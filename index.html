@@ -51,6 +51,7 @@
 <link rel="stylesheet" href="css/v6.css">
 <link rel="stylesheet" href="css/v7.css">
 <link rel="stylesheet" href="css/lounge-play.css">
+<link rel="stylesheet" href="css/lounge-world.css">
 
 <!-- Firebase v10 (compat build) — multiplayer, auth, chat, notebook sync -->
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -106,6 +107,8 @@
 <script defer src="js/features/lounge2.js"></script>
 <script defer src="js/features/lounge-games.js"></script>
 <script defer src="js/features/lounge-play.js"></script>
+<script defer src="js/features/lounge-progress.js"></script>
+<script defer src="js/features/lounge-console.js"></script>
 <script defer src="js/features/v7.js"></script>
 </head>
 <body>
@@ -235,43 +238,64 @@
 
     <!-- ================= OBSERVATION LOUNGE (network.js) ================= -->
     <section id="lobby" class="screen noprintsec" aria-labelledby="h-lobby">
-      <div class="sec-head">
+      <div class="sec-head lounge-head">
         <span class="sec-ic" data-sprite="moon" data-px="36"></span>
         <span><p class="sec-kick">SOCIAL DECK · MULTIPLAYER</p><h2 class="sec-title" id="h-lobby">OBSERVATION LOUNGE</h2>
-        <p class="sec-sub">A quiet observation deck beneath the surface — click the floor to roam, talk on the channels</p></span>
+        <p class="sec-sub">A quiet observation deck beneath the surface — click the floor to roam, open the console for what to do here</p></span>
         <span class="sec-chip" id="lobbyCountChip">— ONLINE</span>
       </div>
 
-      <div class="lobby-grid">
-        <div class="panel lobby-deck-panel">
-          <div class="lobby-deck-head">
-            <span class="panel-kick" style="color:var(--teal)">DECK 07 · ABYSSAL VIEWPORT</span>
-            <span class="small" id="lobbyWhoami">IDENT: —</span>
+      <div class="lobby-grid lounge" id="lounge" data-console="open">
+        <div class="panel lobby-deck-panel lounge-stage" id="loungeStage">
+          <div class="lobby-deck-head lounge-toolbar">
+            <span class="panel-kick lounge-kicker" id="loungeKicker" style="color:var(--teal)">DECK 07 · ABYSSAL VIEWPORT</span>
+            <span class="small lounge-ident" id="lobbyWhoami">IDENT: —</span>
+            <span class="lounge-tools" role="group" aria-label="Lounge view">
+              <button type="button" class="lg-tool" id="loungeConsoleBtn" title="Show or hide the Activity Console" aria-pressed="true" aria-expanded="true" aria-controls="loungeConsole"><span aria-hidden="true">▤</span> <span class="lg-tool-t">Console</span></button>
+              <button type="button" class="lg-tool" id="loungeFocusBtn" title="World focus: give the lounge the whole screen" aria-pressed="false"><span aria-hidden="true">⤢</span> <span class="lg-tool-t">Focus</span></button>
+            </span>
           </div>
           <div class="lobby-cv-wrap">
             <canvas id="loungeCanvas" width="480" height="300" aria-label="2D observation lounge — click the floor to move your character"></canvas>
           </div>
           <p class="small lobby-hint">TAP / CLICK THE DECK TO WALK · OPERATORS APPEAR AND VANISH LIVE · ONLY OPEN WHILE THIS SCREEN SHOWS</p>
-          <div class="lobby-roster" id="lobbyRoster"><span class="small">Scanning for operators…</span></div>
         </div>
 
-        <div class="panel lobby-chat-panel">
+        <aside class="panel lounge-console" id="loungeConsole" aria-labelledby="loungeConsoleTitle">
+          <div class="lc-head">
+            <h3 class="lc-title" id="loungeConsoleTitle">Activity Console</h3>
+            <button type="button" class="lg-tool lc-close" id="loungeConsoleClose" aria-label="Close Activity Console">✕</button>
+          </div>
+          <div class="lc-tabs" id="lcTabs" role="tablist" aria-label="Console sections"></div>
+          <div class="lc-body" id="lcBody"></div>
+          <div class="lc-foot">
+            <div class="chat-admin" id="chatAdminBar" hidden>
+              <input id="adminBroadcastIn" type="text" maxlength="120" autocomplete="off" placeholder="⚑ Global system broadcast…">
+              <button class="btn" id="adminBroadcastBtn">BROADCAST</button>
+              <span class="chat-audit" id="adminAudit">ACCOUNTS: — · ACTIVE: —</span>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Roster lives in the console's Room tab (lounge-console.js moves it there); before that script runs it just sits here. -->
+        <div class="lobby-roster" id="lobbyRoster"><span class="small">Scanning for operators…</span></div>
+      </div>
+
+      <!-- Messaging UI is the chat dock (social.js). The legacy lounge chat DOM is kept, hidden, because network.js ChatEngine still
+           renders into it (speech-bubble feed, render contract) — it is not a second visible chat. -->
+      <div class="chat-mount" id="chatEngineMount" hidden aria-hidden="true">
+        <div class="lobby-chat-panel">
           <div class="chat-channels" id="chatChannels" role="tablist" aria-label="Chat channels">
-            <button class="chtab on" data-ch="global" role="tab" aria-selected="true">Everyone</button>
-            <button class="chtab" data-ch="essay" role="tab" aria-selected="false">Room chat</button>
-            <button class="chtab" data-ch="study" role="tab" aria-selected="false">Study rooms</button>
-            <button class="chtab" data-ch="dm" role="tab" aria-selected="false">Direct</button>
+            <button class="chtab on" data-ch="global" role="tab" aria-selected="true" tabindex="-1">Everyone</button>
+            <button class="chtab" data-ch="essay" role="tab" aria-selected="false" tabindex="-1">Room chat</button>
+            <button class="chtab" data-ch="study" role="tab" aria-selected="false" tabindex="-1">Study rooms</button>
+            <button class="chtab" data-ch="dm" role="tab" aria-selected="false" tabindex="-1">Direct</button>
           </div>
           <div class="chat-subchips" id="chatSubchips" hidden></div>
-          <div class="chat-log" id="chatLog" aria-live="polite"><div class="chat-sys">Booting comms…</div></div>
+          <div class="chat-log" id="chatLog" aria-live="off"><div class="chat-sys">Booting comms…</div></div>
           <div class="chat-input-row">
-            <textarea id="chatInput" rows="1" maxlength="240" autocomplete="off" placeholder="Message #global…" aria-label="Message"></textarea>
-            <button class="btn primary" id="chatSend">SEND</button>
-          </div>
-          <div class="chat-admin" id="chatAdminBar" hidden>
-            <input id="adminBroadcastIn" type="text" maxlength="120" autocomplete="off" placeholder="⚑ Global system broadcast…">
-            <button class="btn" id="adminBroadcastBtn">BROADCAST</button>
-            <span class="chat-audit" id="adminAudit">ACCOUNTS: — · ACTIVE: —</span>
+            <textarea id="chatInput" rows="1" maxlength="240" autocomplete="off" placeholder="Message #global…" aria-label="Message" tabindex="-1"></textarea>
+            <button class="btn primary" id="chatSend" tabindex="-1">SEND</button>
           </div>
           <p class="small chat-note" id="chatNote">1s rate limit per message · history self-destructs after 7 days · the latest 250 messages are kept</p>
         </div>

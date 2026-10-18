@@ -139,8 +139,11 @@ function userCard(btn) {
 /* ---------- the dock ---------- */
 let CONV = ld('cx_v7_convs', {}), LAST = ld('cx_v7_last', {}), INBOX = [], firstSnap = true, inboxUn = null;
 const D = { open: false, view: 'list', cid: null, unsub: null, docs: [], reply: null, search: false, emo: false, err: 0 };
+const TOPICS = () => (NE().ChatEngine && NE().ChatEngine.TOPICS) || ['astronomy', 'physics', 'gaming-lore', 'mathematics', 'history', 'psychology'];
+const studyTopic = t => (TOPICS().indexOf(t) >= 0 ? t : TOPICS()[0]);   /* never build a collection path from an unvalidated cid */
 function convo(cid) {
   if (cid === 'g') return { id: 'g', kind: 'room', label: 'Everyone', col: () => DBr() && DBr().collection('chat_global') };
+  if (cid.indexOf('s:') === 0) { const tp = studyTopic(cid.slice(2)); return { id: 's:' + tp, kind: 'room', label: 'Study · ' + tp, col: () => DBr() && DBr().collection('chat_study_' + tp) }; }
   if (cid.indexOf('r:') === 0) return { id: cid, kind: 'room', label: 'Room ' + cid.slice(2), col: () => DBr() && DBr().collection('chat_essay_' + cid.slice(2)) };
   const uid = cid.slice(3), c = CONV[uid] || {};
   return { id: cid, kind: 'dm', label: c.n || 'Operator', peer: { uid: uid, name: c.n, av: c.av }, col: () => { if (!DBr() || !AM().uid) return null; return DBr().collection('chat_dm_' + [AM().uid, uid].sort().join('_')); } };
@@ -156,7 +159,7 @@ function listen(cv) {
 }
 function shell() {
   if ($1('#cxDock')) return;
-  document.body.insertAdjacentHTML('beforeend', '<section id="cxDock" class="dk" role="dialog" aria-label="Chats" hidden><header class="dk-h"><button type="button" data-dk="back" aria-label="Back">‹</button><b class="dk-t">Chats</b><button type="button" data-dk="search" aria-label="Search in chat">🔍</button><button type="button" data-dk="close" aria-label="Close chats">✕</button></header><div class="dk-body"></div></section>');
+  document.body.insertAdjacentHTML('beforeend', '<section id="cxDock" class="dk" role="dialog" aria-label="Chats" hidden><header class="dk-h"><button type="button" data-dk="back" aria-label="Back">‹</button><b class="dk-t">Chats</b><button type="button" data-dk="catch" aria-label="Catch up: summarize recent messages" title="Catch up" hidden>✦</button><button type="button" data-dk="search" aria-label="Search in chat">🔍</button><button type="button" data-dk="close" aria-label="Close chats">✕</button></header><div class="dk-body"></div></section>');
   $1('#cxDock').addEventListener('click', onDock);
 }
 function open(view, cid) {
@@ -175,11 +178,11 @@ function listHTML() {
   const dms = Object.keys(CONV).sort((a, b) => (CONV[b].ts || 0) - (CONV[a].ts || 0));
   const row = (cid, name, sub, av, un) => '<button type="button" class="dk-r" data-dk="open" data-c="' + esc(cid) + '"><span class="dk-ico">' + (av && window.CodexAvatar ? CodexAvatar.el(av, 40, 'sq') : (cid === 'g' ? '🌊' : '🪐')) + '</span><span class="dk-rt"><b>' + esc(name) + '</b><small>' + esc(sub || '') + '</small></span>' + (un ? '<i class="dk-un">' + un + '</i>' : '') + '</button>';
   const gate = AM().user && !AM().mailOK() ? '<div class="dk-gate">🔒 <b>Direct messages</b> need a verified email or Google link. <button type="button" class="ac-link" data-dk="acct">Set up</button></div>' : '';
-  return '<button type="button" class="btn primary dk-new" data-dk="new">＋ New message</button>' + gate + rows.map(r => row(r[0], r[1], r[2], '', 0)).join('') + '<h5 class="dk-sec">Direct messages</h5>' + (dms.length ? dms.map(u => row('dm:' + u, CONV[u].n || 'Operator', CONV[u].t || 'No messages yet', CONV[u].av || (window.CodexAvatar ? CodexAvatar.forName(CONV[u].n || 'op') : ''), unread(u))).join('') : '<p class="small dk-empty">No conversations yet. Start one with ＋ New message, or click a name in chat.</p>');
+  return '<button type="button" class="btn primary dk-new" data-dk="new">＋ New message</button>' + gate + rows.map(r => row(r[0], r[1], r[2], '', 0)).join('') + '<h5 class="dk-sec">Study rooms</h5>' + TOPICS().map(tp => row('s:' + tp, 'Study · ' + tp, 'Topic room', '', 0)).join('') + '<h5 class="dk-sec">Direct messages</h5>' + (dms.length ? dms.map(u => row('dm:' + u, CONV[u].n || 'Operator', CONV[u].t || 'No messages yet', CONV[u].av || (window.CodexAvatar ? CodexAvatar.forName(CONV[u].n || 'op') : ''), unread(u))).join('') : '<p class="small dk-empty">No conversations yet. Start one with ＋ New message, or click a name in chat.</p>');
 }
 function paintDock() {
   const d = $1('#cxDock'); if (!d || !D.open) return; const body = $1('.dk-body', d), cv = D.cid && convo(D.cid);
-  $1('.dk-t', d).textContent = D.view === 'chat' && cv ? cv.label : D.view === 'new' ? 'New message' : 'Chats'; $1('[data-dk=back]', d).hidden = D.view === 'list'; $1('[data-dk=search]', d).hidden = D.view !== 'chat';
+  $1('.dk-t', d).textContent = D.view === 'chat' && cv ? cv.label : D.view === 'new' ? 'New message' : 'Chats'; $1('[data-dk=back]', d).hidden = D.view === 'list'; $1('[data-dk=search]', d).hidden = D.view !== 'chat'; { const cb = $1('[data-dk=catch]', d); if (cb) cb.hidden = D.view !== 'chat' || !window.CodexGuide; }
   if (D.view === 'list') { body.innerHTML = '<div class="dk-list">' + listHTML() + '</div>'; return; }
   if (D.view === 'new') { if (!$1('#dkQ', body)) { body.innerHTML = '<div class="dk-find"><input id="dkQ" type="search" placeholder="Search a username…" autocomplete="off" aria-label="Find a person"><div id="dkRes" class="dk-list"><p class="small dk-empty">Type at least 2 letters.</p></div></div>'; const q = $1('#dkQ', body); let t = 0; q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => AM().lookup(q.value, rs => { $1('#dkRes').innerHTML = rs.length ? rs.map(r => '<button type="button" class="dk-r" data-dk="pick" data-u="' + esc(r.uid) + '" data-n="' + esc(r.name) + '" data-av="' + esc(r.avatar || '') + '"><span class="dk-ico">' + CodexAvatar.el(r.avatar || CodexAvatar.forName(r.name), 40, 'sq') + '</span><span class="dk-rt"><b>' + esc(r.name) + '</b><small>Level ' + (r.level || 1) + '</small></span></button>').join('') : '<p class="small dk-empty">No one found. Names must match exactly the start of a username.</p>'; }), 260); }); setTimeout(() => q.focus(), 40); } return; }
   if (!$1('.dk-log', body)) {
@@ -217,6 +220,7 @@ function onDock(e) {
   if (a === 'open') { const cid = b.dataset.c; if (cid.indexOf('dm:') === 0 && !AM().mailOK()) { toast('<b>Add an email to unlock DMs</b>', 'speech'); if (window.CodexAccount) CodexAccount.open('email'); return; } D.view = 'chat'; D.cid = cid; D.reply = null; return open('chat', cid); }
   if (a === 'pick') return openDM(b.dataset.u, b.dataset.n, b.dataset.av);
   if (a === 'search') { const s = $1('.dk-sbar'); if (s) { s.hidden = !s.hidden; if (!s.hidden) $1('#dkS').focus(); else { $1('#dkS').value = ''; $1('.dk-log').dataset.q = ''; paintDock(); } } return; }
+  if (a === 'catch') { const cv = D.cid && convo(D.cid), m = (D.docs || []).filter(x => x.k !== 'r' && x.t && !x.deleted).slice(-40).map(x => ({ n: x.n, t: x.t })); if (!m.length) { toast('<b>Nothing to summarize yet.</b>', 'speech', 2000); return; } if (window.CodexGuide) CodexGuide.run('catchup', { chat: m, channel: cv ? cv.label : 'chat' }); return; }
   if (a === 'send') return dockSend();
   if (a === 'emoT') { const m = $1('.dk-emo'); if (m) m.hidden = !m.hidden; return; }
   if (a === 'emo') { const i = $1('#dkIn'); i.value += b.dataset.e; i.focus(); i.dispatchEvent(new Event('input')); }
