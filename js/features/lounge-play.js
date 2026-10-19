@@ -182,12 +182,15 @@ function openDialog(npcId) {
   el.querySelector('.lgd-n').textContent = npc.n; el.querySelector('.lgd-r').textContent = npc.tag + ' · ' + (L.me.room === a.r && root.CodexLounge && root.CodexLounge.ROOMS[a.r] ? root.CodexLounge.ROOMS[a.r].n : '');
   if (root.CodexAvatar) el.querySelector('.lgd-av').innerHTML = root.CodexAvatar.el(a.av, 56, 'sq');
   const txt = el.querySelector('.lgd-t'), chat = el.querySelector('[data-d=chat]'); txt.textContent = scripted(npc, 'greet');
+  const W = root.CodexLoungeWorld, ql = W && W.npcLine ? W.npcLine(npc.id) : null;   /* progression is deterministic: the current objective is stated every time, not left to random dialogue */
+  if (ql) { txt.textContent = ql.text; if (ql.go) { const go = document.createElement('button'); go.type = 'button'; go.className = 'btn'; go.dataset.d = 'go'; go.dataset.room = ql.go; go.textContent = ql.goLabel || 'Show me'; el.querySelector('.lgd-a').insertBefore(go, el.querySelector('[data-d=bye]')); } }
   const d = DLG = { el: el, npc: npc, seq: 0, dead: false, key: e => { if (e.key === 'Escape' && !GAME) { e.preventDefault(); e.stopPropagation(); closeDialog(); } } };
   document.addEventListener('keydown', d.key, true);
   el.addEventListener('click', e => {
     const b = e.target.closest('[data-d]'); if (!b || d.dead) return; const k = b.dataset.d;
     if (k === 'bye') { if (root.sfx) root.sfx('click'); closeDialog(); }
     else if (k === 'game') playGame(npc);
+    else if (k === 'go') { const rm = b.dataset.room; closeDialog(); if (root.CodexLoungeWorld) root.CodexLoungeWorld.goTo(rm); }
     else if (k === 'chat') {
       const my = ++d.seq; chat.disabled = true; el.setAttribute('aria-busy', 'true'); txt.textContent = '…';
       encounter(npc, (root.CodexLounge && root.CodexLounge.ROOMS[a.r] ? root.CodexLounge.ROOMS[a.r].n : a.r) + ', ' + partOfDay(Date.now())).then(r => {

@@ -111,3 +111,42 @@ body.lounge-world-focus .btt { display: none; }
 
 @media (prefers-reduced-motion: reduce) { .lg-tool, .lc-act, .lc-res-i { transition: none; } }
 @media print { .lounge-console, .chat-mount { display: none !important; } }
+
+/* ---- in-stage info card (.lgi): the one feedback surface for world interactions ---- */
+.lgi { position: absolute; z-index: 6; left: 8px; right: 8px; top: 8px; max-height: 70%; display: flex; flex-direction: column; gap: 8px; overflow: hidden; padding: 12px 14px;
+  border: 1px solid var(--cyan); border-radius: 16px; background: linear-gradient(180deg, rgba(6, 34, 48, .97), rgba(4, 22, 34, .98)); box-shadow: 0 14px 40px -8px rgba(0, 0, 0, .7); animation: lgiIn .18s ease-out; }
+@keyframes lgiIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.lgi-h { display: flex; align-items: center; gap: 10px; }
+.lgi-ic { font-size: 26px; line-height: 1; }
+.lgi-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lgi-t small { font: 700 10.5px var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--teal); }
+.lgi-t b { font: 700 16px var(--ui); color: var(--ink); }
+.lgi-x { width: 36px; height: 36px; border: 1px solid var(--line2); border-radius: 50%; background: none; color: var(--mut); cursor: pointer; font: 700 14px var(--ui); }
+.lgi-x:hover { color: var(--ink); border-color: var(--cyan); }
+.lgi-b { display: flex; gap: 14px; align-items: flex-start; overflow: auto; min-height: 0; }
+.lgi-svg { flex: none; }
+.lgi-p { flex: 1; min-width: 0; font: 400 13.5px/1.5 var(--ui); color: var(--mut); }
+.lgi-p p { margin: 0 0 8px; } .lgi-p ol { margin: 0 0 8px; padding-left: 20px; } .lgi-p li { margin-bottom: 3px; }
+.lgi-fact { color: var(--gold); }
+.lgi-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lgi-n { color: var(--dim); font: 700 12px var(--ui); }
+.lgi button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+@media (max-width: 560px) { .lgi-b { flex-direction: column; } }
+@media (prefers-reduced-motion: reduce) { .lgi { animation: none; } }
+
+/* ---- console: quests, collection, sub-room crumb ---- */
+.lc-quest { padding: 12px; margin-bottom: 10px; border: 1px solid var(--line2); border-radius: 16px; background: rgba(255, 255, 255, .03); }
+.lc-quest.done { opacity: .72; }
+.lc-quest h4 { margin: 0 0 4px; font: 700 14.5px var(--ui); color: var(--ink); }
+.lc-quest p { margin: 0 0 8px; font: 400 13px/1.45 var(--ui); color: var(--mut); }
+.lc-tick { color: var(--teal); }
+.lc-prog { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; margin: 2px 0 6px; }
+.lc-prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--teal)); border-radius: 99px; transition: width .4s ease; }
+.lc-quest .lc-meta { margin-bottom: 8px; }
+.lc-coll { margin: 4px 0; border: 1px solid var(--line2); border-radius: 12px; padding: 6px 10px; }
+.lc-coll summary { cursor: pointer; color: var(--mut); font: 700 12.5px var(--ui); min-height: 28px; display: flex; align-items: center; gap: 8px; }
+.lc-coll summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.lc-coll p { margin: 6px 0; font: 400 12.5px/1.45 var(--ui); color: var(--mut); }
+.lc-coll b { color: var(--ink); }
+.lg-crumb { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 99px; border: 1px dashed var(--gold); color: var(--gold); font: 700 12px var(--ui); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .lc-prog i { transition: none; } }

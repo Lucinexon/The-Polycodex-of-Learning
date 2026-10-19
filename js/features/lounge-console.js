@@ -113,7 +113,7 @@ function fit() {
 
 /* ---------- Escape policy ---------- */
 const visible = n => !!(n && n.getClientRects && n.getClientRects().length);
-function otherLayerOpen() { return $A('.lgx,.lgd,.modal,[role="dialog"],[aria-modal="true"]').some(visible); }
+function otherLayerOpen() { return $A('.lgx,.lgd,.lgi,.modal,[role="dialog"],[aria-modal="true"]').some(visible); }
 function typing(t) { return !!(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)); }
 function onKey(e) {
   if (e.key !== 'Escape' || e.defaultPrevented || !lobbyActive() || typing(e.target) || otherLayerOpen()) return;
@@ -138,13 +138,13 @@ const roomTab = {
     }
     const id = L.room(), r = L.ROOMS[id] || {}, hot = (L.HOT[id] || []);
     $1('.lc-room-ic', p).textContent = r.i || ''; $1('.lc-room-name', p).textContent = r.n || id; $1('.lc-room-kick', p).textContent = r.k || ''; $1('.lc-desc', p).textContent = r.d || '';
-    const seats = hot.filter(h => h.t === 'seat'), acts = hot.filter(h => h.t !== 'seat' && h.t !== 'npc' && h.l);
-    setHTML($1('.lc-things', p), (acts.length || seats.length ? acts.map(h => '<button type="button" class="lc-act" data-hot="' + esc(h.id) + '" data-fk="h:' + esc(h.id) + '"><span aria-hidden="true">' + (ICON[h.t] || '•') + '</span><span class="lc-act-l"><b>' + esc(h.l) + '</b><small>' + esc(VERB[h.t] || 'Go') + '</small></span></button>').join('') +
+    const seats = hot.filter(h => h.t === 'seat'), acts = hot.filter(h => h.t !== 'seat' && h.t !== 'npc' && h.t !== 'door' && h.l), lbl = h => (L.label ? L.label(h) : h.l);
+    setHTML($1('.lc-things', p), (acts.length || seats.length ? acts.map(h => '<button type="button" class="lc-act" data-hot="' + esc(h.id) + '" data-fk="h:' + esc(h.id) + '"><span aria-hidden="true">' + (h.icon || ICON[h.t] || '•') + '</span><span class="lc-act-l"><b>' + esc(lbl(h)) + '</b><small>' + esc(h.verb || VERB[h.t] || 'Go') + '</small></span></button>').join('') +
       (seats.length ? '<button type="button" class="lc-act" data-hot="' + esc(seats[0].id) + '" data-fk="h:seat"><span aria-hidden="true">🪑</span><span class="lc-act-l"><b>Sit down</b><small>' + seats.length + ' seat' + (seats.length > 1 ? 's' : '') + ' here</small></span></button>' : '') : '<p class="lc-empty">Nothing to interact with here yet.</p>'));
     const npcs = (L.who ? L.who(id) : []).filter(w => w.npc);
     setHTML($1('.lc-res', p), npcs.length ? npcs.map(n => '<button type="button" class="lc-res-i" data-hot="' + esc(n.uid) + '" data-fk="n:' + esc(n.uid) + '"><span class="lc-av">' + (root.CodexAvatar && n.code ? root.CodexAvatar.el(n.code, 28, 'sq') : '') + '</span><span class="lc-act-l"><b>' + esc(n.n) + '</b><small>' + esc(n.tag || 'Resident') + ' · talk</small></span></button>').join('') : '<p class="lc-empty">No one is on shift here right now.</p>');
-    const keys = ['prev', 'next'].map(k => r[k]).filter((v, i, a) => v && L.ROOMS[v] && a.indexOf(v) === i);
-    setHTML($1('.lc-exits', p), keys.map(k => '<button type="button" class="lc-exit" data-room="' + k + '" data-fk="r:' + k + '">' + esc(L.ROOMS[k].i) + ' ' + esc(L.ROOMS[k].n) + '</button>').join(''));
+    const keys = ['prev', 'next'].map(k => r[k]).concat(hot.filter(h => h.t === 'door').map(h => h.to)).filter((v, i, a) => v && L.ROOMS[v] && a.indexOf(v) === i);
+    setHTML($1('.lc-exits', p), keys.map(k => { const lk = L.lockOf ? L.lockOf(k) : null; return '<button type="button" class="lc-exit" data-room="' + k + '" data-fk="r:' + k + '"' + (lk ? ' title="' + esc(lk) + '"' : '') + '>' + (lk ? '\uD83D\uDD12 ' : '') + esc(L.ROOMS[k].i) + ' ' + esc(L.ROOMS[k].n) + '</button>'; }).join(''));
   }
 };
 
@@ -173,7 +173,7 @@ const journalTab = {
     const when = t => { if (!t) return ''; const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
     const note = P.status() === 'newer' ? '<p class="lc-warn">This journal was saved by a newer version of the site. It is shown empty and left untouched.</p>' : P.status() === 'recovered' ? '<p class="lc-warn">Your saved journal was unreadable, so a fresh one was started (a backup copy was kept).</p>' : '';
     setHTML(p, note + '<h4 class="lc-h">Rooms explored <span class="lc-count">' + seen.length + '/' + ids.length + '</span></h4><div class="lc-chips">' + ids.map(k => '<span class="lc-chip' + (seen.includes(k) ? ' on' : '') + '">' + esc(L.ROOMS[k].i) + ' ' + esc(L.ROOMS[k].n) + '</span>').join('') + '</div>' +
-      '<h4 class="lc-h">Activity</h4><p class="lc-stats"><span>Seats <b>' + d.stats.sits + '</b></span><span>Emotes <b>' + d.stats.emotes + '</b></span></p>' +
+      (root.CodexLoungeWorld ? root.CodexLoungeWorld.collectionHTML(d) : '') + '<h4 class="lc-h">Activity</h4><p class="lc-stats"><span>Seats <b>' + d.stats.sits + '</b></span><span>Emotes <b>' + d.stats.emotes + '</b></span></p>' +
       '<h4 class="lc-h">Recent</h4>' + (d.log.length ? '<ol class="lc-log">' + d.log.slice().reverse().slice(0, 12).map(e => '<li><span>' + esc(e.x) + '</span><time>' + when(e.t) + '</time></li>').join('') + '</ol>' : '<p class="lc-empty">Nothing yet — explore, sit down, try a game.</p>') +
       '<button type="button" class="lc-reset" data-act="reset" data-fk="reset">Clear journal</button>');
     if (!p.__bound) { p.__bound = 1; p.addEventListener('click', e => { if (e.target.closest('[data-act="reset"]') && root.confirm('Clear your lounge journal? Rooms explored, activity and game records will be erased on this device.')) { P.reset(); } }); }
@@ -183,7 +183,7 @@ const journalTab = {
 function onAct(e) {
   const L = LG(); if (!L) return; const h = e.target.closest('[data-hot]'), r = e.target.closest('[data-room]');
   if (h) { if (L.walkTo(h.dataset.hot) && mobile()) setConsole(false, { restoreFocus: true }); }
-  else if (r) { L.setRoom(r.dataset.room); }
+  else if (r) { L.setRoom(r.dataset.room, { from: L.room() }); }
 }
 
 /* ---------- public API ---------- */

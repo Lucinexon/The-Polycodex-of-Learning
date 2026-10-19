@@ -1163,7 +1163,7 @@ const SB_OK = (function () {
 function clampN(v, lo, hi, d) { v = +v; return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; }
 
 /* ---- V8: appearance + interaction state riding on presence ----------------------------------------------
-   Compact fields only (no images, no frames): av = avatar code, r = room id, pz = seat id (''=standing), jk = jukebox, em = {k,ts} emote,
+   Compact fields only (no images, no frames): av = avatar code, r = main room id, sr = optional sub-room id (validated against the local registry), pz = seat id (''=standing), jk = jukebox, em = {k,ts} emote,
    d = facing. LoungeEngine.extra() (set by lounge2.js) supplies them; everything received is sanitised here before it touches game state.
    Clients that predate this simply ignore the extra fields; missing fields fall back to the old behaviour. */
 function extraOut() { try { const e = LoungeEngine.extra ? LoungeEngine.extra() : null; return e && typeof e === 'object' ? e : {}; } catch (x) { return {}; } }
@@ -1171,6 +1171,7 @@ function readExtra(d) {
   const o = { pose: 0, pz: '', jk: d.jk ? 1 : 0 };
   if (typeof d.av === 'string' && /^[0-9a-z.]{3,80}$/.test(d.av)) o.av = d.av;
   if (typeof d.r === 'string' && /^[a-z]{2,12}$/.test(d.r)) o.r = d.r;
+  o.sr = (typeof d.sr === 'string' && /^[a-z]{2,12}$/.test(d.sr)) ? d.sr : '';     // optional sub-room name; lounge2.js only honours it if its registry lists it under `r` (older clients ignore it and show the player in `r`)
   if (typeof d.pz === 'string' && /^[a-z0-9]{1,8}$/.test(d.pz)) { o.pz = d.pz; o.pose = 1; }
   if (d.d === 1 || d.d === -1) o.d = d.d;
   o.em = (d.em && typeof d.em === 'object' && /^[a-z]{2,8}$/.test(String(d.em.k)) && isFinite(+d.em.ts)) ? { k: String(d.em.k), ts: +d.em.ts } : null;
@@ -1178,7 +1179,7 @@ function readExtra(d) {
 }
 function applyExtra(n, prev, d, x, y) {
   const ex = readExtra(d); Object.assign(n, ex);
-  if (prev && prev.r && ex.r && prev.r !== ex.r) { n.x = n.cx = x; n.y = n.cy = y; n.walk = false; }   // changed room: appear at the entry spot instead of gliding across
+  if (prev && prev.r && ex.r && ((prev.sr || prev.r) !== (ex.sr || ex.r))) { n.x = n.cx = x; n.y = n.cy = y; n.walk = false; }   // changed room: appear at the entry spot instead of gliding across
   if (ex.d && (ex.pose || !prev)) n.dir = ex.d;                                                          // seated / newly seen: take the announced facing
 }
 

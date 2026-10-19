@@ -63,11 +63,14 @@ test.describe('desktop layout', () => {
   test('tabs are a real tablist: arrow keys move selection, only the active panel is shown', async ({ page }) => {
     await boot(page);
     await page.locator('#lcTab-room').focus();
+    await page.keyboard.press('ArrowRight');                                         // tab order: Room, Quests, Games, Journal
+    await expect(page.locator('#lcTab-quests')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#lcTab-quests')).toBeFocused();
+    await expect(page.locator('#lcPanel-quests')).toBeVisible();
+    await expect(page.locator('#lcPanel-room')).toBeHidden();
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('#lcTab-games')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#lcTab-games')).toBeFocused();
     await expect(page.locator('#lcPanel-games')).toBeVisible();
-    await expect(page.locator('#lcPanel-room')).toBeHidden();
     await page.keyboard.press('End');
     await expect(page.locator('#lcTab-journal')).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Home');
@@ -286,9 +289,9 @@ test.describe('progress ledger', () => {
     expect(d.log.filter(e => e.k === 'room')).toHaveLength(3);
     expect(d.log.filter(e => e.k === 'game').length).toBe(3);
     await page.locator('#lcTab-journal').click();
-    await expect(page.locator('#lcPanel-journal .lc-count').first()).toHaveText('3/4');
+    await expect(page.locator('#lcPanel-journal .lc-count').first()).toHaveText('3/8');
     page.once('dialog', dlg => dlg.accept());
     await page.locator('#lcPanel-journal [data-act="reset"]').click();
-    await expect(page.locator('#lcPanel-journal .lc-count').first()).toHaveText('0/4');
+    await expect(page.locator('#lcPanel-journal .lc-count').first()).toHaveText('0/8');
   });
 });
