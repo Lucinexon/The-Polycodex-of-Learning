@@ -255,8 +255,9 @@ test.describe('progress ledger', () => {
     expect(await page.evaluate(() => window.CodexLoungeProgress.get().games.orderUp.best)).toBe(141);
     expect(await page.evaluate(() => localStorage.getItem('cx_lounge_v1'))).toBe(legacy);
     await page.locator('#lcTab-games').click();
-    await expect(page.locator('#lcPanel-games .lc-game')).toContainText('Order Up');
-    await expect(page.locator('#lcPanel-games .lc-stats')).toContainText('141');
+    const card = page.locator('#lcPanel-games .lc-game', { hasText: 'Order Up' });      // the tab now lists every registered game
+    await expect(card).toHaveCount(1);
+    await expect(card.locator('.lc-stats')).toContainText('141');
   });
 
   test('visiting rooms and game results are recorded: a real lost run via the UI, a synthetic win, and a no-progress quit', async ({ page }) => {

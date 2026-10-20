@@ -203,7 +203,39 @@ function registerWorld() {
       const how = { caesar: 'To decode: slide every letter BACK by the shift. Try each shift until words appear, or use a clue that tells you the shift.', atbash: 'To decode: swap each letter with its mirror (A\u2194Z, B\u2194Y, C\u2194X \u2026). Applying it twice gives back the original.', rail: 'To decode: count the zigzag. Fill the top rail first, then the next, and read the zigzag path back down and up.', vigenere: 'To decode: line the keyword up under the text and shift each letter back by its keyword letter (A=0, B=1, \u2026).' };
       a.info({ title: 'Rare book case', icon: '\ud83d\udcda', onView: (i, p) => a.discover(CIPHERS[i]), pages: CIPHERS.map(id => ({ title: DISC[id].n, kicker: 'Method', icon: '\ud83d\udcdc', html: '<p>' + esc(DISC[id].fact) + '</p><p class="lgi-fact">' + esc(how[id]) + '</p>' })) });
     } });
+  /* ---- game launchers: one per side room, each a different presentation ---- */
+  defIx({ id: 'bigscope', room: 'dome', hot: { x: 262, y: 70, w: 62, h: 130, sx: 300, sy: 214 }, l: 'Dome telescope', verb: 'Celestial Survey', icon: '\ud83d\udd2d', requires: () => (root.CodexLoungeGames && root.CodexLoungeGames.survey ? null : 'The survey is not available.'), run: () => launchGame('survey') });
+  defIx({ id: 'pass', room: 'kitchen', hot: { x: 338, y: 84, w: 130, h: 104, sx: 400, sy: 214 }, l: 'Ticket rail', verb: 'Order Up shifts', icon: '\ud83c\udf7d\ufe0f',
+    run(a) {
+      const t = GT('orderUp'), tiers = gameTiers('orderUp'), best = (P() && P().get().games.orderUp || {}).best | 0;
+      a.info({ title: 'Ticket rail', icon: '\ud83c\udf7d\ufe0f', pages: [{ title: 'Pick a shift', kicker: 'Order Up \u00b7 best ' + best, icon: '\u2615', html: '<p>Memorise the ticket, then plate it in order. Classic is six tickets. <b>Lunch Rush</b> adds rush timers, allergy bans and streak bonuses; <b>Chef\u2019s Table</b> adds longer tickets and reversals.</p><p class="lgi-fact">' + (t === 0 ? 'Win a classic shift to open Lunch Rush.' : t === 1 ? 'Win Lunch Rush to open Chef\u2019s Table.' : 'Every shift is open.') + '</p>' }],
+        actions: [{ label: 'Classic shift', primary: true, run: () => launchGame('orderUp', { npc: 'Mira' }) }].concat(tiers.map(x => ({ label: x.name + (x.open ? '' : ' \ud83d\udd12'), run: () => { if (x.open) launchGame('orderUp', { npc: 'Mira', tier: x.tier }); else toast('<b>' + esc(x.name) + ' is locked</b><br>Win the previous shift first.', 'speech', 2400); } }))) });
+    } });
+  defIx({ id: 'terrarium', room: 'conservatory', hot: { x: 200, y: 90, w: 84, h: 100, sx: 240, sy: 214 }, l: 'Terrarium console', verb: 'Ecosystem Keeper', icon: '\ud83e\udeb8', requires: () => (root.CodexLoungeGames && root.CodexLoungeGames.keeper ? null : 'The terrarium is offline.'), run: () => launchGame('keeper') });
+  defIx({ id: 'cipherdesk', room: 'archive', hot: { x: 176, y: 120, w: 128, h: 72, sx: 240, sy: 214 }, l: 'Cipher desk', verb: 'Archive Cipher', icon: '\ud83d\udddd\ufe0f', requires: () => (root.CodexLoungeGames && root.CodexLoungeGames.cipher ? null : 'The desk is empty.'), run: () => launchGame('cipher') });
   return true;
+}
+
+/* ======================= games: launching + one reward path ======================= */
+/* Progress per game is a single number in the ledger (games[id].tier): shifts won (Order Up), charts cleared (survey), tanks stabilised (keeper), cases solved (cipher). */
+const GT = id => gt(led(), id);
+const GM_TIERS = () => root.CodexLoungeGames && root.CodexLoungeGames.orderUp && root.CodexLoungeGames.orderUp.TIERS;
+function launchGame(id, extra) {
+  const Play = root.CodexLoungePlay, GM = root.CodexLoungeGames; if (!Play || !Play.launch || !GM || !GM[id]) return null;
+  const o = Object.assign({ cleared: GT(id) }, extra); if (id === 'keeper') o.forecast = SPECIMENS.filter(isFound).length >= 3;
+  const ctl = Play.launch(id, o); if (!ctl) toast('<b>Finish what you are doing first</b><br>Close the current game or conversation.', 'speech', 2200); return ctl;
+}
+/* Mira's dialogue and the kitchen pass offer the higher Order Up shifts once the previous one has been won */
+function gameTiers(id) { if (id !== 'orderUp') return []; const t = GT('orderUp'), T = GM_TIERS() || {}; return [2, 3].map(n => ({ tier: n, name: T[n] ? T[n].name : 'Shift ' + n, open: t >= n - 1 })); }
+/* Every finished run, from any launcher, lands here (CodexLoungeGames.observe): tier progress, discoveries, first-clear XP through the shared daily cap. Replays pay nothing extra. */
+function settle(id, r) {
+  if (!P() || !r || r.quit || !r.won) return; const before = GT(id); let tier = 0, xp = 0;
+  if (id === 'orderUp') { tier = r.tier || 1; xp = tier > before && tier > 1 ? 6 + 4 * tier : 0; }
+  else if (id === 'survey') { tier = r.level | 0; if (SKY[tier - 1]) discover(SKY[tier - 1].id); xp = tier > before ? 4 + 2 * tier : 0; }
+  else if (id === 'keeper') { tier = r.scenario | 0; xp = tier > before ? 8 + 4 * tier : 0; }
+  else if (id === 'cipher') { tier = r.case | 0; if (CIPHERS[tier - 1]) discover(CIPHERS[tier - 1]); xp = tier > before ? 6 + 3 * tier : 0; }
+  if (tier > before) setTier(id, tier);
+  if (xp && root.CodexLoungePlay && root.CodexLoungePlay.awardXP) { const got = root.CodexLoungePlay.awardXP(xp); if (got) toast('<b>First clear</b> \u00b7 +' + got + ' XP', 'coin', 2400); }
 }
 
 /* ======================= console: Quests tab + collection ======================= */
@@ -235,6 +267,7 @@ function init() {
   if (started) return; const g = G(); if (!g || !g.registerRoom) return; started = true;
   registerWorld(); registerConsole();
   g.handlers.ix = a => runIx(a.ix);
+  if (root.CodexLoungeGames && root.CodexLoungeGames.observe) root.CodexLoungeGames.observe(settle);
   P() && P().onChange(evalQuests);
   g.on('room', () => Info.close(true)); g.on('active', e => { if (!e.on) Info.close(true); else evalQuests(); });
   evalQuests();
@@ -243,7 +276,7 @@ doc.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { if 
 
 root.CodexLoungeWorld = {
   SKY: SKY, DISC: DISC, QUESTS: QUESTS, MAIN: MAIN, SIDE: SIDE, IX: IX, defIx: defIx, runIx: runIx, api: api, info: Info, init: init,
-  discover: discover, isFound: isFound, foundCount: foundCount, setTier: setTier, questState: questState, evalQuests: evalQuests, npcLine: npcLine, goTo: goTo,
+  launchGame: launchGame, gameTiers: gameTiers, settle: settle, discover: discover, isFound: isFound, foundCount: foundCount, setTier: setTier, questState: questState, evalQuests: evalQuests, npcLine: npcLine, goTo: goTo,
   collectionHTML: collectionHTML, starSVG: starSVG, _t: { JUST: JUST }
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.CodexLoungeWorld;

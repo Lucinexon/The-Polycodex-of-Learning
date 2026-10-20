@@ -183,13 +183,14 @@ function openDialog(npcId) {
   if (root.CodexAvatar) el.querySelector('.lgd-av').innerHTML = root.CodexAvatar.el(a.av, 56, 'sq');
   const txt = el.querySelector('.lgd-t'), chat = el.querySelector('[data-d=chat]'); txt.textContent = scripted(npc, 'greet');
   const W = root.CodexLoungeWorld, ql = W && W.npcLine ? W.npcLine(npc.id) : null;   /* progression is deterministic: the current objective is stated every time, not left to random dialogue */
+  if (npc.game && W && W.gameTiers) W.gameTiers(npc.game).forEach(t => { if (t.tier > 1 && t.open) { const tb = document.createElement('button'); tb.type = 'button'; tb.className = 'btn'; tb.dataset.d = 'game'; tb.dataset.tier = t.tier; tb.textContent = t.name; el.querySelector('.lgd-a').insertBefore(tb, el.querySelector('[data-d=bye]')); } });
   if (ql) { txt.textContent = ql.text; if (ql.go) { const go = document.createElement('button'); go.type = 'button'; go.className = 'btn'; go.dataset.d = 'go'; go.dataset.room = ql.go; go.textContent = ql.goLabel || 'Show me'; el.querySelector('.lgd-a').insertBefore(go, el.querySelector('[data-d=bye]')); } }
   const d = DLG = { el: el, npc: npc, seq: 0, dead: false, key: e => { if (e.key === 'Escape' && !GAME) { e.preventDefault(); e.stopPropagation(); closeDialog(); } } };
   document.addEventListener('keydown', d.key, true);
   el.addEventListener('click', e => {
     const b = e.target.closest('[data-d]'); if (!b || d.dead) return; const k = b.dataset.d;
     if (k === 'bye') { if (root.sfx) root.sfx('click'); closeDialog(); }
-    else if (k === 'game') playGame(npc);
+    else if (k === 'game') playGame(npc, +b.dataset.tier || 0);
     else if (k === 'go') { const rm = b.dataset.room; closeDialog(); if (root.CodexLoungeWorld) root.CodexLoungeWorld.goTo(rm); }
     else if (k === 'chat') {
       const my = ++d.seq; chat.disabled = true; el.setAttribute('aria-busy', 'true'); txt.textContent = '…';
@@ -208,11 +209,23 @@ function openDialog(npcId) {
    started on top). onEnd fires once per run for rewards; onClose fires once when the controller is really gone. The identity guard makes
    a stale onClose a no-op and never lets it clear a newer game's controller. */
 function abortGame(why) { if (GAME) { const g = GAME; GAME = null; g.quit(why); } }
-function playGame(npc) {
+/* shared daily XP ceiling for every lounge activity (finishGame uses the same store) */
+function awardXP(raw) {
+  let gain = 0; store.set(d => { const today = new Date().toDateString(); if (d.xp.d !== today) d.xp = { d: today, n: 0 }; gain = clamp(Math.round(raw), 0, Math.max(0, CFG.xpPerDayCap - d.xp.n)); d.xp.n += gain; });
+  if (gain > 0 && typeof root.gainXP === 'function') root.gainXP(gain, true); return gain;
+}
+/* start any registered game as THE current game: teardown, room changes and deactivation destroy it through the same GAME slot as Order Up */
+function launch(id, opts) {
+  const G = root.CodexLoungeGames; if (dead || !G || !G[id] || GAME) return null; closeDialog();
+  let ctl = null; const o = Object.assign({}, opts), userClose = o.onClose;
+  o.onClose = c => { if (GAME === ctl) GAME = null; if (userClose) { try { userClose(c); } catch (e) {} } };
+  ctl = G[id].start(o); GAME = ctl; return ctl;
+}
+function playGame(npc, tier) {
   const G = root.CodexLoungeGames; if (dead || !G || !G[npc.game] || GAME) return; closeDialog();
   let ctl = null;
   ctl = G[npc.game].start({
-    npc: npc.n,
+    npc: npc.n, tier: tier > 1 ? tier : undefined,
     onEnd: r => finishGame(npc, r),
     onClose: () => { if (GAME === ctl) GAME = null; }
   });
@@ -271,7 +284,7 @@ function teardown() {
 
 document.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { if (root.console) console.error('[lounge-play]', e); } });
 root.CodexLoungePlay = {
-  config: CFG, npcs: NPCS, ai: { stats: () => AIG.stats(), gate: AIG, encounter: encounter }, openDialog: openDialog, closeDialog: closeDialog, teardown: teardown,
+  config: CFG, npcs: NPCS, ai: { stats: () => AIG.stats(), gate: AIG, encounter: encounter }, openDialog: openDialog, closeDialog: closeDialog, teardown: teardown, launch: launch, awardXP: awardXP, current: () => GAME,
   _t: { stateAt: stateAt, AIG: AIG, encounter: encounter, cleanText: cleanText, store: store, scripted: scripted, lookCode: lookCode, init: init, setRng: f => { rng = f || Math.random; }, resetSession: () => { AIG.s = { calls: 0, last: -Infinity, byNpc: {}, busy: false }; } }
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.CodexLoungePlay;

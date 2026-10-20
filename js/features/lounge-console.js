@@ -36,6 +36,7 @@ function registerTab(t) {
   TABS.push({ id: t.id, label: String(t.label || t.id), order: t.order | 0, render: t.render, badge: t.badge });
   TABS.sort((a, b) => a.order - b.order); if (st.ready) buildTabs(); return true;
 }
+function unregisterTab(id) { const i = TABS.findIndex(x => x.id === id); if (i < 0) return false; TABS.splice(i, 1); if (st.tab === id) st.tab = TABS.some(t => t.id === 'room') ? 'room' : (TABS[0] ? TABS[0].id : 'room'); if (st.ready) buildTabs(); return true; }
 function buildTabs() {
   if (!el.tabs) return;
   if (!TABS.some(t => t.id === st.tab) && TABS.length) st.tab = TABS[0].id;
@@ -113,7 +114,7 @@ function fit() {
 
 /* ---------- Escape policy ---------- */
 const visible = n => !!(n && n.getClientRects && n.getClientRects().length);
-function otherLayerOpen() { return $A('.lgx,.lgd,.lgi,.modal,[role="dialog"],[aria-modal="true"]').some(visible); }
+function otherLayerOpen() { return $A('.lgx,.lgs,.lgd,.lgi,.modal,[role="dialog"],[aria-modal="true"]').some(visible); }
 function typing(t) { return !!(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)); }
 function onKey(e) {
   if (e.key !== 'Escape' || e.defaultPrevented || !lobbyActive() || typing(e.target) || otherLayerOpen()) return;
@@ -157,8 +158,8 @@ const gamesTab = {
     const ids = (G.list || []).filter(id => G[id] && G[id].start);
     setHTML(p, ids.length ? ids.map(id => {
       const m = Object.assign({}, META[id], (G.meta && G.meta[id]) || {}), s = led.games[id] || { best: 0, plays: 0, wins: 0 }, rm = L && L.ROOMS[m.room];
-      return '<article class="lc-game"><h4>' + esc(m.n || id) + '</h4><p>' + esc(m.blurb || '') + '</p><p class="lc-meta">' + (rm ? esc(rm.i + ' ' + rm.n) : '') + (m.host ? ' · ' + esc(m.host) : '') + '</p>' +
-        '<p class="lc-stats"><span>Best <b>' + s.best + '</b></span><span>Plays <b>' + s.plays + '</b></span><span>Wins <b>' + s.wins + '</b></span></p>' +
+      return '<article class="lc-game"><h4>' + esc(m.n || id) + '</h4><p>' + esc(m.blurb || '') + '</p><p class="lc-meta">' + (m.mech ? '<b>' + esc(m.mech) + '</b> · ' : '') + (rm ? esc(rm.i + ' ' + rm.n) : '') + (m.host ? ' · ' + esc(m.host) : '') + '</p>' +
+        '<p class="lc-stats"><span>Best <b>' + s.best + '</b></span><span>Plays <b>' + s.plays + '</b></span><span>Wins <b>' + s.wins + '</b></span><span>Level <b>' + (s.tier | 0) + '</b></span></p>' +
         (rm ? '<button type="button" class="btn lc-go" data-room="' + esc(m.room) + '" data-fk="g:' + esc(id) + '">Go to ' + esc(rm.n) + '</button>' : '') + '</article>';
     }).join('') : '<p class="lc-empty">No games are loaded.</p>');
     if (!p.__bound) { p.__bound = 1; p.addEventListener('click', onAct); }
@@ -221,7 +222,7 @@ function init() {
 doc.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { if (root.console) console.error('[lounge-console]', e); } });
 
 root.CodexLoungeConsole = {
-  registerTab: registerTab, selectTab: selectTab, refresh: refresh, setConsole: setConsole, setFocus: setFocus,
+  registerTab: registerTab, unregisterTab: unregisterTab, panel: id => panels[id] || null, selectTab: selectTab, refresh: refresh, setConsole: setConsole, setFocus: setFocus,
   isOpen: () => !!st.console, isFocus: () => st.focus, tabs: () => TABS.map(t => t.id), layout: layout, UI_KEY: UI_KEY
 };
 })(typeof window !== 'undefined' ? window : globalThis);
