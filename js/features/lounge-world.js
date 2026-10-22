@@ -71,6 +71,7 @@ const Q_BY = {}; QUESTS.forEach(q => { Q_BY[q.id] = q; });
 
 /* ======================= small helpers ======================= */
 function led() { return P() ? P().get() : { rooms: {}, found: {}, items: {}, quests: {}, games: {}, log: [], stats: {} }; }
+let SNAP = null; const snap = () => SNAP || (SNAP = led());      /* per-frame readers use this; it is dropped whenever the ledger changes */
 const isFound = id => !!led().found[id];
 const foundCount = () => nFound(led());
 function toast(h, kind, ms) { if (typeof root.toast === 'function') root.toast(h, kind || 'speech', ms || 2600); }
@@ -139,7 +140,8 @@ const JUST = []; let evaluating = false;
 function questState(d, q) { const st = d.quests[q.id]; if (st && st.s === 'done') return 'done'; if (q.after && !(d.quests[q.after] && d.quests[q.after].s === 'done')) return 'locked'; return 'active'; }
 function completeQuest(q) {
   P().update(d => { d.quests[q.id] = { s: 'done', p: q.prog(d)[1], t: Date.now() }; d.log.push({ t: Date.now(), k: 'quest', id: q.id, x: 'Quest complete: ' + q.title }); }, 'quest');
-  JUST.push({ id: q.id, npc: q.npc, ack: false }); toast('<b>Quest complete</b><br>' + esc(q.title) + (q.xp ? ' \u00b7 +' + q.xp + ' XP' : ''), 'coin', 3400); sfx('combo');
+  JUST.push({ id: q.id, npc: q.npc, ack: false }); toast('<b>Quest complete</b><br>' + esc(q.title) + (q.xp ? ' \u00b7 +' + q.xp + ' XP' : ''), 'coin', 3400); sfx('combo'); const g = G(); if (g && g.emit) g.emit('win', { quest: q.id });
+  const unlocked = QUESTS.filter(x => x.after === q.id && (!x.need || (root.CodexLoungeGames && root.CodexLoungeGames[x.need]))); if (unlocked.length) setTimeout(() => toast('<b>New objective</b><br>' + unlocked.map(x => esc(x.title)).join(' \u00b7 '), 'speech', 3200), 900);
   if (q.xp && typeof root.gainXP === 'function') { try { root.gainXP(q.xp, true); } catch (e) {} }        /* once per quest: the ledger marks it done BEFORE the reward */
 }
 function evalQuests() {
@@ -181,6 +183,7 @@ function registerWorld() {
       const pages = SKY.map((c, i) => i < cleared ? { title: c.n, kicker: 'Chart ' + (i + 1) + ' \u00b7 cleared', icon: '\u2728', svg: starSVG(c, true), html: '<p>' + esc(c.fact) + '</p>' } :
         i === cleared ? { title: 'Next chart: ' + c.n, kicker: 'Chart ' + (i + 1) + ' \u00b7 study this shape', icon: '\ud83d\udd2d', svg: starSVG(c, true), html: '<p>Memorise how the stars connect. At the telescope you will see the stars without the lines, rotated, among decoys.</p>' } :
         { title: 'Chart ' + (i + 1), kicker: 'Locked', icon: '\ud83d\udd12', svg: starSVG(c, false), html: '<p>Clear the earlier charts at the telescope to unlock this one.</p>', locked: true });
+      if (P()) P().update(dd => { dd.items.atlas = Math.min(SKY.length, cleared) + 1; }, 'atlas');
       a.info({ title: 'Star atlas', icon: '\ud83d\udcd6', pages: pages, index: Math.min(cleared, SKY.length - 1) });
     } });
   /* ---- Kitchen: recipes are discoveries; the pantry is a one-off ---- */
@@ -223,13 +226,13 @@ const GM_TIERS = () => root.CodexLoungeGames && root.CodexLoungeGames.orderUp &&
 function launchGame(id, extra) {
   const Play = root.CodexLoungePlay, GM = root.CodexLoungeGames; if (!Play || !Play.launch || !GM || !GM[id]) return null;
   const o = Object.assign({ cleared: GT(id) }, extra); if (id === 'keeper') o.forecast = SPECIMENS.filter(isFound).length >= 3;
-  const ctl = Play.launch(id, o); if (!ctl) toast('<b>Finish what you are doing first</b><br>Close the current game or conversation.', 'speech', 2200); return ctl;
+  const ctl = Play.launch(id, o); if (!ctl) toast('<b>Finish what you are doing first</b><br>Close the current game or conversation.', 'speech', 2200); else if (ctl.dead) toast('<b>Could not start</b><br>The activity could not open here. Try again from the room it belongs to.', 'speech', 3000); return ctl;
 }
 /* Mira's dialogue and the kitchen pass offer the higher Order Up shifts once the previous one has been won */
 function gameTiers(id) { if (id !== 'orderUp') return []; const t = GT('orderUp'), T = GM_TIERS() || {}; return [2, 3].map(n => ({ tier: n, name: T[n] ? T[n].name : 'Shift ' + n, open: t >= n - 1 })); }
 /* Every finished run, from any launcher, lands here (CodexLoungeGames.observe): tier progress, discoveries, first-clear XP through the shared daily cap. Replays pay nothing extra. */
 function settle(id, r) {
-  if (!P() || !r || r.quit || !r.won) return; const before = GT(id); let tier = 0, xp = 0;
+  if (!P() || !r || r.quit || !r.won) return; const before = GT(id); let tier = 0, xp = 0; const g0 = G(); if (g0 && g0.emit) g0.emit('win', { game: id });
   if (id === 'orderUp') { tier = r.tier || 1; xp = tier > before && tier > 1 ? 6 + 4 * tier : 0; }
   else if (id === 'survey') { tier = r.level | 0; if (SKY[tier - 1]) discover(SKY[tier - 1].id); xp = tier > before ? 4 + 2 * tier : 0; }
   else if (id === 'keeper') { tier = r.scenario | 0; xp = tier > before ? 8 + 4 * tier : 0; }
@@ -239,10 +242,11 @@ function settle(id, r) {
 }
 
 /* ======================= console: Quests tab + collection ======================= */
+const PREV = {};   /* quest id → last rendered percent, so progress bars grow instead of jumping */
 function questsHTML(d) {
   const rows = QUESTS.map(q => ({ q: q, st: questState(d, q), pr: q.prog(d) })).filter(r => !r.q.need || (root.CodexLoungeGames && root.CodexLoungeGames[r.q.need]) || r.st === 'done');
   const card = r => { const pct = Math.round(100 * Math.min(1, r.pr[0] / r.pr[1])), npc = r.q.npc[0].toUpperCase() + r.q.npc.slice(1);
-    return '<article class="lc-quest' + (r.st === 'done' ? ' done' : '') + '"><h4>' + esc(r.q.title) + (r.st === 'done' ? ' <span class="lc-tick" aria-label="completed">\u2713</span>' : '') + '</h4><p>' + esc(r.q.text) + '</p><div class="lc-prog" role="progressbar" aria-valuemin="0" aria-valuemax="' + r.pr[1] + '" aria-valuenow="' + r.pr[0] + '" aria-label="' + esc(r.q.title) + ' progress"><i style="width:' + pct + '%"></i></div><p class="lc-meta">' + r.pr[0] + '/' + r.pr[1] + ' \u00b7 from ' + esc(npc) + (r.q.xp ? ' \u00b7 ' + r.q.xp + ' XP' : '') + '</p>' + (r.st === 'active' ? '<button type="button" class="btn lc-go" data-goroom="' + esc(r.q.where) + '" data-fk="q:' + r.q.id + '">Go there</button>' : '') + '</article>'; };
+    return '<article class="lc-quest' + (r.st === 'done' ? ' done' : '') + '"><h4>' + esc(r.q.title) + (r.st === 'done' ? ' <span class="lc-tick" aria-label="completed">\u2713</span>' : '') + '</h4><p>' + esc(r.q.text) + '</p><div class="lc-prog" role="progressbar" aria-valuemin="0" aria-valuemax="' + r.pr[1] + '" aria-valuenow="' + r.pr[0] + '" aria-label="' + esc(r.q.title) + ' progress"><i data-q="' + r.q.id + '" data-to="' + pct + '" style="width:' + (PREV[r.q.id] != null ? PREV[r.q.id] : pct) + '%"></i></div><p class="lc-meta">' + r.pr[0] + '/' + r.pr[1] + ' \u00b7 from ' + esc(npc) + (r.q.xp ? ' \u00b7 ' + r.q.xp + ' XP' : '') + '</p>' + (r.st === 'active' ? '<button type="button" class="btn lc-go" data-goroom="' + esc(r.q.where) + '" data-fk="q:' + r.q.id + '">Go there</button>' : '') + '</article>'; };
   const act = rows.filter(r => r.st === 'active'), lock = rows.filter(r => r.st === 'locked'), done = rows.filter(r => r.st === 'done');
   return '<h4 class="lc-h">Objectives <span class="lc-count">' + act.length + '</span></h4>' + (act.map(card).join('') || '<p class="lc-empty">Nothing active \u2014 every objective is complete.</p>') +
     (lock.length ? '<h4 class="lc-h">Later</h4>' + lock.map(r => '<p class="lc-empty">\ud83d\udd12 ' + esc(r.q.title) + ' \u2014 finish \u201c' + esc(Q_BY[r.q.after].title) + '\u201d first.</p>').join('') : '') +
@@ -258,7 +262,31 @@ function registerConsole() {
   C.registerTab({ id: 'quests', label: 'Quests', order: 15,
     badge: () => (P() ? QUESTS.filter(q => questState(P().get(), q) === 'active' && (!q.need || (root.CodexLoungeGames && root.CodexLoungeGames[q.need]))).length : 0),
     render(p, c) { const d = P() ? P().get() : null; if (!d) { c.setHTML(p, '<p class="lc-empty">Progress tracking is unavailable.</p>'); return; } c.setHTML(p, questsHTML(d));
+      const raf = root.requestAnimationFrame || (f => setTimeout(f, 16)); raf(() => p.querySelectorAll('.lc-prog i').forEach(i => { PREV[i.dataset.q] = +i.dataset.to; i.style.width = i.dataset.to + '%'; }));
       if (!p.__bound) { p.__bound = 1; p.addEventListener('click', e => { const b = e.target.closest('[data-goroom]'); if (b) { goTo(b.dataset.goroom); } }); } } });
+}
+
+/* ======================= feedback: "something new here" markers + scenery that reflects saved progress ======================= */
+const FRESH = {   /* interaction id → does it still have something unseen? (read from the cached snapshot) */
+  atlas: () => (snap().items.atlas | 0) < Math.min(SKY.length, (snap().games.survey || {}).tier | 0) + 1,   /* a chart the player has not studied yet (ledger items.atlas = charts seen + 1) */
+  recipes: () => RECIPES.some(i => !snap().found[i]), pantry: () => !snap().found.coldchain, cases: () => SPECIMENS.some(i => !snap().found[i]), rarebooks: () => CIPHERS.some(i => !snap().found[i]),
+  bigscope: () => !((snap().games.survey || {}).plays), terrarium: () => !((snap().games.keeper || {}).plays), cipherdesk: () => !((snap().games.cipher || {}).plays), pass: () => !((snap().games.orderUp || {}).plays)
+};
+function freshMarkers(L, c, t, id) {
+  if (!P()) return; const hs = (root.CodexLounge.HOT[id] || []);
+  hs.forEach(h => { if (h.t !== 'ix' || !FRESH[h.id] || !FRESH[h.id]()) return; const bob = L.REDUCED ? 0 : Math.sin(t / 380 + h.x) * 2, x = Math.round(h.x + h.w / 2), y = Math.round(h.y - 7 + bob);
+    c.fillStyle = 'rgba(255,224,130,' + (L.REDUCED ? .9 : .65 + .3 * Math.sin(t / 300 + h.x)) + ')'; c.fillRect(x - 1, y - 3, 2, 6); c.fillRect(x - 3, y - 1, 6, 2); c.fillStyle = 'rgba(255,255,255,.95)'; c.fillRect(x, y - 1, 1, 2); });
+}
+function registerScenery() {
+  const g = G(); if (!g || !g.decorate) return; const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); }, glow = (c, x, y, r, col) => { const gr = c.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(x - r, y - r, r * 2, r * 2); };
+  g.decorate('dome', (L, c, t) => { const n = Math.min(SKY.length, (snap().games.survey || {}).tier | 0);   /* one pin per cleared chart on the wall */
+    for (let i = 0; i < SKY.length; i++) { const x = 40 + i * 26, on = i < n; R(c, x, 52, 3, 3, on ? '#ffe9a0' : '#3a4270'); if (on) glow(c, x + 1, 53, 9, 'rgba(255,230,150,' + (.35 + (L.REDUCED ? 0 : .12 * Math.sin(t / 500 + i)) ) + ')'); } });
+  g.decorate('kitchen', (L, c, t) => { RECIPES.forEach((id, i) => { if (!snap().found[id]) return; c.strokeStyle = 'rgba(250,250,235,.98)'; c.lineWidth = 2; c.lineCap = 'round'; c.beginPath(); c.moveTo(192, 80 + i * 10); c.lineTo(196, 85 + i * 10); c.lineTo(205, 74 + i * 10); c.stroke(); c.lineCap = 'butt'; });   /* chalk ticks on the recipe board */
+    if (snap().found.coldchain) glow(c, 78, 130, 38, 'rgba(180,240,255,.10)'); });
+  g.decorate('conservatory', (L, c, t) => { const groups = [['dinoflagellate', 'vibrio'], ['aequorea', 'glowworm'], ['foxfire']], cols = ['120,200,255', '140,230,100', '120,255,160'];   /* each specimen case glows brighter for every specimen logged */
+    groups.forEach((grp, i) => { const k = grp.filter(x => snap().found[x]).length / grp.length; if (k > 0) glow(c, 357 + i * 40, 134, 30 + 10 * k, 'rgba(' + cols[i] + ',' + (.18 + .3 * k + (L.REDUCED ? 0 : .06 * Math.sin(t / 600 + i))) + ')'); }); });
+  g.decorate('archive', (L, c, t) => { const n = Math.min(CIPHERS.length, (snap().games.cipher || {}).tier | 0);   /* a brass lamp on the desk for every case solved */
+    for (let i = 0; i < CIPHERS.length; i++) { const x = 196 + i * 30, on = i < n; R(c, x, 150, 4, 6, on ? '#c9a64a' : '#4a3a22'); R(c, x - 1, 156, 6, 2, '#6a5a32'); if (on) glow(c, x + 2, 148, 14, 'rgba(255,200,110,' + (.4 + (L.REDUCED ? 0 : .1 * Math.sin(t / 340 + i))) + ')'); } });
 }
 
 /* ======================= wiring ======================= */
@@ -268,7 +296,8 @@ function init() {
   registerWorld(); registerConsole();
   g.handlers.ix = a => runIx(a.ix);
   if (root.CodexLoungeGames && root.CodexLoungeGames.observe) root.CodexLoungeGames.observe(settle);
-  P() && P().onChange(evalQuests);
+  P() && P().onChange(() => { SNAP = null; evalQuests(); });
+  registerScenery(); g.addOverlay(freshMarkers);
   g.on('room', () => Info.close(true)); g.on('active', e => { if (!e.on) Info.close(true); else evalQuests(); });
   evalQuests();
 }

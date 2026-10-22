@@ -30,7 +30,7 @@ function start(opts) {
   opts = opts || {}; const W = root.CodexLoungeWorld, G = root.CodexLoungeGames, SKY = W && W.SKY, host = opts.host || (G && G.host);
   const stage = host && host.stage && SKY ? host.stage({ id: 'survey', label: 'Celestial Survey', cls: 'lgs-sky' }) : null;
   const reduced = opts.reduced != null ? !!opts.reduced : !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  let anim = false, lock = 0, dead = false, ended = false, level = 0, run = 0, lives = LIVES, edges = [], done = {}, sel = -1, fi = 0, phase = 'menu', stars = [], pts = [], mistakes = 0, score = 0, early = false; const timers = new Set();
+  let joined = false, anim = false, lock = 0, dead = false, ended = false, level = 0, run = 0, lives = LIVES, edges = [], done = {}, sel = -1, fi = 0, phase = 'menu', stars = [], pts = [], mistakes = 0, score = 0, early = false; const timers = new Set();
   const unlocked = Math.min(SKY ? SKY.length : 1, Math.max(0, opts.cleared | 0) + 1);
   const ctl = { el: stage && stage.el, get dead() { return dead; }, get core() { return { phase: phase, level: level + 1, lives: lives, edges: edges.length, need: edges.length && SKY ? SKY[level].e.length : 0, stars: stars, pts: pts, sel: sel, done: done }; } };
   if (!stage) { dead = true; if (opts.onClose) opts.onClose(ctl); return ctl; }
@@ -61,9 +61,9 @@ function start(opts) {
     const dust = mulberry(4242); for (let k = 0; k < 46; k++) svg += '<circle cx="' + Math.round(dust() * 480) + '" cy="' + Math.round(dust() * 270) + '" r="' + (.5 + dust() * .5).toFixed(2) + '" fill="#fff" opacity="' + (.15 + dust() * .35).toFixed(2) + '"/>';
     svg += '<g class="sky' + (reduced ? ' still' : '') + '" style="transform-origin:' + CX + 'px ' + CY + 'px;transform:rotate(' + (anim ? 0 : th) + 'deg)">';
     if (phase === 'observe' || phase === 'done') c.e.forEach(e => { const a = stars[e[0]], b = stars[e[1]]; svg += '<line class="lgs-line' + (phase === 'observe' ? ' show' : ' hit') + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '"/>'; });
-    edges.forEach(e => { const a = stars[e[0]], b = stars[e[1]]; svg += '<line class="lgs-line hit" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '"/>'; });
+    edges.forEach((e, k) => { const a = stars[e[0]], b = stars[e[1]]; svg += '<line class="lgs-line hit' + (joined && k === edges.length - 1 ? ' new' : '') + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '"/>'; });
     stars.forEach((s, i) => { svg += '<circle class="lgs-star' + (phase === 'observe' && s.pat ? ' pat' : '') + (i === sel ? ' sel' : '') + (i === fi && phase === 'find' ? ' foc' : '') + '" data-s="' + i + '" cx="' + s.x + '" cy="' + s.y + '" r="' + s.r + '"/>'; });
-    svg += '</g></svg>';
+    joined = false; svg += '</g></svg>';
     shell('<div class="lgs-field" tabindex="0" role="application" aria-label="Star field. Arrow keys move between stars, Enter or Space selects a star.">' + svg + '</div>',
       phase === 'observe' ? '<button type="button" class="btn primary" data-a="ready">Ready — turn the sky</button><button type="button" class="btn" data-a="menu">Charts</button>' : '<button type="button" class="btn" data-a="menu">Charts</button><button type="button" class="btn" data-a="retry">Restart chart</button>',
       c.n + ' · chart ' + (level + 1) + ' of ' + SKY.length);
@@ -82,7 +82,7 @@ function start(opts) {
     const a = Math.min(sel, i), b = Math.max(sel, i), idx = c.e.findIndex(e => Math.min(e[0], e[1]) === a && Math.max(e[0], e[1]) === b);
     if (idx >= 0 && a < n && b < n) {
       if (done[idx]) { sel = -1; draw(); msg('Those two are already joined.'); return; }
-      done[idx] = 1; edges.push(c.e[idx]); score += 10 + Math.max(0, 4 - mistakes) * 2; sel = -1; fi = i; if (root.sfx) root.sfx('click');
+      done[idx] = 1; edges.push(c.e[idx]); joined = !reduced; score += 10 + Math.max(0, 4 - mistakes) * 2; sel = -1; fi = i; if (root.sfx) root.sfx('click');
       if (edges.length === c.e.length) return win(); draw(); msg('Joined! Lines left: ' + (c.e.length - edges.length) + '.');
     } else {
       lives--; mistakes++; sel = -1; if (root.sfx) root.sfx('bad'); const fld = el.querySelector('.lgs-field'); if (fld && !reduced) { fld.classList.remove('shake'); void fld.offsetWidth; fld.classList.add('shake'); }

@@ -186,7 +186,11 @@ const EYES = [
   { a: ['.kk.', 'kwwk', 'kwkk', '.kk.'] },                                  /* 9 wide */
   { a: ['kk..', '.kkk', '.kk.', '....'], same: 0 },                          /* 10 determined */
   { a: ['k..k', '.kk.', '.kk.', 'k..k'] },                                  /* 11 x */
-  { a: ['kkkkk', 'iwiii', 'iiiii', '.sss.'], same: 1 }                      /* 12 chibi (default) */
+  { a: ['kkkkk', 'iwiii', 'iiiii', '.sss.'], same: 1 },                     /* 12 chibi (default) */
+  /* appended — never reorder: saved codes index into this list */
+  { a: ['k....', 'kkkkk', 'iwiii', '.iii.'] },                              /* 13 lashes: a flick at the outer corner */
+  { a: ['....', 'kkkk', 'iwii', '.ii.'] },                                  /* 14 calm half-lid */
+  { a: ['.kkk.', 'kiwik', 'kiiik', '.kkk.'], same: 1 }                      /* 15 round, bright */
 ];
 const CLOSED = ['....', '....', 'kkkk', '....'];
 function drawEyes(L, st, v, ex) {
@@ -205,17 +209,18 @@ function drawEyes(L, st, v, ex) {
   art(L, ra, 2, top, look);
 }
 /* ---- brows ---- */
-const BROWS = [null, ['kkkk'], ['.kk.', 'k..k'], ['k...', '.kkk'], ['...k', 'kkk.'], ['kkkk', 'kkkk']];
+const BROWS = [null, ['kkkk'], ['.kk.', 'k..k'], ['k...', '.kkk'], ['...k', 'kkk.'], ['kkkk', 'kkkk'], ['...kk', 'kkk..'], ['kk...', '..kkk']];   /* 6 worried, 7 stern (appended) */
 function drawBrows(L, st, v, ex) {
   const a = BROWS[st]; if (!a) return; const y = ex.brow ? -1 : 0, wid = a[0].length;
-  const l = (st === 3 || st === 4) ? a : a, rr = (st === 3 || st === 4) ? mirrorRows(a) : a;
+  const l = a, rr = st >= 3 && st !== 5 ? mirrorRows(a) : a;   /* asymmetric brows (3,4,6,7) mirror to the other side */
   if (v === 1) { art(L, l, -3, y); art(L, rr, 4 + (wid - 4), y, 0, 1); return; }
   art(L, l, -2 - wid, y); art(L, rr, 2, y);
 }
 /* ---- mouths (centred on x=0, or on the face centre in 3/4 view) ---- */
 const MOUTHS = [
   ['k..k', '.kk.'], ['kkkk', 'kwwk', '.kk.'], ['.mm.', 'm..m', '.mm.'], ['kkkk'], ['..kk', '.k..'],
-  ['k..k', '.kk.', '.pp.'], ['mm', 'mm'], ['k.k.', '.k.k'], ['k..k', '.kk.', 'w..w'], ['kkkk', 'wkww', '.kk.'], ['.ll.']
+  ['k..k', '.kk.', '.pp.'], ['mm', 'mm'], ['k.k.', '.k.k'], ['k..k', '.kk.', 'w..w'], ['kkkk', 'wkww', '.kk.'], ['.ll.'],
+  ['...kk', '.kk..'], ['k....k', '.kkkk.'], ['kk']                                  /* 11 smirk, 12 wide gentle smile, 13 neutral dot (appended) */
 ];
 const MOUTH_OPEN = ['.kkkk.', 'kmmmmk', '.kmmk.'], MOUTH_O = ['.kk.', 'kmmk', '.kk.'], MOUTH_BIG = ['kkkkkk', 'kwwwwk', '.kmmk.'], MOUTH_SLEEP = ['.kk.'];
 function drawMouth(L, st, v, ex) {
@@ -282,6 +287,13 @@ HAIR[22] = { lift: 4, cap: [.7, -.5, 3.5], top: L => {
 }, fringe: L => { spikesDown(L, [-8, -4.2, -.5, 3.4, 7.2], [2.5, 1.8, 1, 2.2, 2.8], -1.5, 2.4, R.HAIR); } };
 /* NEW 23 — shaggy side fringe */
 HAIR[23] = { lift: 2, cap: [1, -1, 3], top: L => spikesUp(L, [-5, 1, 7], [3, 4, 3], -9, 3.2, R.HAIR), fringe: L => L.poly([-11, -4, 2, -9, 11, -6, 10.5, 4, 7, 1, 5, 5, 2, 0, -2, 3, -6, 1, -9, 2], R.HAIR) };
+/* appended 24‥29: distinct silhouettes, not recolours */
+HAIR[24] = { lift: 7, cap: [.6, -2, 2], top: L => { L.ell(0, -16, 4.8, 4.4, R.HAIR); L.rect(-4, -12, 8, 1.6, R.HAIR_LO); }, fringe: L => L.poly([-10, -3, -3, -8, 8, -8, 10.5, -3, 10.5, 1, 4, -2, -4, -1], R.HAIR) };            /* top bun */
+HAIR[25] = { lift: 1, cap: [.6, -2, 3], back: L => { [-1, 1].forEach(s => { for (let i = 0; i < 5; i++) L.ell(s * 13.5, 5 + i * 4.8, 2.7 - i * .2, 2.6, R.HAIR); L.rect(s * 13.5 - 1, 28, 2, 2, R.GOLD); }); }, fringe: L => L.poly([-10, -3, -1, -9, 10, -4, 10.5, 1, 3, -2, -5, 0], R.HAIR) };   /* twin braids */
+HAIR[26] = { lift: 7, cap: [1.8, -2, 3], fuzz: 1, top: L => puffs(L, [[-12, -7], [-7, -14], [0, -17], [7, -14], [12, -7], [-14, 0], [14, 0], [-4, -16], [4, -16]], 5.2, R.HAIR) };                                  /* round cloud */
+HAIR[27] = { lift: 7, cap: [-.5, -4, 0], top: L => { L.poly([-3.5, -8, -1.5, -20, 0, -24, 1.5, -20, 3.5, -8], R.HAIR); L.rect(-.6, -22, 1.2, 12, R.HAIR_HI); }, fringe: L => L.rect(-1.8, -7, 3.6, 5, R.HAIR) };      /* undercut fin */
+HAIR[28] = { lift: 1, cap: [.6, -2, 3], back: L => { L.rect(-12.5, -8, 25, 24, R.HAIR); L.poly([-12.5, 16, -9, 22, -5, 16, -1, 22, 3, 16, 7, 22, 12.5, 16], R.HAIR); }, fringe: L => L.poly([-10.5, -3, -3, -9.5, 9, -7, 10.5, -1, 6, -2, -1, -4, -6, 0], R.HAIR) };      /* long wavy, side part */
+HAIR[29] = { lift: 5, cap: [.6, -2, 2], top: L => { [-1, 1].forEach(s => { L.ell(s * 13, -6, 3.4, 3.4, R.HAIR); L.poly([s * 11, -4, s * 17, 2, s * 13.5, 13, s * 10, 3], R.HAIR); L.rect(s * 11.2 - 1.5, -8.5, 3, 1.6, R.GOLD); }); }, fringe: L => L.rect(-10.5, -4, 21, 2.5, R.HAIR) };   /* high pigtails */
 const HAIR_N = HAIR.length;
 function hairFront(L, st, v) {            /* cap + top + fringe into L (design space already set) */
   const H = HAIR[st]; if (!H || !H.cap) { if (H && H.top) H.top(L); return; }
@@ -308,7 +320,12 @@ const HATS = [null,
   (L, t) => { L.ell(0, t + 7, 11.5, 7, R.NAVY); L.rect(-14, t + 8.5, 28, 10, 0); L.rect(-2, t + 4, 4, 3, R.WHITE); L.px(-1, t + 5, R.INK); L.px(1, t + 5, R.INK); L.poly([8, t + 8, 14, t + 12, 9, t + 12], R.NAVY); },
   (L, t) => { L.rect(-11.5, t + 8, 23, 3, R.ACC); L.ell(5, t + 9.5, 1.7, 1.7, R.GOLD); },
   (L, t) => { L.ell(-8, t + 8, 2.6, 2.6, R.PINK); L.ell(-3, t + 6, 2.4, 2.4, R.ACC); L.ell(2, t + 5, 2.2, 2.2, R.PINK); L.px(-8, t + 8, R.GOLD); L.px(-3, t + 6, R.GOLD); L.poly([-6, t + 10, -4, t + 7.5, -3, t + 10.5], R.GREEN); },
-  (L, t) => { [[-1, 1], [1, 1]].forEach(s => { const x = s[0]; L.ell(x * 10.5, t + 9, 1.8, 2.6, R.GREEN); L.ell(x * 11.4, t + 13, 1.8, 2.6, R.GREEN); L.ell(x * 9.4, t + 5, 1.6, 2.4, R.GREEN); }); }
+  (L, t) => { [[-1, 1], [1, 1]].forEach(s => { const x = s[0]; L.ell(x * 10.5, t + 9, 1.8, 2.6, R.GREEN); L.ell(x * 11.4, t + 13, 1.8, 2.6, R.GREEN); L.ell(x * 9.4, t + 5, 1.6, 2.4, R.GREEN); }); },
+  /* appended 18‥21 */
+  (L, t) => { L.ell(0, t + 9, 12.8, 10.5, R.DARK); L.ell(0, t + 9, 11.2, 9, 0); L.rect(-16, t + 11, 32, 12, 0); L.rect(-15, t + 6, 4.2, 9, R.ACC); L.rect(-14.2, t + 7, 1.2, 6, R.ACC_HI); L.rect(10.8, t + 6, 4.2, 9, R.ACC); L.rect(12, t + 7, 1.2, 6, R.ACC_HI); },            /* 18 headphones */
+  (L, t) => { L.ell(-1, t + 7, 12.5, 5.2, R.ACC); L.rect(-15, t + 9, 30, 8, 0); L.poly([-12, t + 8.5, 9, t + 8.5, 14, t + 11.5, -12, t + 11.5], R.ACC_LO); L.px(-1, t + 2, R.ACC_HI); L.px(-1, t + 1, R.ACC_LO); },                                        /* 19 flat cap */
+  (L, t) => { L.ell(0, t + 6.5, 11.2, 7.2, R.GOLD); L.rect(-14, t + 8, 28, 10, 0); L.rect(-1.8, t - 2, 3.6, 8, R.GOLD_LO); L.ell(0, t + 9, 14.5, 2.6, R.GOLD_LO); L.rect(-12, t + 7, 24, 1.4, R.GOLD_LO); },                                                   /* 20 hard hat */
+  (L, t) => { L.ell(0, t + 8, 9, 4.2, R.NAVY); L.rect(-12, t + 9, 24, 8, 0); L.poly([-15, t + 3, 0, t - 3, 15, t + 3, 0, t + 8.5], R.NAVY); L.poly([-12, t + 3, 0, t - 1.5, 12, t + 3, 0, t + 6], R.NAVY_HI); L.line(12, t + 3.2, 13.5, t + 11, R.GOLD); L.ell(13.6, t + 12, 1.4, 1.8, R.GOLD); }      /* 21 mortarboard */
 ];
 const HAT_N = HATS.length;
 
@@ -330,7 +347,12 @@ const EXTRAS = [null,
   { l: 1, f: (L, v) => { const x = v === 1 ? 1 : -2; L.poly([x + 2, -6, x + 3, -3.5, x + 5.5, -3.5, x + 3.5, -2, x + 4.2, .5, x + 2, -1, x - .2, .5, x + .5, -2, x - 1.5, -3.5, x + 1, -3.5], R.GOLD); } },
   { l: 0, f: (L, v) => { const x = v === 1 ? -5 : -10, w = v === 1 ? 15 : 20; L.rect(x, 0, w, 7, R.DARK); L.rect(x + 1, 1, w - 2, 5, R.CYAN); L.rect(x + 2, 1, Math.round(w / 3), 1, R.WHITE); } },
   { l: 1, f: (L, v, t) => { L.line(0, t + 1, 0, t - 7, R.GRAY_LO); L.ell(0, t - 8, 2, 2, R.PINK); } },
-  { l: 0, f: (L, v) => { const o = v === 1 ? 3 : 0; L.rect(-4 + o, 6, 8, 1, R.HAIR_LO); L.px(-5 + o, 7, R.HAIR_LO); L.px(4 + o, 7, R.HAIR_LO); } }
+  { l: 0, f: (L, v) => { const o = v === 1 ? 3 : 0; L.rect(-4 + o, 6, 8, 1, R.HAIR_LO); L.px(-5 + o, 7, R.HAIR_LO); L.px(4 + o, 7, R.HAIR_LO); } },
+  /* appended 16‥19 */
+  { l: 0, f: (L, v) => { const o = v === 1 ? 3 : 0; L.rect(-3 + o, 4, 7, 2, R.COAT_HI); L.px(-1 + o, 4, R.COAT_LO); L.px(1 + o, 5, R.COAT_LO); L.px(-3 + o, 4, R.SKIN_OL); L.px(3 + o, 5, R.SKIN_OL); } },                                                           /* 16 nose plaster */
+  { l: 0, f: (L, v) => { const o = v === 1 ? 3 : 0; L.line(-9 + o, 5, -6 + o, 6, R.RED); L.line(-9.5 + o, 7, -6.5 + o, 8, R.RED); L.line(6 + o, 6, 9 + o - (v === 1 ? 2 : 0), 5, R.RED); L.line(6.5 + o, 8, 9.5 + o - (v === 1 ? 2 : 0), 7, R.RED); } },       /* 17 cheek stripes */
+  { l: 0, f: (L, v) => { const x = v === 1 ? -4 : -9, w = v === 1 ? 14 : 18; L.rect(x, 7.5, w, 5, R.RED); L.rect(x, 7.5, w, 1, R.WHITE); L.px(x + 3, 10, R.WHITE); L.px(x + 8, 9, R.WHITE); L.px(x + 12 > x + w - 1 ? x + w - 2 : x + 12, 10, R.WHITE); } },  /* 18 bandana (lower face) */
+  { l: 1, f: (L, v) => { const x = v === 1 ? 8 : 11; L.poly([x, -6, x + 1.6, -3, x, -.8, x - 1.6, -3], R.CYAN); L.px(x - .4, -4, R.WHITE); } }                                                                                                                   /* 19 sweat drop */
 ];
 const EXTRA_N = EXTRAS.length;
 
@@ -354,7 +376,14 @@ const OUTFITS = [
   { b: 'NAVY', s: 'l', sr: 'NAVY', f: L => { L.poly([-4, -21, 4, -21, 6, -16, 0, -13, -6, -16], R.OUT); } },
   { b: 'OUT', s: 's', f: L => { L.poly([0, -18, 1.2, -15.5, 3.8, -15.2, 1.8, -13.5, 2.4, -11.2, 0, -12.5, -2.4, -11.2, -1.8, -13.5, -3.8, -15.2, -1.2, -15.5], R.GOLD); } },
   { b: 'OUT', s: 's', f: L => { L.rect(-6, -18, 12, 1, R.WHITE); L.rect(-6, -15, 12, 1, R.WHITE); L.rect(-6, -12, 12, 1, R.WHITE); L.rect(-3, -21, 6, 1, R.WHITE); } },
-  { b: 'OUT', s: 'l', flare: 1, f: L => { L.rect(-.5, -20, 1, 9, R.OUT_LO); L.poly([-5, -21, 0, -15, 5, -21, 3, -21, 0, -18, -3, -21], R.OUT_HI); } }
+  { b: 'OUT', s: 'l', flare: 1, f: L => { L.rect(-.5, -20, 1, 9, R.OUT_LO); L.poly([-5, -21, 0, -15, 5, -21, 3, -21, 0, -18, -3, -21], R.OUT_HI); } },
+  /* appended 18‥23 — each changes the silhouette or the garment structure, not just the colour */
+  { b: 'OUT', s: 'l', f: L => { L.rect(-5.5, -22, 11, 2.4, R.OUT_LO); L.rect(-4, -15.5, 8, 3.5, R.OUT_LO); L.rect(-4, -15.5, 8, 1, R.OUT_HI); L.px(-1.6, -19, R.WHITE); L.px(-1.6, -18, R.WHITE); L.px(1.6, -19, R.WHITE); L.px(1.6, -18, R.WHITE); L.rect(-6, -12, 12, 1, R.OUT_LO); } },                       /* 18 hoodie */
+  { b: 'COAT', s: 'l', sr: 'COAT', f: L => { L.poly([-2.8, -21, 0, -11.5, 2.8, -21], R.OUT); L.rect(-.4, -20, .8, 9, R.COAT_LO); L.rect(-4.6, -16, 3, 3, R.COAT_LO); L.rect(1.6, -16, 3, 3, R.COAT_LO); L.px(-3.6, -17, R.CYAN); L.px(-3.6, -16, R.CYAN); L.rect(-5, -22, 3, 1.4, R.COAT_HI); L.rect(2, -22, 3, 1.4, R.COAT_HI); } },   /* 19 lab coat */
+  { b: 'NAVY', s: 's', sr: 'WHITE', flare: 1, f: L => { L.rect(-3.2, -21, 1.6, 4, R.NAVY_LO); L.rect(1.6, -21, 1.6, 4, R.NAVY_LO); L.rect(-3.5, -18, 7, 5, R.NAVY_HI); L.px(-2, -17, R.GOLD); L.px(2, -17, R.GOLD); L.rect(-7, -11, 14, 1, R.NAVY_LO); } },                                    /* 20 pinafore dress */
+  { b: 'OUT', s: 'c', flare: 1, f: L => { L.poly([-3, -21, 0, -17, 3, -21], R.OUT_LO); L.rect(-6, -16, 12, 1.2, R.GOLD); L.rect(-6.5, -13.5, 13, 1.2, R.WHITE); L.rect(-7, -11, 14, 1.2, R.GOLD); } },                                                                                         /* 21 poncho */
+  { b: 'OUT', s: 's', sr: 'OUT', f: L => { L.rect(-6, -15.5, 12, 5, R.BLUE); L.rect(-3.5, -19, 7, 4, R.BLUE_HI); L.rect(-4, -21, 1.5, 3, R.BLUE_LO); L.rect(2.5, -21, 1.5, 3, R.BLUE_LO); L.px(-3, -17.5, R.GOLD); L.px(2, -17.5, R.GOLD); L.rect(-2, -14, 4, 2.4, R.BLUE_LO); } },                      /* 22 overalls */
+  { b: 'OUT', s: 'l', f: L => { L.rect(-5.5, -22, 11, 3.2, R.RED); L.rect(1.2, -19, 2.8, 6.5, R.RED); L.rect(1.2, -13, 2.8, 1.2, R.WHITE); L.rect(-6, -14.5, 12, 1, R.OUT_HI); L.rect(-6, -12.5, 12, 1, R.OUT_HI); L.px(-3, -21, R.WHITE); L.px(0, -21, R.WHITE); } }                          /* 23 knit sweater + scarf */
 ];
 const OUT_N = OUTFITS.length;
 function torsoShape(L, role, flare) {
@@ -369,7 +398,9 @@ const LEGW = [
   { skirt: 1, len: 0, rad: 0 },           /* 2 skirt */
   { len: 5.2, rad: 2.1 },                 /* 3 capris */
   { len: 4.6, rad: 2.5 },                 /* 4 long shorts */
-  { len: 2.4, rad: 2.2 }                  /* 5 short shorts */
+  { len: 2.4, rad: 2.2 },                 /* 5 short shorts */
+  { len: 6.6, rad: 2.8 },                 /* 6 baggy trousers (appended) */
+  { len: 5.2, rad: 1.6 }                  /* 7 slim cropped (appended) */
 ];
 const LEG_N = LEGW.length;
 
@@ -382,7 +413,10 @@ const SHOES = [
   { y0: 1, f: ['sssss', 'shhss', 'lllll'], s: ['ssssss.', 'ssshhss', 'lllllll'] },                                                              /* 3 loafers */
   { y0: -2, f: ['.sss.', '.sss.', 'sssss', 'sssss', 'hssss', 'lllll'], s: ['ssss...', 'ssss...', 'sssshh.', 'sssssss', 'sssssss', 'lllllll'] },   /* 4 high-tops */
   { y0: 2, f: ['SSSSS', 'SSDSS'], s: ['SSSSSS.', 'SSSSSSD'], skin: 1 },                                                                      /* 5 barefoot */
-  { y0: 1, f: ['.aaa.', 'aaaaa', 'lllll'], s: ['.aaaaa.', 'aaaaaaa', 'lllllll'] }                                                           /* 6 slippers */
+  { y0: 1, f: ['.aaa.', 'aaaaa', 'lllll'], s: ['.aaaaa.', 'aaaaaaa', 'lllllll'] },                                                          /* 6 slippers */
+  { y0: -4, f: ['hhhhh', '.sss.', '.sss.', '.sss.', 'sssss', 'sssss', 'lllll'], s: ['hhhh...', 'ssss...', 'ssss...', 'ssss...', 'sssssss', 'sssssss', 'lllllll'] },  /* 7 cuffed boots (appended) */
+  { y0: 1, f: ['SaSaS', 'SSSSS', 'lllll'], s: ['SSSaSS.', 'SSSSSSS', 'lllllll'], skin: 1 },                                                         /* 8 sandals (appended) */
+  { y0: -1, f: ['.hss.', 'sssss', 'sssss', 'wwwww', 'lllll'], s: ['sssh...', 'sssssh.', 'ssssss.', 'wwwwwww', 'lllllll'] }                          /* 9 chunky sneakers (appended) */
 ];
 const SHOE_N = SHOES.length;
 

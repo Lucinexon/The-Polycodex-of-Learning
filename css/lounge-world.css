@@ -1,3 +1,19 @@
+/* ============ lounge design tokens ============
+   Every lounge surface (stage, console, info card, game views) reads these. A future app-wide v10 theme overrides them at :root (or on [data-theme])
+   without touching lounge logic. Timing tokens are the ONLY place durations live; prefers-reduced-motion collapses them all at the bottom of this file. */
+:root {
+  --lg-dur-fast: 120ms;      /* press / hover feedback */
+  --lg-dur: 180ms;           /* state changes, panel swaps */
+  --lg-dur-slow: 260ms;      /* entrances (console, focus) — the longest ordinary UI motion */
+  --lg-dur-meter: 420ms;     /* progress / meter growth: long enough to read as change, short enough not to block */
+  --lg-ease: cubic-bezier(.2, .8, .2, 1);
+  --lg-focus: var(--gold);   /* focus ring colour: contrast-checked against every lounge surface */
+  --lg-surface: linear-gradient(180deg, #0a3448, #051e2c);   /* opaque sheet/card surface */
+  --lg-radius: 16px; --lg-radius-pill: 999px;
+  --lg-accent: var(--cyan); --lg-ok: var(--teal); --lg-warn: var(--gold); --lg-bad: var(--red);
+}
+@media (prefers-reduced-motion: reduce) { :root { --lg-dur-fast: .01ms; --lg-dur: .01ms; --lg-dur-slow: .01ms; --lg-dur-meter: .01ms; } }
+
 /* lounge-world.css — Observation Lounge layout: stage + Activity Console, world-focus mode, mobile bottom sheet.
    Stacking (keep in sync with style.css/v7.css): chat dock .dk = 78, game overlay .lgx = 84, top bar = 130.
    World focus (70) and the mobile sheet (72) sit BELOW the dock so messaging is always reachable while playing. */
@@ -18,11 +34,11 @@ body.focusmode #lobby .lounge { max-width: none; margin: 0; grid-template-column
 .is-world-focus .lounge-ident { order: 0; flex-basis: auto; margin: 0 0 0 auto; }
 .is-world-focus .lounge-tools { margin-left: 0; }
 .lg-tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 13px; border: 1px solid var(--line2); border-radius: 999px;
-  background: rgba(10, 56, 78, .5); color: var(--mut); font: 700 12.5px var(--ui); letter-spacing: .04em; cursor: pointer; transition: background .15s, border-color .15s, color .15s, transform .12s; }
+  background: rgba(10, 56, 78, .5); color: var(--mut); font: 700 12.5px var(--ui); letter-spacing: .04em; cursor: pointer; transition: background var(--lg-dur-fast), border-color var(--lg-dur-fast), color var(--lg-dur-fast), transform var(--lg-dur-fast); }
 .lg-tool:hover { border-color: var(--cyan); color: var(--ink); background: rgba(95, 208, 238, .16); }
 .lg-tool:active { transform: scale(.96); }
 .lg-tool[aria-pressed="true"] { background: rgba(95, 208, 238, .2); border-color: var(--cyan); color: var(--ink); }
-.lg-tool:focus-visible, .lc-tab:focus-visible, .lc-act:focus-visible, .lc-res-i:focus-visible, .lc-exit:focus-visible, .lc-go:focus-visible, .lc-reset:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.lg-tool:focus-visible, .lc-tab:focus-visible, .lc-act:focus-visible, .lc-res-i:focus-visible, .lc-exit:focus-visible, .lc-go:focus-visible, .lc-reset:focus-visible { outline: 2px solid var(--lg-focus); outline-offset: 2px; }
 @media (pointer: coarse) { .lg-tool { min-height: 44px; padding: 8px 16px; } }
 
 /* ---- Activity Console ---- */
@@ -51,7 +67,7 @@ body.focusmode #lobby .lounge { max-width: none; margin: 0; grid-template-column
 .lc-count { padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line2); color: var(--cyan); letter-spacing: .04em; }
 .lc-things, .lc-res, .lc-exits, .lc-chips { display: flex; flex-direction: column; gap: 6px; }
 .lc-exits, .lc-chips { flex-direction: row; flex-wrap: wrap; }
-.lc-act, .lc-res-i { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 7px 10px; text-align: left; cursor: pointer; border: 1px solid var(--line2); border-radius: 14px; background: rgba(255, 255, 255, .03); color: var(--ink); font: 400 13px var(--ui); transition: background .15s, border-color .15s, transform .12s; }
+.lc-act, .lc-res-i { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 7px 10px; text-align: left; cursor: pointer; border: 1px solid var(--line2); border-radius: 14px; background: rgba(255, 255, 255, .03); color: var(--ink); font: 400 13px var(--ui); transition: background var(--lg-dur-fast), border-color var(--lg-dur-fast), transform var(--lg-dur-fast); }
 .lc-act:hover, .lc-res-i:hover { background: rgba(95, 208, 238, .12); border-color: var(--cyan); }
 .lc-act:active, .lc-res-i:active { transform: translateY(1px); }
 .lc-act-l { display: flex; flex-direction: column; min-width: 0; }
@@ -97,7 +113,7 @@ body.lounge-world-focus .btt { display: none; }
   /* #lobby prefix: must out-rank `body.smooth .panel` (translucent background) and `.is-world-focus .lounge-console` (max-height) */
   #lobby .lounge-console { position: fixed; left: 0; right: 0; bottom: var(--v6-bar, 0px); z-index: 72; min-height: 0; max-height: min(46dvh, 400px); border-radius: 22px 22px 0 0;
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -18px 50px -10px rgba(0, 0, 0, .7);
-    background: linear-gradient(180deg, #0a3448, #051e2c); }   /* opaque: it overlays page text, unlike the translucent .panel */
+    background: var(--lg-surface); }   /* opaque: it overlays page text, unlike the translucent .panel */
   /* room + emote strips scroll sideways instead of wrapping into 3+ rows (the room list will grow) */
   .lobby-cv-wrap .lg-rooms, .lobby-cv-wrap .lg-emo { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; padding-bottom: 2px; }
   .lobby-cv-wrap .lg-rooms::-webkit-scrollbar, .lobby-cv-wrap .lg-emo::-webkit-scrollbar { display: none; }
@@ -115,7 +131,7 @@ body.lounge-world-focus .btt { display: none; }
 
 /* ---- in-stage info card (.lgi): the one feedback surface for world interactions ---- */
 .lgi { position: absolute; z-index: 6; left: 8px; right: 8px; top: 8px; max-height: 70%; display: flex; flex-direction: column; gap: 8px; overflow: hidden; padding: 12px 14px;
-  border: 1px solid var(--cyan); border-radius: 16px; background: linear-gradient(180deg, rgba(6, 34, 48, .97), rgba(4, 22, 34, .98)); box-shadow: 0 14px 40px -8px rgba(0, 0, 0, .7); animation: lgiIn .18s ease-out; }
+  border: 1px solid var(--cyan); border-radius: 16px; background: linear-gradient(180deg, rgba(6, 34, 48, .97), rgba(4, 22, 34, .98)); box-shadow: 0 14px 40px -8px rgba(0, 0, 0, .7); animation: lgiIn var(--lg-dur) var(--lg-ease); }
 @keyframes lgiIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .lgi-h { display: flex; align-items: center; gap: 10px; }
 .lgi-ic { font-size: 26px; line-height: 1; }
@@ -131,7 +147,7 @@ body.lounge-world-focus .btt { display: none; }
 .lgi-fact { color: var(--gold); }
 .lgi-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lgi-n { color: var(--dim); font: 700 12px var(--ui); }
-.lgi button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.lgi button:focus-visible { outline: 2px solid var(--lg-focus); outline-offset: 2px; }
 @media (max-width: 560px) { .lgi-b { flex-direction: column; } }
 @media (prefers-reduced-motion: reduce) { .lgi { animation: none; } }
 
@@ -142,11 +158,11 @@ body.lounge-world-focus .btt { display: none; }
 .lc-quest p { margin: 0 0 8px; font: 400 13px/1.45 var(--ui); color: var(--mut); }
 .lc-tick { color: var(--teal); }
 .lc-prog { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; margin: 2px 0 6px; }
-.lc-prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--teal)); border-radius: 99px; transition: width .4s ease; }
+.lc-prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--teal)); border-radius: 99px; transition: width var(--lg-dur-meter) var(--lg-ease); }
 .lc-quest .lc-meta { margin-bottom: 8px; }
 .lc-coll { margin: 4px 0; border: 1px solid var(--line2); border-radius: 12px; padding: 6px 10px; }
 .lc-coll summary { cursor: pointer; color: var(--mut); font: 700 12.5px var(--ui); min-height: 28px; display: flex; align-items: center; gap: 8px; }
-.lc-coll summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.lc-coll summary:focus-visible { outline: 2px solid var(--lg-focus); outline-offset: 2px; }
 .lc-coll p { margin: 6px 0; font: 400 12.5px/1.45 var(--ui); color: var(--mut); }
 .lc-coll b { color: var(--ink); }
 .lg-crumb { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 99px; border: 1px dashed var(--gold); color: var(--gold); font: 700 12px var(--ui); white-space: nowrap; }
@@ -164,7 +180,7 @@ body.lounge-world-focus .btt { display: none; }
 .lgs-f { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line2); background: rgba(255, 255, 255, .03); }
 .lgs-msg { margin: 0; min-height: 36px; color: var(--mut); font: 400 13px/1.4 var(--ui); }
 .lgs-acts { display: flex; gap: 8px; flex-wrap: wrap; }
-.lgs button:focus-visible, .lgs input:focus-visible, .lgs-field:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.lgs button:focus-visible, .lgs input:focus-visible, .lgs-field:focus-visible { outline: 2px solid var(--lg-focus); outline-offset: 2px; }
 .lgs-menu { display: grid; gap: 8px; padding: 14px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); align-content: start; }
 .lgs-menu > p { grid-column: 1 / -1; margin: 0; color: var(--mut); font: 400 13px/1.45 var(--ui); }
 .lgs-chart { display: flex; flex-direction: column; gap: 2px; min-height: 56px; padding: 8px 12px; text-align: left; cursor: pointer; border: 1px solid var(--line2); border-radius: 14px; background: rgba(255, 255, 255, .03); color: var(--ink); font: 400 13px var(--ui); }
@@ -213,11 +229,27 @@ body.lounge-world-focus .btt { display: none; }
 .kp-chips { display: flex; flex-wrap: wrap; gap: 6px; } .kp-chip { min-height: 38px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line2); background: rgba(255, 255, 255, .04); color: var(--mut); cursor: pointer; font: 700 12px var(--ui); }
 .kp-chip[aria-pressed="true"] { background: rgba(95, 208, 238, .2); border-color: var(--cyan); color: var(--ink); } .kp-chip:disabled { opacity: .4; cursor: not-allowed; }
 .kp-acts { display: flex; gap: 8px; flex-wrap: wrap; } .kp-log { margin: 0; padding-left: 18px; color: var(--mut); font: 400 12px/1.5 var(--ui); }
-.kp button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.kp button:focus-visible { outline: 2px solid var(--lg-focus); outline-offset: 2px; }
 /* ---- Order Up: tier rules (Lunch Rush / Chef's Table) ---- */
 .lgx-mods { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; } .lgx-mod { padding: 4px 10px; border-radius: 999px; font: 700 12px var(--ui); border: 1px solid; }
 .lgx-mod-rush { color: #ffd479; border-color: #ffd47966; background: #ffd47914; } .lgx-mod-allergy { color: #ff9aa8; border-color: #ff9aa866; background: #ff9aa814; } .lgx-mod-reverse { color: #9adfff; border-color: #9adfff66; background: #9adfff14; }
 .lgx-it.ban { opacity: .55; text-decoration: line-through; border-color: #ff9aa8; position: relative; } .lgx-it.ban::after { content: "\2715"; position: absolute; top: 4px; right: 8px; color: #ff9aa8; font-weight: 700; }
-.lgx-it.pop { animation: lgxPop .28s ease-out; } @keyframes lgxPop { 40% { transform: scale(1.1); } }
+.lgx-it.pop { animation: lgxPop var(--lg-dur) var(--lg-ease); } @keyframes lgxPop { 40% { transform: scale(1.1); } }
 @media (prefers-reduced-motion: reduce) { .lgs-line.show { animation: none; stroke-dashoffset: 0; } .shake, .kp-d, .lgx-it.pop { animation: none; } .sky:not(.still) { transition: none; } }
 .lgs-sky .lgs-main, .lgs-sky .lgs-field { background: #03061a; }
+
+/* ---- microinteractions: restrained, each with a job. All disabled under prefers-reduced-motion (see end of block). ---- */
+.lounge .btn:active, .lgs .btn:active, .lgi .btn:active, .lgx .btn:active, .lgd .btn:active, .kp .btn:active { transform: translateY(1px) scale(.98); }
+.lounge-console { animation: lcSlide var(--lg-dur-slow) var(--lg-ease); } @keyframes lcSlide { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+.lc-panel:not([hidden]) { animation: lcFade var(--lg-dur) var(--lg-ease); } @keyframes lcFade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+#lobby.is-world-focus .lounge-stage { animation: lgFocusIn var(--lg-dur-slow) var(--lg-ease); } @keyframes lgFocusIn { from { opacity: .4; transform: scale(.985); } to { opacity: 1; transform: none; } }
+.lc-badge { animation: lcPop var(--lg-dur-slow) var(--lg-ease); } @keyframes lcPop { 50% { transform: scale(1.25); } }
+.lgs-star.sel { animation: lgsPulse 1s ease-in-out infinite; } @keyframes lgsPulse { 50% { r: 4.6; } }
+.lgs-line.new { stroke-dasharray: 400; stroke-dashoffset: 400; animation: lgsDraw var(--lg-dur-meter) var(--lg-ease) forwards; }
+.kp-m.bump { animation: kpBump var(--lg-dur-meter) var(--lg-ease); } @keyframes kpBump { 30% { transform: scaleY(1.5); filter: brightness(1.5); } }
+.cp-out.reveal { animation: cpReveal .6s ease-out; } @keyframes cpReveal { from { opacity: 0; letter-spacing: .5em; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .lounge-console, .lc-panel:not([hidden]), #lobby.is-world-focus .lounge-stage, .lc-badge, .lgs-star.sel, .lgs-line.new, .kp-m.bump, .cp-out.reveal { animation: none; }
+  .lgs-line.new { stroke-dashoffset: 0; }
+  .lounge .btn:active, .lgs .btn:active, .lgi .btn:active, .lgx .btn:active, .lgd .btn:active, .kp .btn:active { transform: none; }
+}

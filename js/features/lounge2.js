@@ -30,6 +30,26 @@ const HANDLERS = {};      /* hotspot type → fn(hotspot, L): runs when the play
 const OVERLAYS = [];      /* fn(L, ctx, t, roomId, pos): extra per-frame painters (markers, prompts) drawn after characters */
 const PAINT = {};         /* roomId → { stat(c), dyn(L, c, t), light } — scenery painters; rooms without one use the built-in legacy painters */
 const DECOR = {};         /* roomId → [fn(L, ctx, t)]: scenery-layer decorations drawn behind the characters (door sprites, props) */
+const FX2 = [], FXCAP = 28;   /* cosmetic effects: drawn locally, never part of presence, so they cost no network traffic */
+function fx(kind, x, y, o) { FX2.push({ k: kind, x: x, y: y, t0: performance.now(), d: (o && o.d) || (kind === 'confetti' ? 1500 : kind === 'sparkle' ? 1000 : 750) }); if (FX2.length > FXCAP) FX2.shift(); }
+function drawFx(L, c) {
+  const now = performance.now(), still = !!L.REDUCED;
+  for (let i = FX2.length - 1; i >= 0; i--) {
+    const f = FX2[i], p = (now - f.t0) / f.d; if (p >= 1) { FX2.splice(i, 1); continue; } const a = 1 - p;
+    if (f.k === 'sparkle') { for (let k = 0; k < 7; k++) { const an = k * 0.9 + 0.3, r = still ? 14 : 5 + p * 22, x = f.x + Math.cos(an) * r, y = f.y - (still ? 0 : p * 14) + Math.sin(an) * r * .6; c.fillStyle = k % 2 ? 'rgba(255,236,150,' + a + ')' : 'rgba(255,255,255,' + a + ')'; c.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); c.fillRect(Math.round(x), Math.round(y) - 1, 1, 3); } }
+    else if (f.k === 'dust') { if (still) continue; for (let k = 0; k < 5; k++) { c.fillStyle = 'rgba(220,232,240,' + (.32 * a) + ')'; c.beginPath(); c.arc(f.x + (k - 2) * 5 * (.4 + p), f.y - p * 7 - (k % 2) * 2, 1.4 + p * 2.6, 0, 7); c.fill(); } }
+    else if (f.k === 'ping') { c.strokeStyle = 'rgba(255,222,130,' + (.75 * a) + ')'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(f.x, f.y, still ? 14 : 4 + p * 24, still ? 8 : (4 + p * 24) * .42, 0, 0, 7); c.stroke(); }
+    else if (f.k === 'deny') { const sh = still ? 0 : Math.sin(p * 30) * 3 * a; c.strokeStyle = 'rgba(255,135,149,' + a + ')'; c.lineWidth = 2; c.beginPath(); c.moveTo(f.x - 6 + sh, f.y - 6); c.lineTo(f.x + 6 + sh, f.y + 6); c.moveTo(f.x + 6 + sh, f.y - 6); c.lineTo(f.x - 6 + sh, f.y + 6); c.stroke(); }
+    else if (f.k === 'confetti') { const cols = ['#ffd479', '#5fd0ee', '#ff8fb0', '#8ff0b0', '#c9a0ff']; for (let k = 0; k < 16; k++) { const x = f.x + ((k * 29) % 60) - 30 + (still ? 0 : Math.sin(p * 6 + k) * 4), y = f.y - 34 + (still ? 10 : p * 56) + ((k * 13) % 14); c.fillStyle = cols[k % 5]; c.globalAlpha = Math.min(1, a * 2); c.fillRect(Math.round(x), Math.round(y), 2, k % 3 ? 3 : 2); } c.globalAlpha = 1; }
+  }
+}
+/* room-entry banner: brief, legible destination feedback for ring moves and side-room doors alike */
+function drawBanner(L, c) {
+  const b = STATE.banner; if (!b) return; const age = performance.now() - b.t0; if (age > 2000) { STATE.banner = null; return; }
+  const a = age < 220 ? age / 220 : age > 1500 ? Math.max(0, 1 - (age - 1500) / 500) : 1, yo = L.REDUCED ? 0 : (age < 220 ? (1 - a) * -8 : 0);
+  c.font = 'bold 11px "Atkinson Hyperlegible", sans-serif'; const w = c.measureText(b.txt).width + 26, x = Math.round(L.W / 2 - w / 2), y = 14 + yo;
+  c.globalAlpha = a; c.fillStyle = 'rgba(3,20,30,.88)'; c.fillRect(x, y, w, 20); c.fillStyle = b.sub ? '#ffd479' : '#5fd0ee'; c.fillRect(x, y + 20, w, 2); c.fillStyle = '#e6fbff'; c.fillText(b.txt, x + 13, y + 14); c.globalAlpha = 1;
+}
 const PAUSE = new Set();  /* tokens: while non-empty the world ignores click/keyboard movement (a game or panel owns the input) */
 const inBox = (v, a, b) => typeof v === 'number' && v >= a && v <= b;
 function registerRoom(def) {
@@ -130,7 +150,7 @@ function setRoom(id, opts) {
   const why = lockOf(id); if (why) { if (!o.force) { emit('locked', { room: id, why: why }); if (window.toast) toast('<b>' + esc(ROOMS[id].i + ' ' + ROOMS[id].n) + ' is locked</b><br>' + esc(why), 'speech', 3200); if (window.sfx) sfx('cross'); return false; } }
   const from = L.me.room || 'deck', R = ROOMS[id], sp = (R.spawn && R.spawn.from && R.spawn.from[from]) || (R.spawn && R.spawn.x != null ? R.spawn : null) || { x: 240, y: 244 };
   L.me.room = id; L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null; L.me.jukebox = 0; L.me.x = L.me.cx = sp.x; L.me.y = L.me.cy = sp.y; L.me.walk = false; L.me.act = null;
-  STATE.fade = 1; STATE.hover = null; hideCard(); track(true); if (L.renderRoster) L.renderRoster(); paintBar(); if (!o.silent && window.sfx) sfx('reveal'); emit('room', { from: from, to: id });
+  STATE.fade = 1; STATE.hover = null; STATE.banner = { txt: R.i + ' ' + R.n, t0: performance.now(), sub: !!R.parent }; hideCard(); track(true); if (L.renderRoster) L.renderRoster(); paintBar(); if (!o.silent && window.sfx) sfx('reveal'); emit('room', { from: from, to: id });
   return true;
 }
 function doEmote(k) { const L = LE(); if (!L || !EMO[k]) return; L.me.emote = { k: k, ts: Date.now() }; EM[AM().uid || 'me'] = { ts: L.me.emote.ts, at: performance.now() }; if (k === 'sip') STATE.fx.push({ k: 'steam', x: L.me.cx, y: L.me.cy - 30, at: performance.now() }); track(true); if (window.sfx) sfx(k === 'cheer' ? 'combo' : 'click'); emit('emote', { k: k }); }
@@ -271,7 +291,7 @@ function draw(t) {
   lightOverlay(c, id); doors(c, id, t); hotDoors(c, id, t); bubbles(L, c, pos);
   if (EXT.over) { try { EXT.over(L, c, pos, t, wrap); } catch (e) { if (window.console && !STATE.warnedOver) { STATE.warnedOver = 1; console.error('[lounge2:over]', e); } } }
   OVERLAYS.forEach(f => { try { f(L, c, t, id, pos); } catch (e) { if (window.console && !STATE.warnedOv) { STATE.warnedOv = 1; console.error('[lounge2:overlay]', e); } } });
-  prompt(L, c);
+  prompt(L, c); drawFx(L, c); drawBanner(L, c);
   STATE.fx = STATE.fx.filter(f => performance.now() - f.at < 1800); STATE.fx.forEach(f => { const a = (performance.now() - f.at) / 1800; c.fillStyle = 'rgba(255,255,255,' + (.7 * (1 - a)) + ')'; c.beginPath(); c.arc(f.x + Math.sin(a * 6) * 3, f.y - a * 24, 2 + a * 3, 0, 7); c.fill(); });
   const h = STATE.hover; if (h) { c.font = 'bold 9px "Atkinson Hyperlegible", sans-serif'; const w = c.measureText(hlabel(h)).width + 10, x = Math.max(4, Math.min(L.W - w - 4, h.x + h.w / 2 - w / 2)), y = Math.max(4, h.y - 16); c.fillStyle = 'rgba(3,20,30,.92)'; c.fillRect(x, y, w, 14); c.strokeStyle = '#ffc874'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, w - 1, 13); c.fillStyle = '#ffe9b0'; c.fillText(hlabel(h), x + 5, y + 10); }
   if (STATE.fade > 0.01) { c.fillStyle = 'rgba(2,12,20,' + STATE.fade + ')'; c.fillRect(0, 0, L.W, L.H); STATE.fade *= .88; }
@@ -358,12 +378,20 @@ function init() {
   L.extra = extraMeta;                /* network.js merges this into presence meta */
   L.actors = ACT;                     /* read-only handle for diagnostics */
   window.CodexLounge = { HOT: HOT, ROOMS: ROOMS, hooks: EXT, room: room, doEmote: doEmote, track: track, setRoom: setRoom, who: who, walkTo: walkTo, on: on, off: off, emit: emit,
-    registerRoom: registerRoom, addHotspot: addHotspot, setSpawn: setSpawn, handlers: HANDLERS, addOverlay: f => { OVERLAYS.push(f); return () => { const i = OVERLAYS.indexOf(f); if (i >= 0) OVERLAYS.splice(i, 1); }; },
+    registerRoom: registerRoom, addHotspot: addHotspot, setSpawn: setSpawn, fx: fx, fxCount: () => FX2.length, paintDecor: (id, c, t) => { const L = LE(); (DECOR[id] || []).forEach(f => f(L, c, t)); }, bannerOn: () => !!STATE.banner, fading: () => STATE.fade > 0.01, handlers: HANDLERS, addOverlay: f => { OVERLAYS.push(f); return () => { const i = OVERLAYS.indexOf(f); if (i >= 0) OVERLAYS.splice(i, 1); };
+ },
     decorate: (id, fn) => { if (ID_RE.test(id) && typeof fn === 'function') (DECOR[id] || (DECOR[id] = [])).push(fn); }, registerArt: (id, def) => { if (ID_RE.test(id) && def) { PAINT[id] = def; delete cache[id]; } }, parentOf: parentOf, mainRooms: mainRooms, lockOf: lockOf, label: hlabel, nearest: () => STATE.near,
     pause: tok => { PAUSE.add(tok || 'x'); emit('pause', { on: true }); }, resume: tok => { PAUSE.delete(tok || 'x'); if (!PAUSE.size) emit('pause', { on: false }); }, paused: () => PAUSE.size > 0 };   /* seam for lounge-play.js */
+/* feedback wiring: effects are purely local and react to the same events other modules use */
+on('arrive', e => { const L = LE(); if (!L || !e) return; const h = (HOT[room()] || []).filter(x => x.id === e.id)[0];
+  if (e.t !== 'seat' && e.t !== 'door') fx('dust', L.me.cx, L.me.cy + 2);
+  if (h && h.t !== 'npc' && h.t !== 'seat' && h.t !== 'door') fx('ping', h.x + h.w / 2, h.y + h.h - 4); });
+on('locked', e => { const h = (HOT[room()] || []).filter(x => x.t === 'door' && x.to === e.room)[0]; if (h) fx('deny', h.x + h.w / 2, h.y + h.h / 2); });
+on('discover', () => { const L = LE(); if (L && L.me) fx('sparkle', L.me.cx, L.me.cy - 46); });
+on('win', () => { const L = LE(); if (L && L.me) fx('confetti', L.me.cx, L.me.cy - 30); });
   L.draw = draw; L.onClick = onClick; L.renderRoster = roster;
   const step0 = L.step; L.step = function (dt, t) { step0.call(this, dt, t); arrive(this); try { tick(this, dt); } catch (e) { if (window.console && !STATE.warned) { STATE.warned = 1; console.error('[lounge2:tick]', e); } } if (L.me.emote && Date.now() - L.me.emote.ts > 4300) L.me.emote = null; STATE.last += dt; if (STATE.last > 1000) { STATE.last = 0; if (wantMusic()) musicStart(); else if (MUS.on) musicStop(); } };
-  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); } emit('active', { on: !!on }); };
+  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); FX2.length = 0; STATE.banner = null; } emit('active', { on: !!on }); };
   L.cv.insertAdjacentHTML('afterend', '<div id="lgBar" class="lg-bar"></div>'); paintBar();
   $1('#lgBar').addEventListener('click', e => {
     const r = e.target.closest('[data-room]'), m = e.target.closest('[data-emo]'), g = e.target.closest('[data-lg2]');

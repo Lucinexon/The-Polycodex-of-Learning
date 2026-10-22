@@ -77,7 +77,7 @@ function start(opts) {
     if (phase !== 'bench' || ended) return; const c = CASES[ci];
     if (solved(c, tool, set)) { ended = true; phase = 'done'; score = Math.max(10, 100 - 15 * mistakes - 10 * hints); const res = result({ won: true, rounds: 1 }); if (G && G.report) G.report('cipher', res);
       const nx = ci + 1 < CASES.length; if (root.sfx) root.sfx('ok');
-      shell('<div class="cp"><p class="cp-win">\u2714 Decoded!</p><p class="cp-out">' + esc(c.plain) + '</p><p class="cp-note">' + esc(c.n) + ' solved. Score ' + score + '.</p></div>', (nx ? '<button type="button" class="btn primary" data-a="next">Next case</button>' : '') + '<button type="button" class="btn" data-a="menu">Cases</button><button type="button" class="btn" data-a="close">Close</button>', c.n);
+      shell('<div class="cp"><p class="cp-win">\u2714 Decoded!</p><p class="cp-out reveal">' + esc(c.plain) + '</p><p class="cp-note">' + esc(c.n) + ' solved. Score ' + score + '.</p></div>', (nx ? '<button type="button" class="btn primary" data-a="next">Next case</button>' : '') + '<button type="button" class="btn" data-a="menu">Cases</button><button type="button" class="btn" data-a="close">Close</button>', c.n);
       msg('Score ' + score + (mistakes ? ' (' + mistakes + ' wrong reading' + (mistakes > 1 ? 's' : '') + ')' : ' \u2014 perfect') + '.'); const b = el.querySelector('.lgs-acts .btn'); if (b) b.focus(); if (opts.onEnd) opts.onEnd(res); return; }
     lives--; mistakes++; if (root.sfx) root.sfx('bad');
     if (lives <= 0) { ended = true; phase = 'done'; const res = result({ won: false, rounds: 0 }); if (G && G.report) G.report('cipher', res);

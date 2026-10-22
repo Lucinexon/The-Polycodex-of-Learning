@@ -112,6 +112,8 @@ function fit() {
   wrap.style.setProperty('--stage-w', Math.max(300, Math.floor(Math.min(availW, h * (480 / 300)))) + 'px');
 }
 
+/* periodic refresh (NPC shifts change on a clock): only while the lounge is showing AND the page is visible */
+function tick() { if (doc.hidden || !lobbyActive()) return; refresh(); }
 /* ---------- Escape policy ---------- */
 const visible = n => !!(n && n.getClientRects && n.getClientRects().length);
 function otherLayerOpen() { return $A('.lgx,.lgs,.lgd,.lgi,.modal,[role="dialog"],[aria-modal="true"]').some(visible); }
@@ -166,9 +168,13 @@ const gamesTab = {
   }
 };
 
+let seenFound = null;   /* discoveries the player has already looked at in the Journal (session-local) */
+const foundNow = () => (PG() ? Object.keys(PG().get().found).length : 0);
 const journalTab = {
   id: 'journal', label: 'Journal', order: 30,
+  badge: () => (seenFound == null ? 0 : Math.max(0, foundNow() - seenFound)),
   render(p) {
+    seenFound = foundNow();
     const P = PG(), L = LG(); if (!P) { setHTML(p, '<p class="lc-empty">Progress tracking is unavailable.</p>'); return; }
     const d = P.get(), ids = L ? Object.keys(L.ROOMS) : [], seen = ids.filter(k => d.rooms[k] && d.rooms[k].n);
     const when = t => { if (!t) return ''; const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
@@ -194,7 +200,7 @@ function init() {
   el.lobby = $1('#lobby'); el.lounge = $1('#lounge'); if (!el.lobby || !el.lounge) return;
   Object.assign(el, { stage: $1('#loungeStage'), wrap: $1('.lobby-cv-wrap', el.lobby), cv: $1('#loungeCanvas'), cons: $1('#loungeConsole'), tabs: $1('#lcTabs'), body: $1('#lcBody'), cbtn: $1('#loungeConsoleBtn'), fbtn: $1('#loungeFocusBtn'), roster: $1('#lobbyRoster') });
   loadPrefs(); if (st.console === null) st.console = !mobile();
-  registerTab(roomTab); registerTab(gamesTab); registerTab(journalTab);
+  seenFound = foundNow(); registerTab(roomTab); registerTab(gamesTab); registerTab(journalTab);
   st.ready = true; buildTabs(); setConsole(st.console);
   el.cbtn.addEventListener('click', () => setConsole(!st.console, { restoreFocus: true }));
   $1('#loungeConsoleClose').addEventListener('click', () => setConsole(false, { restoreFocus: true }));
@@ -211,12 +217,12 @@ function init() {
   const L = LG();
   if (L && L.on) {
     L.on('room', () => { refresh(); layout(); });
-    L.on('active', e => { syncBody(); layout(); clearInterval(timer); timer = 0; if (e && e.on) { refresh(); timer = setInterval(refresh, 4000); } });
+    L.on('active', e => { syncBody(); layout(); clearInterval(timer); timer = 0; if (e && e.on) { refresh(); timer = setInterval(tick, 4000); } });
     L.on('arrive', refresh);
   }
   const le = NE().LoungeEngine; if (le && typeof le.renderRoster === 'function') { const rr = le.renderRoster; le.renderRoster = function () { const r = rr.apply(this, arguments); refresh(); return r; }; }
   if (PG()) PG().onChange(refresh);
-  if (lobbyActive()) { syncBody(); refresh(); if (!timer) timer = setInterval(refresh, 4000); }
+  if (lobbyActive()) { syncBody(); refresh(); if (!timer) timer = setInterval(tick, 4000); }
   layout();
 }
 doc.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { if (root.console) console.error('[lounge-console]', e); } });

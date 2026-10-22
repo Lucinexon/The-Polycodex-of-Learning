@@ -54,12 +54,12 @@ const Model = {
 /* ---------- activity UI (console tab) ---------- */
 function start(opts) {
   opts = opts || {}; const G = root.CodexLoungeGames, host = opts.host || (G && G.host);
-  let idx = cl((opts.scenario | 0) - 1, 0, SCEN.length - 1), scn = SCEN[idx], st = Model.init(scn), picks = [], used = 0, ended = false, dead = false, view = 'menu', lastLines = [], note = '', tab = null, runs = 0;
+  let prev = null, idx = cl((opts.scenario | 0) - 1, 0, SCEN.length - 1), scn = SCEN[idx], st = Model.init(scn), picks = [], used = 0, ended = false, dead = false, view = 'menu', lastLines = [], note = '', tab = null, runs = 0;
   const reduced = !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches), unlocked = Math.max(0, opts.cleared | 0) + 1, forecastOn = !!opts.forecast;
   const result = x => Object.assign({ won: false, score: 0, rounds: st.cycle, mistakes: 0, quit: false, scenario: idx + 1 }, x);
   const bandOf = k => scn.bands[k];
   let panel = null;
-  const meter = k => { const v = st[k], b = bandOf(k), ok = !b || (v >= b[0] && v <= b[1]); let seg = ''; for (let i = 1; i <= CAP; i++) seg += '<i class="' + (i <= v ? 'on' : '') + (b && i >= b[0] && i <= b[1] ? ' band' : '') + '"></i>'; return '<div class="kp-row" style="--c:' + SP[k].c + '"><span class="kp-n">' + esc(SP[k].n) + '</span><div class="kp-m' + (ok ? '' : ' warn') + '" role="meter" aria-label="' + esc(SP[k].n) + '" aria-valuemin="0" aria-valuemax="' + CAP + '" aria-valuenow="' + v + '"' + (b ? ' aria-valuetext="' + v + ', safe ' + b[0] + ' to ' + b[1] + '"' : '') + '>' + seg + '</div><b class="kp-v">' + v + '</b><small>' + (b ? 'safe ' + b[0] + '–' + b[1] : SP[k].d) + '</small></div>'; };
+  const meter = k => { const v = st[k], bump = !!prev && prev[k] !== v && !reduced, b = bandOf(k), ok = !b || (v >= b[0] && v <= b[1]); let seg = ''; for (let i = 1; i <= CAP; i++) seg += '<i class="' + (i <= v ? 'on' : '') + (b && i >= b[0] && i <= b[1] ? ' band' : '') + '"></i>'; return '<div class="kp-row" style="--c:' + SP[k].c + '"><span class="kp-n">' + esc(SP[k].n) + '</span><div class="kp-m' + (ok ? '' : ' warn') + (bump ? ' bump' : '') + '" role="meter" aria-label="' + esc(SP[k].n) + '" aria-valuemin="0" aria-valuemax="' + CAP + '" aria-valuenow="' + v + '"' + (b ? ' aria-valuetext="' + v + ', safe ' + b[0] + ' to ' + b[1] + '"' : '') + '>' + seg + '</div><b class="kp-v">' + v + '</b><small>' + (b ? 'safe ' + b[0] + '–' + b[1] : SP[k].d) + '</small></div>'; };
   const tank = () => { let dots = ''; [['p', 11], ['z', 7], ['j', 5]].forEach(a => { for (let i = 0; i < st[a[0]]; i++) { const x = 8 + ((i * 37 + a[1] * 13) % 120), y = 8 + ((i * 23 + a[1] * 7) % 54); dots += '<circle class="kp-d" cx="' + x + '" cy="' + y + '" r="' + (a[0] === 'j' ? 3.4 : a[0] === 'z' ? 2.4 : 1.8) + '" fill="' + SP[a[0]].c + '" style="animation-delay:-' + ((i * 7 + a[1]) % 9) / 3 + 's"/>'; } }); return '<svg class="kp-tank" viewBox="0 0 136 70" role="img" aria-label="Tank: ' + st.p + ' phytoplankton, ' + st.z + ' copepods, ' + st.j + ' comb jellies"><rect width="136" height="70" rx="8" fill="#062a3a"/>' + dots + '<rect y="' + (70 - st.n * 3) + '" width="136" height="' + st.n * 3 + '" fill="rgba(255,255,255,.07)"/></svg>'; };
   function paint() {
     if (!panel || dead) return; let h;
@@ -81,9 +81,9 @@ function start(opts) {
     const a = doc.activeElement, fk = a && panel.contains(a) ? a.getAttribute('data-fk') : ''; panel.innerHTML = '<div class="kp">' + h + '</div>';
     if (fk) { const n = panel.querySelector('[data-fk="' + fk + '"]'); if (n && !n.disabled) n.focus(); }
   }
-  function begin(i) { idx = cl(i, 0, SCEN.length - 1); scn = SCEN[idx]; st = Model.init(scn); picks = []; used = 0; ended = false; lastLines = []; note = scn.story; view = 'play'; runs++; paint(); }
+  function begin(i) { prev = null; idx = cl(i, 0, SCEN.length - 1); scn = SCEN[idx]; st = Model.init(scn); picks = []; used = 0; ended = false; lastLines = []; note = scn.story; view = 'play'; runs++; paint(); }
   function run() {
-    if (ended || dead) return; const r = Model.step(st, picks, scn); used += picks.length; picks = []; st = r.s; lastLines = r.lines;
+    if (ended || dead) return; prev = Object.assign({}, st); const r = Model.step(st, picks, scn); used += picks.length; picks = []; st = r.s; lastLines = r.lines;
     if (r.fail || r.won || st.cycle >= scn.limit) {
       ended = true; const won = r.won; if (!won) note = r.fail ? Model.failText(r.fail) : 'Out of time: the tank never held steady long enough.'; else note = 'The tank held steady for ' + scn.need + ' cycles — stable!';
       const res = result({ won: won, score: won ? Model.score(st.cycle, scn, used) : 0, mistakes: won ? 0 : 1 }); if (G && G.report) G.report('keeper', res); if (opts.onEnd) opts.onEnd(res);

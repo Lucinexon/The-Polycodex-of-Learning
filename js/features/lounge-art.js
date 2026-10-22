@@ -24,6 +24,9 @@ const GEO = {
   exit: { x: 8, y: 128, w: 38, h: 58 }
 };
 
+/* Deck props drawn at their hotspot rectangles (kept here so tests can assert art ↔ hitbox alignment). */
+const PROPS = { deck: { benches: [[52, 212], [372, 224]], scope: { x: 318, y: 120, w: 44, h: 66 } } };
+
 /* ---------- door sprites (drawn in the scenery layer, behind characters) ---------- */
 function doorSprite(c, g, kind, t, locked) {
   const { R, E, L, P, glow } = H(c), x = g.x, y = g.y, w = g.w, h = g.h, tw = Math.sin(t / 500);
@@ -161,11 +164,79 @@ const archive = {
   }
 };
 
+/* ---------- Observation Deck (main room) ----------
+   Layer order: ocean + ocean life (engine painters) → architecture overlay (cached, transparent windows) → light shafts / floor shimmer / plankton (per frame).
+   Props are drawn at the SAME rectangles as the hotspots they belong to (telescope 318,120,44×66; benches 52,212 and 372,224, both 56×26). */
+let deckStatic = null;
+function buildDeck(L) {
+  const cv = document.createElement('canvas'); cv.width = 480; cv.height = 300; const c = cv.getContext('2d'), { R, E, G, L: Ln, P } = H(c), FY = L.FLOOR_Y || 185;
+  /* floor: polished plate with perspective seams */
+  G(FY, 300, '#0b4160', '#051f31'); R(0, FY, 480, 3, '#3aa7cf'); R(0, FY + 3, 480, 5, '#0e4d70');
+  c.strokeStyle = 'rgba(120,214,240,.13)'; c.lineWidth = 1; for (let k = -8; k <= 8; k++) { c.beginPath(); c.moveTo(240 + k * 26, FY + 8); c.lineTo(240 + k * 78, 300); c.stroke(); }
+  [FY + 22, FY + 44, FY + 72, FY + 106].forEach(y => R(0, y, 480, 1, 'rgba(120,214,240,.12)'));
+  /* window architecture: mullions with rivets, header beam with light strips, sill + rail */
+  [[0, 6], [157, 7], [316, 7], [474, 6]].forEach(m => { const g = c.createLinearGradient(m[0], 0, m[0] + m[1], 0); g.addColorStop(0, '#0a2f48'); g.addColorStop(.5, '#2b7fa6'); g.addColorStop(1, '#0a2f48'); c.fillStyle = g; c.fillRect(m[0], 0, m[1], FY); for (let y = 14; y < FY; y += 22) R(m[0] + Math.floor(m[1] / 2) - 1, y, 2, 2, '#8fe0f5'); });
+  G(0, 13, '#051c2c', '#0a3550'); R(0, 13, 480, 2, '#2b7fa6'); for (let x = 12; x < 480; x += 60) { R(x, 4, 34, 3, '#d7f6ff'); R(x - 1, 3, 36, 5, 'rgba(160,230,255,.18)'); }
+  R(0, FY - 10, 480, 10, '#06283e'); R(0, FY - 10, 480, 2, '#3aa7cf'); for (let x = 6; x < 480; x += 24) { R(x, FY - 8, 2, 8, '#0b3d59'); }
+  R(0, FY - 22, 480, 2, 'rgba(120,214,240,.35)'); for (let x = 0; x < 480; x += 48) R(x, FY - 22, 3, 12, '#1f7396');
+  /* benches (hotspots b1 52,212 · b2 372,224; both 56×26): cushion, apron, legs, contact shadow */
+  PROPS.deck.benches.forEach(b => { const x = b[0], y = b[1]; E(x + 28, y + 27, 31, 5, 'rgba(0,0,0,.32)'); R(x + 3, y + 17, 5, 10, '#0a2d45'); R(x + 48, y + 17, 5, 10, '#0a2d45'); R(x, y + 8, 56, 10, '#145a7c'); R(x, y + 8, 56, 2, '#3aa7cf'); R(x + 1, y + 18, 54, 3, '#0a3550');
+    G(y + 1, y + 9, '#2a95b8', '#1d7f9c', x + 2, 52); R(x + 2, y + 1, 52, 1, '#7fdcf2'); for (let i = 1; i < 4; i++) R(x + 2 + i * 13, y + 2, 1, 7, 'rgba(0,0,0,.22)'); R(x - 2, y, 4, 12, '#0e4a6a'); R(x + 54, y, 4, 12, '#0e4a6a'); R(x - 2, y, 4, 2, '#3aa7cf'); R(x + 54, y, 4, 2, '#3aa7cf'); });
+  /* telescope (hotspot 318,120,44×66): brass-and-steel tube on a tripod, aimed up-right through the glass */
+  E(340, 188, 24, 4, 'rgba(0,0,0,.35)'); Ln(340, 168, 326, 190, '#5c6b76', 2.2); Ln(340, 168, 354, 190, '#5c6b76', 2.2); Ln(340, 168, 340, 190, '#8a99a4', 2.2); R(334, 164, 12, 6, '#6b7882'); E(340, 164, 7, 3, '#9aa7b2');
+  c.save(); c.translate(340, 160); c.rotate(-0.62); const tg = c.createLinearGradient(-6, 0, 6, 0); tg.addColorStop(0, '#6f7f8b'); tg.addColorStop(.45, '#dfe8ef'); tg.addColorStop(1, '#5d6c77'); c.fillStyle = tg; c.fillRect(-6, -44, 12, 44); c.fillStyle = '#c9a64a'; c.fillRect(-7, -44, 14, 4); c.fillRect(-7, -22, 14, 2.5); c.fillRect(-7, -4, 14, 3); c.fillStyle = '#7fe3ff'; c.fillRect(-5, -47, 10, 3); c.fillStyle = '#243441'; c.fillRect(-3, 0, 6, 9); c.fillStyle = '#c9a64a'; c.fillRect(-4, 8, 8, 2); c.restore();
+  return cv;
+}
+const deck = {
+  draw(L, c, t) {
+    const FY = L.FLOOR_Y || 185, bg = c.createLinearGradient(0, 0, 0, FY); bg.addColorStop(0, '#0d5f8c'); bg.addColorStop(.55, '#08436a'); bg.addColorStop(1, '#042a45'); c.fillStyle = bg; c.fillRect(0, 0, L.W, L.H);
+    if (L.drawGlow) L.drawGlow(t);
+    (L.stars || []).forEach(s => { const a = L.REDUCED ? .6 : (.35 + .4 * Math.abs(Math.sin(s.tw))); c.fillStyle = s.s > 1 ? 'rgba(255,200,116,' + a + ')' : 'rgba(190,235,250,' + a + ')'; c.fillRect(Math.round(s.x), Math.round(s.y), s.s, s.s); });
+    if (L.drawWhale) L.drawWhale(t); if (!L.REDUCED && L.drawSat) L.drawSat(t);
+    /* soft light shafts through the water, slowly drifting */
+    for (let i = 0; i < 4; i++) { const x = 40 + i * 120 + (L.REDUCED ? 0 : Math.sin(t / 3200 + i * 1.7) * 14), a = .05 + .02 * Math.sin(t / 2100 + i); c.fillStyle = 'rgba(170,235,255,' + a + ')'; c.beginPath(); c.moveTo(x - 6, 14); c.lineTo(x + 18, 14); c.lineTo(x + 70, FY - 10); c.lineTo(x - 34, FY - 10); c.closePath(); c.fill(); }
+    if (!deckStatic) deckStatic = buildDeck(L); c.drawImage(deckStatic, 0, 0);
+    /* window light pooling on the floor, plankton drifting in the glass, and a glint on the telescope lens */
+    for (let i = 0; i < 3; i++) { c.fillStyle = 'rgba(150,225,250,' + (.06 + .02 * Math.sin(t / 900 + i * 2)) + ')'; c.beginPath(); c.moveTo(20 + i * 160, FY + 8); c.lineTo(140 + i * 160, FY + 8); c.lineTo(170 + i * 160, 292); c.lineTo(-10 + i * 160, 292); c.closePath(); c.fill(); }
+    if (!L.REDUCED) for (let i = 0; i < 26; i++) { const x = (i * 83 + t / 40 * (.3 + (i % 5) * .12)) % 470 + 5, y = 24 + (i * 47) % (FY - 60) + Math.sin(t / 1300 + i) * 4, a = .18 + .28 * Math.abs(Math.sin(t / 700 + i)); c.fillStyle = 'rgba(160,255,230,' + a + ')'; c.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    const gl = .5 + .5 * Math.sin(t / 900); c.fillStyle = 'rgba(190,245,255,' + (.25 + .5 * gl) + ')'; c.fillRect(325, 119 - Math.round(gl), 2, 2);
+  }
+};
+
+/* ---------- depth passes for the café, greenhouse and loft ----------
+   Scenery layer (behind characters): contact shadows ground furniture; light pools say where the light comes from.
+   Foreground layer (in front of characters, low alpha): frames the room so characters read as standing INSIDE it. All motion respects L.REDUCED. */
+function seatShadows(G, id, c) {
+  (G.HOT[id] || []).forEach(h => { if (h.t !== 'seat' || h.npc) return; c.fillStyle = 'rgba(0,0,0,.26)'; c.beginPath(); c.ellipse(h.x + h.w / 2, h.y + h.h - 1, h.w * .56, 4.2, 0, 0, 7); c.fill(); });
+}
+function pool(c, x, y, rx, ry, col) { c.fillStyle = col; c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 7); c.fill(); }
+function decorCafe(G) { return (L, c, t) => {
+  seatShadows(G, 'cafe', c); const f = L.REDUCED ? 0 : Math.sin(t / 260) * .015;
+  pool(c, 360, 196, 120, 10, 'rgba(255,190,110,' + (.12 + f) + ')'); pool(c, 150, 262, 70, 14, 'rgba(255,200,130,' + (.07 + f) + ')'); pool(c, 70, 224, 40, 8, 'rgba(255,120,160,' + (.08 + f * 2) + ')');   /* counter lamps, table lamp, jukebox glow */
+  if (!L.REDUCED) for (let i = 0; i < 3; i++) { const p = ((t / 2600) + i / 3) % 1; c.fillStyle = 'rgba(255,255,255,' + (.3 * (1 - p)) + ')'; c.beginPath(); c.arc(284 + Math.sin(p * 7 + i) * 3, 80 - p * 26, 1.6 + p * 3.2, 0, 7); c.fill(); }   /* steam rising from the machine (hotspot 262,84) */
+}; }
+function decorGarden(G) { return (L, c, t) => {
+  seatShadows(G, 'garden', c);
+  for (let i = 0; i < 3; i++) { const p = L.REDUCED ? .5 : ((t / 3000) + i / 3) % 1, r = 6 + p * 34; c.strokeStyle = 'rgba(190,255,250,' + (.34 * (1 - p)) + ')'; c.lineWidth = 1; c.beginPath(); c.ellipse(210 + i * 34, 248 + (i % 2) * 6, r, r * .3, 0, 0, 7); c.stroke(); }   /* pond ripples */
+  const g = .07 + (L.REDUCED ? 0 : .03 * Math.sin(t / 700)); pool(c, 360, 206, 30, 8, 'rgba(120,255,200,' + g + ')'); pool(c, 240, 250, 100, 14, 'rgba(60,200,220,' + (g * .8) + ')');   /* mushroom + pond glow on the ground */
+}; }
+function fgGarden(L, c, t, id) {
+  if (id !== 'garden' && id !== 'conservatory') return; const sw = L.REDUCED ? 0 : Math.sin(t / 1700) * 1.6;
+  [[0, 1], [480, -1]].forEach(s => { const x = s[0], d = s[1]; c.fillStyle = 'rgba(8,52,40,.72)'; for (let k = 0; k < 4; k++) { c.beginPath(); c.moveTo(x, 300); c.quadraticCurveTo(x + d * (22 + k * 12), 270 - k * 6 + sw * (k + 1) * .3, x + d * (54 + k * 14) + sw * d, 268 + k * 9); c.quadraticCurveTo(x + d * (24 + k * 12), 286 - k * 2, x, 300); c.fill(); }
+    c.strokeStyle = 'rgba(100,255,190,.28)'; c.lineWidth = 1; for (let k = 0; k < 4; k++) { c.beginPath(); c.moveTo(x, 300); c.quadraticCurveTo(x + d * (20 + k * 12), 276 - k * 5, x + d * (50 + k * 14) + sw * d, 270 + k * 9); c.stroke(); } });
+}
+function decorLoft(G) { return (L, c, t) => {
+  seatShadows(G, 'loft', c); const f = L.REDUCED ? 0 : Math.sin(t / 110) * .03 + Math.sin(t / 290) * .02;
+  pool(c, 240, 232, 150, 20, 'rgba(255,140,50,' + (.1 + f) + ')'); pool(c, 240, 196, 52, 8, 'rgba(255,200,120,' + (.14 + f) + ')');   /* firelight on the rug and hearth */
+  if (!L.REDUCED) for (let i = 0; i < 6; i++) { const p = ((t / 3200) + i / 6) % 1, x = 232 + ((i * 17) % 16) + Math.sin(p * 9 + i) * 5, y = 176 - p * 70; c.fillStyle = 'rgba(255,' + (150 + i * 12) + ',70,' + (.7 * (1 - p)) + ')'; c.fillRect(Math.round(x), Math.round(y), 1.5, 1.5); }   /* embers lifting from the fire (hotspot 205,104) */
+}; }
+
 function install() {
   const G = root.CodexLounge; if (!G || !G.registerArt) return false;
-  G.registerArt('dome', dome); G.registerArt('kitchen', kitchen); G.registerArt('conservatory', conservatory); G.registerArt('archive', archive);
+  G.registerArt('deck', deck); G.registerArt('dome', dome); G.registerArt('kitchen', kitchen); G.registerArt('conservatory', conservatory); G.registerArt('archive', archive);
   const sprite = (kind, g, lockFn) => (L, c, t) => doorSprite(c, g, kind, t, lockFn ? !!lockFn() : false);
   G.decorate('deck', sprite('dome', GEO.deck.dome));
+  G.decorate('cafe', decorCafe(G)); G.decorate('garden', decorGarden(G)); G.decorate('loft', decorLoft(G)); G.addOverlay(fgGarden);
   G.decorate('cafe', sprite('kitchen', GEO.cafe.kitchen));
   G.decorate('garden', sprite('conservatory', GEO.garden.conservatory));
   G.decorate('loft', sprite('archive', GEO.loft.archive, () => G.lockOf('archive')));
@@ -173,6 +244,6 @@ function install() {
   return true;
 }
 document.addEventListener('DOMContentLoaded', () => { try { install(); } catch (e) { if (root.console) console.error('[lounge-art]', e); } });
-root.CodexLoungeArt = { GEO: GEO, painters: { dome: dome, kitchen: kitchen, conservatory: conservatory, archive: archive }, doorSprite: doorSprite, install: install };
+root.CodexLoungeArt = { GEO: GEO, PROPS: PROPS, painters: { dome: dome, kitchen: kitchen, conservatory: conservatory, archive: archive }, doorSprite: doorSprite, install: install };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.CodexLoungeArt;
 })(typeof window !== 'undefined' ? window : globalThis);

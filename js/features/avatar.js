@@ -88,11 +88,14 @@ function parse(code) {
 }
 const enc = o => KEYS.map(k => (o[k] | 0).toString(36)).join('.');
 /* name-derived look: the reference character with deterministic palette / style variations */
+/* forName() must keep producing the SAME look for the same name after catalogs grow. Everything it indexes into is a fixed table except the hat pick, which
+   depended on MAX.t — so it is frozen to the hat count at the time saved looks were generated. New hats are reachable through the studio and random(), never through forName. */
+const LEGACY_HATS = 18;
 function forName(name) {
   let h = hashS(name); const nx = n => { const v = h % n; h = Math.imul(h, 1103515245) + 12345 >>> 0; return v; }, o = parse(DEFAULT);
   o.s = nx(9); o.hc = [0, 1, 2, 2, 3, 3, 4, 5, 14][nx(9)]; o.h = [22, 22, 22, 1, 3, 12, 23, 20, 11][nx(9)]; o.o = [0, 0, 0, 1, 10, 11, 12, 15, 16, 17][nx(10)]; o.oc = nx(PAL.length);
   o.ic = nx(IRIS.length); o.lw = [0, 0, 0, 1, 3, 4][nx(6)]; o.lc = nx(LEGC.length); o.ft = [0, 0, 1, 2, 3, 4][nx(6)]; o.fc = nx(SHOEC.length);
-  o.t = nx(4) ? 0 : 1 + nx(MAX.t - 1); return enc(o);
+  o.t = nx(4) ? 0 : 1 + nx(LEGACY_HATS - 1); return enc(o);
 }
 function random() {
   const o = {}; KEYS.forEach(k => { o[k] = Math.floor(Math.random() * MAX[k]); });
