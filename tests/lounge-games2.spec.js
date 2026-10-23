@@ -177,6 +177,22 @@ test.describe('Celestial Survey (stage takeover)', () => {
     expect(await page.evaluate(() => window.__s.core.sel)).toBe(-1);
   });
 
+  test('compact layout: the game surface keeps a usable height, the room bar is pushed down (not covered), and the canvas box is restored on close', async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 760 });                                          // normal (non-focus) layout: the stage is only ~450 px wide
+    await boot(page); await goRoom(page, 'dome', 'deck');
+    const natural = await page.evaluate(() => document.querySelector('#loungeCanvas').offsetHeight);
+    expect(natural).toBeLessThan(330);                                                                 // precondition: this really is the cramped case
+    await page.evaluate(() => { window.__s = window.CodexLoungeWorld.launchGame('survey', { level: 1, reduced: true }); });
+    await page.locator('[data-a=ready]').click();
+    const m = await page.evaluate(() => { const r = s => document.querySelector(s).getBoundingClientRect(); return { stage: r('.lgs').height, field: r('.lgs-svg').height, lgsBottom: r('.lgs').bottom, barTop: r('#lgBar').top }; });
+    expect(m.stage).toBeGreaterThanOrEqual(438);
+    expect(m.field).toBeGreaterThanOrEqual(260);                                                       // was 168 px before the minimum was introduced
+    expect(m.barTop).toBeGreaterThanOrEqual(m.lgsBottom - 1);                                          // the room/emote bar is below the game, never under it
+    await page.evaluate(() => window.__s.destroy());
+    expect(await page.evaluate(() => document.querySelector('#loungeCanvas').style.height)).toBe('');   // inline height removed
+    expect(await page.evaluate(() => document.querySelector('#loungeCanvas').offsetHeight)).toBe(natural);
+  });
+
   test('locked charts stay locked until the previous chart is cleared', async ({ page }) => {
     await boot(page); await goRoom(page, 'dome', 'deck');
     await page.evaluate(() => { window.__s = window.CodexLoungeWorld.launchGame('survey', {}); });

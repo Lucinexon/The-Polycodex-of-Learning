@@ -168,9 +168,11 @@ const Host = {
     const NE = root.NetworkEngine, L = NE && NE.LoungeEngine, G = root.CodexLounge; if (!L || !L.cv || !G) return null;
     const wrap = L.cv.parentNode, el = document.createElement('div'), tok = 'game:' + (cfg.id || 'x'), prev = document.activeElement; let closed = false, ro = null;
     el.className = 'lgs ' + (cfg.cls || ''); el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', cfg.label || 'Activity'); el.tabIndex = -1; wrap.style.position = 'relative'; wrap.appendChild(el);
-    const size = () => { el.style.height = L.cv.offsetHeight + 'px'; }; size(); if (root.ResizeObserver) { ro = new root.ResizeObserver(size); ro.observe(L.cv); }
+    /* The panel covers the canvas area, but never gets smaller than MIN px: in the compact layout the canvas is only ~320 px tall, which leaves a game almost no room after its
+       header and footer. We grow the (covered) canvas box instead, so the room bar below is pushed down rather than overlapped. */
+    const MIN = cfg.minHeight || 440, size = () => { const nat = Math.round(wrap.clientWidth * 300 / 480), h = Math.max(nat, MIN); L.cv.style.height = h + 'px'; el.style.height = h + 'px'; }; size(); if (root.ResizeObserver) { ro = new root.ResizeObserver(size); ro.observe(wrap); }
     G.pause(tok);
-    return { el: el, get closed() { return closed; }, close() { if (closed) return; closed = true; if (ro) ro.disconnect(); if (el.parentNode) el.parentNode.removeChild(el); G.resume(tok); try { if (prev && prev.focus && document.contains(prev)) prev.focus({ preventScroll: true }); else L.cv.focus({ preventScroll: true }); } catch (e) {} } };
+    return { el: el, get closed() { return closed; }, close() { if (closed) return; closed = true; if (ro) ro.disconnect(); L.cv.style.height = ''; if (el.parentNode) el.parentNode.removeChild(el); G.resume(tok); try { if (prev && prev.focus && document.contains(prev)) prev.focus({ preventScroll: true }); else L.cv.focus({ preventScroll: true }); } catch (e) {} } };
   },
   consoleTab(cfg) {
     const C = root.CodexLoungeConsole; if (!C || !C.unregisterTab) return null; let closed = false, panel = null;

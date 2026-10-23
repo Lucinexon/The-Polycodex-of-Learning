@@ -177,8 +177,8 @@ body.lounge-world-focus .btt { display: none; }
 .lgs-x { width: 36px; height: 36px; flex: none; border: 1px solid var(--line2); border-radius: 50%; background: none; color: var(--mut); cursor: pointer; font: 700 14px var(--ui); }
 .lgs-x:hover { color: var(--ink); border-color: var(--cyan); }
 .lgs-main { flex: 1; min-height: 0; overflow: auto; position: relative; }
-.lgs-f { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line2); background: rgba(255, 255, 255, .03); }
-.lgs-msg { margin: 0; min-height: 36px; color: var(--mut); font: 400 13px/1.4 var(--ui); }
+.lgs-f { display: flex; flex-direction: column; gap: 6px; padding: 6px 12px 8px; border-top: 1px solid var(--line2); background: rgba(255, 255, 255, .03); }
+.lgs-msg { margin: 0; min-height: 20px; color: var(--mut); font: 400 13px/1.4 var(--ui); }
 .lgs-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .lgs button:focus-visible, .lgs input:focus-visible, .lgs-field:focus-visible { outline: 2px solid var(--lg-focus); outline-offset: 2px; }
 .lgs-menu { display: grid; gap: 8px; padding: 14px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); align-content: start; }

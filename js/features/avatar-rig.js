@@ -493,10 +493,13 @@ function propSprite(kind) {
 }
 
 /* ---- skeleton: joint rest positions per view (0 front, 1 three-quarter facing +x, 2 back) ---- */
+/* hand  = where a relaxed hand rests, relative to its shoulder: slightly INWARD and short of full reach (6.7 < 2×ARM_L = 7.2), so the arm hangs with a soft elbow
+   bend and the hand sits at the hip. hand0 = the old rest (outward, over-extended) which the authored gesture poses were written against; drawArm blends to it
+   as the pose offset grows, so wave/cheer/sip/heart… keep their exact targets while idle, walk and sit lose the stiff outward "A-pose". */
 const SKEL = [
-  { sh: [[7, -20], [-7, -20]], hip: [[2.5, -10], [-2.5, -10]], hand: [[1.2, 7.4], [-1.2, 7.4]], hs: 0 },
-  { sh: [[-2, -20], [3, -20]], hip: [[-1, -10], [2, -10]], hand: [[.3, 7.4], [.3, 7.4]], hs: 1 },
-  { sh: [[7, -20], [-7, -20]], hip: [[2.5, -10], [-2.5, -10]], hand: [[1.2, 7.4], [-1.2, 7.4]], hs: 0 }
+  { sh: [[7, -20], [-7, -20]], hip: [[2.5, -10], [-2.5, -10]], hand: [[-.7, 6.7], [.7, 6.7]], hand0: [[1.2, 7.4], [-1.2, 7.4]], hs: 0 },
+  { sh: [[-2, -20], [3, -20]], hip: [[-1, -10], [2, -10]], hand: [[.6, 6.8], [.6, 6.8]], hand0: [[.3, 7.4], [.3, 7.4]], hs: 1 },
+  { sh: [[7, -20], [-7, -20]], hip: [[2.5, -10], [-2.5, -10]], hand: [[-.7, 6.7], [.7, 6.7]], hand0: [[1.2, 7.4], [-1.2, 7.4]], hs: 0 }
 ];
 const LEG_L = 3, ARM_L = 3.6;
 function ik(sx, sy, tx, ty, l1, l2, pick) {
@@ -514,8 +517,9 @@ function sleeveOf(A) {
   return { t: t, role: R[O.sr || O.b] };
 }
 function drawArm(buf, roles, A, v, i, P, dy, dx, hands) {
-  const K = SKEL[v], sh = K.sh[i], rest = K.hand[i], S = [sh[0] + dx, sh[1] + dy], L = SCR[0];
-  const g = ik(S[0], S[1], S[0] + rest[0] + P['a' + i + 'x'], S[1] + rest[1] + P['a' + i + 'y'], ARM_L, ARM_L, elbowDown), pts = [S[0], S[1], g.ex, g.ey, g.tx, g.ty];
+  const K = SKEL[v], sh = K.sh[i], S = [sh[0] + dx, sh[1] + dy], L = SCR[0], ox = P['a' + i + 'x'], oy = P['a' + i + 'y'];
+  const kb = Math.max(0, Math.min(1, (Math.hypot(ox, oy) - 2.5) / 3)), r1 = K.hand[i], r0 = K.hand0[i], rest = [r1[0] + (r0[0] - r1[0]) * kb, r1[1] + (r0[1] - r1[1]) * kb];   /* calm pose → relaxed rest; gesture-sized pose → its authored target */
+  const g = ik(S[0], S[1], S[0] + rest[0] + ox, S[1] + rest[1] + oy, ARM_L, ARM_L, elbowDown), pts = [S[0], S[1], g.ex, g.ey, g.tx, g.ty];
   const tot = Math.hypot(g.ex - S[0], g.ey - S[1]) + Math.hypot(g.tx - g.ex, g.ty - g.ey), sl = sleeveOf(A), hn = A.hn | 0;
   L.reset(); L.chain(pts, 1.15, R.SKIN); paint(buf, L, roles, { ol: R.SKIN_OL, bev: 0 });
   if (sl.t !== 'n') { L.reset(); if (sl.t === 'c') L.disk(S[0], S[1] + .5, 2.9, sl.role); else L.chain(pts, 2.05, sl.role, 0, sl.t === 's' ? 3.6 : tot - .6); paint(buf, L, roles, { ol: R.INK, bev: 1 }); }
