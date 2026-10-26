@@ -1153,7 +1153,7 @@
     return '<section id="probes" class="screen noprintsec" aria-labelledby="h-pb">' +
       '<div class="sec-head">' +
       '<span class="sec-ic" data-sprite="radar" data-px="36"></span>' +
-      '<span><p class="sec-kick">EXPEDITION CONSOLE · PASSIVE UPLINK</p><h2 class="sec-title" id="h-pb">PROBE TELEMETRY BAY</h2>' +
+      '<span><p class="sec-kick">EXPEDITION CONSOLE · PASSIVE UPLINK</p><h1 class="sec-title" id="h-pb">PROBE TELEMETRY BAY</h1>' +
       '<p class="sec-sub">Long-range expeditions run on real timestamps — background the tab, close it, come back</p></span></div>' +
 
       '<div class="pb-stats">' +
@@ -1192,7 +1192,7 @@
     return '<section id="dispatch" class="screen noprintsec" aria-labelledby="h-dp">' +
       '<div class="sec-head">' +
       '<span class="sec-ic" data-sprite="antenna" data-px="36"></span>' +
-      '<span><p class="sec-kick">DAILY CALIBRATION RITUAL</p><h2 class="sec-title" id="h-dp">0600 DISPATCH</h2>' +
+      '<span><p class="sec-kick">DAILY CALIBRATION RITUAL</p><h1 class="sec-title" id="h-dp">0600 DISPATCH</h1>' +
       '<p class="sec-sub">One deterministic transmission per calendar day — fully offline, always waiting at 06:00</p></span></div>' +
 
       '<div class="panel" id="dispatchHero"></div>' +

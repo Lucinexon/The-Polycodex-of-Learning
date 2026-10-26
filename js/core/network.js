@@ -780,7 +780,7 @@ function leave(close) {
 /* ================= UI ================= */
 function build() {
   built = true;
-  const sec = $1('#notebook'); sec.classList.remove('nbx'); sec.innerHTML = ('<h2 class="skip" id="h-nb">Notebook</h2><div class="vx" id="vx" data-view="edit" data-side="1">' +
+  const sec = $1('#notebook'); sec.classList.remove('nbx'); sec.innerHTML = ('<h1 class="skip" id="h-nb">Notebook</h1><div class="vx" id="vx" data-view="edit" data-side="1">' +
     '<aside class="vx-side panel"><button type="button" class="vx-vsw" data-a="sw" aria-label="Switch vault or room"><span id="vxIc"></span><b id="vxVn"></b><span>▾</span></button>' +
     '<div class="vx-tools"><button type="button" class="btn primary" data-a="new">＋ Note</button><button type="button" class="btn" data-a="daily" title="Today’s note" aria-label="Daily note">📅</button><button type="button" class="btn" data-a="graph" title="Graph view" aria-label="Graph view">🕸️</button><button type="button" class="btn" data-a="cards" title="Flashcards from your notes" aria-label="Flashcards">🃏</button></div>' +
     '<input id="vxFilter" type="search" placeholder="Filter notes or #tags" aria-label="Filter notes" autocomplete="off"><div class="vx-tree" id="vxTree"></div><div class="vx-tags" id="vxTags"></div></aside>' +
@@ -1163,16 +1163,17 @@ const SB_OK = (function () {
 function clampN(v, lo, hi, d) { v = +v; return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; }
 
 /* ---- V8: appearance + interaction state riding on presence ----------------------------------------------
-   Compact fields only (no images, no frames): av = avatar code, r = main room id, sr = optional sub-room id (validated against the local registry), pz = seat id (''=standing), jk = jukebox, em = {k,ts} emote,
+   Compact fields only (no images, no frames): av = avatar code, r = main room id, sr = optional sub-room id (validated against the local registry), pz = seated seat id, ps = seat slot, qz/qs = pending seat reservation, jk = jukebox, em = {k,ts} emote,
    d = facing. LoungeEngine.extra() (set by lounge2.js) supplies them; everything received is sanitised here before it touches game state.
    Clients that predate this simply ignore the extra fields; missing fields fall back to the old behaviour. */
 function extraOut() { try { const e = LoungeEngine.extra ? LoungeEngine.extra() : null; return e && typeof e === 'object' ? e : {}; } catch (x) { return {}; } }
 function readExtra(d) {
-  const o = { pose: 0, pz: '', jk: d.jk ? 1 : 0 };
+  const o = { pose: 0, pz: '', ps: 0, qz: '', qs: 0, jk: d.jk ? 1 : 0 };
   if (typeof d.av === 'string' && /^[0-9a-z.]{3,80}$/.test(d.av)) o.av = d.av;
   if (typeof d.r === 'string' && /^[a-z]{2,12}$/.test(d.r)) o.r = d.r;
   o.sr = (typeof d.sr === 'string' && /^[a-z]{2,12}$/.test(d.sr)) ? d.sr : '';     // optional sub-room name; lounge2.js only honours it if its registry lists it under `r` (older clients ignore it and show the player in `r`)
-  if (typeof d.pz === 'string' && /^[a-z0-9]{1,8}$/.test(d.pz)) { o.pz = d.pz; o.pose = 1; }
+  if (typeof d.pz === 'string' && /^[a-z0-9]{1,8}$/.test(d.pz)) { o.pz = d.pz; o.pose = 1; o.ps = d.ps === 1 ? 1 : 0; }
+  if (typeof d.qz === 'string' && /^[a-z0-9]{1,8}$/.test(d.qz)) { o.qz = d.qz; o.qs = d.qs === 1 ? 1 : 0; }
   if (d.d === 1 || d.d === -1) o.d = d.d;
   o.em = (d.em && typeof d.em === 'object' && /^[a-z]{2,8}$/.test(String(d.em.k)) && isFinite(+d.em.ts)) ? { k: String(d.em.k), ts: +d.em.ts } : null;
   return o;

@@ -43,7 +43,7 @@ const NPCS = [
   { id: 'orrin', n: 'Orrin', tag: 'ARCHIVIST', role: 'the archivist of the Library Loft', home: 'loft', phase: 1,
     look: { name: 'Orrin', over: { t: 7, x: 3, o: 9, p: 2 } },
     persona: 'gentle and absent-minded, speaks in tiny marginalia-style asides, loves unfinished books',
-    route: [{ x: 372, y: 244, pose: 1, pz: 'a2', dir: -1 }, { x: 110, y: 214, em: 'spark' }, { x: 240, y: 212, em: 'warm' }],
+    route: [{ x: 350, y: 244, pose: 1, pz: 'a2', ps: 0, dir: -1 }, { x: 110, y: 214, em: 'spark' }, { x: 240, y: 212, em: 'warm' }],
     greet: ['Ah. A reader. Mind the stack by your left foot.', 'You have the look of someone mid-chapter.', 'Shh. No, I am joking. Come in.'],
     talk: ['Every shelf up there is a conversation someone left halfway.', 'Notes you write today are letters to a stranger who happens to be you.', 'I once lost a bookmark for a year. It was in the book. Of course it was.', 'The fire is a good editor. It makes you cut things short.', 'An unfinished book is only a very patient one.', 'The best margin notes are the ones that disagree politely.'],
     ambient: ['Now where did I put that chapter…', '*turns a page very carefully*', 'Hm. Footnote seven is lying.'] },
@@ -75,7 +75,7 @@ function stateAt(npc, now, out) {
   const dx = stop.x - from.x, dy = stop.y - from.y, dist = Math.hypot(dx, dy), travel = Math.min(dist / CFG.npcSpeed * 1000, CFG.slotMs * .4), walking = el < travel, f = travel > 0 ? Math.min(1, el / travel) : 1;
   out.r = room; out.cx = from.x + dx * f; out.cy = from.y + dy * f; out.x = stop.x; out.y = stop.y; out.walk = walking;
   out.dir = walking ? (dx >= 0 ? 1 : -1) : (stop.dir || (dx >= 0 ? 1 : -1));
-  out.pose = !walking && stop.pose ? 1 : 0; out.pz = out.pose ? (stop.pz || '') : '';
+  out.pose = !walking && stop.pose ? 1 : 0; out.pz = out.pose ? (stop.pz || '') : ''; out.ps = out.pose && stop.ps === 1 ? 1 : 0;
   out.em = null; if (!walking && stop.em) out.em = { k: stop.em, ts: slot * CFG.slotMs + travel + Math.floor((el - travel) / CFG.emotePeriodMs) * CFG.emotePeriodMs };
   const ph = now + npc.phase * 9000, ap = ph % CFG.ambientMs;
   out.say = (!walking && ap < CFG.ambientShowMs) ? npc.ambient[Math.floor(ph / CFG.ambientMs) % npc.ambient.length] : '';

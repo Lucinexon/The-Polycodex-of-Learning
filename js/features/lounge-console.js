@@ -12,7 +12,7 @@
 const doc = root.document;
 const $1 = (s, r) => (r || doc).querySelector(s), $A = (s, r) => Array.from((r || doc).querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const UI_KEY = 'cx_lounge_ui_v1', MOBILE = '(max-width: 900px)';
+const UI_KEY = 'cx_lounge_ui_v1', MOBILE = '(max-width: 920px)';
 const NE = () => root.NetworkEngine || {}, LG = () => root.CodexLounge, PG = () => root.CodexLoungeProgress, GM = () => root.CodexLoungeGames;
 const mq = root.matchMedia ? root.matchMedia(MOBILE) : { matches: false, addEventListener() {} };
 
@@ -141,9 +141,9 @@ const roomTab = {
     }
     const id = L.room(), r = L.ROOMS[id] || {}, hot = (L.HOT[id] || []);
     $1('.lc-room-ic', p).textContent = r.i || ''; $1('.lc-room-name', p).textContent = r.n || id; $1('.lc-room-kick', p).textContent = r.k || ''; $1('.lc-desc', p).textContent = r.d || '';
-    const seats = hot.filter(h => h.t === 'seat'), acts = hot.filter(h => h.t !== 'seat' && h.t !== 'npc' && h.t !== 'door' && h.l), lbl = h => (L.label ? L.label(h) : h.l);
+    const seats = hot.filter(h => h.t === 'seat'), acts = hot.filter(h => h.t !== 'seat' && h.t !== 'npc' && h.t !== 'door' && h.l), lbl = h => (L.label ? L.label(h) : h.l), places = seats.reduce((n, h) => n + (h.capacity === 1 ? 1 : 2), 0);
     setHTML($1('.lc-things', p), (acts.length || seats.length ? acts.map(h => '<button type="button" class="lc-act" data-hot="' + esc(h.id) + '" data-fk="h:' + esc(h.id) + '"><span aria-hidden="true">' + (h.icon || ICON[h.t] || '•') + '</span><span class="lc-act-l"><b>' + esc(lbl(h)) + '</b><small>' + esc(h.verb || VERB[h.t] || 'Go') + '</small></span></button>').join('') +
-      (seats.length ? '<button type="button" class="lc-act" data-hot="' + esc(seats[0].id) + '" data-fk="h:seat"><span aria-hidden="true">🪑</span><span class="lc-act-l"><b>Sit down</b><small>' + seats.length + ' seat' + (seats.length > 1 ? 's' : '') + ' here</small></span></button>' : '') : '<p class="lc-empty">Nothing to interact with here yet.</p>'));
+      (seats.length ? '<button type="button" class="lc-act" data-seat="1" data-fk="h:seat"><span aria-hidden="true">🪑</span><span class="lc-act-l"><b>Take the nearest open seat</b><small>' + seats.length + ' seats · ' + places + ' places</small></span></button>' : '') : '<p class="lc-empty">Nothing to interact with here yet.</p>'));
     const npcs = (L.who ? L.who(id) : []).filter(w => w.npc);
     setHTML($1('.lc-res', p), npcs.length ? npcs.map(n => '<button type="button" class="lc-res-i" data-hot="' + esc(n.uid) + '" data-fk="n:' + esc(n.uid) + '"><span class="lc-av">' + (root.CodexAvatar && n.code ? root.CodexAvatar.el(n.code, 28, 'sq') : '') + '</span><span class="lc-act-l"><b>' + esc(n.n) + '</b><small>' + esc(n.tag || 'Resident') + ' · talk</small></span></button>').join('') : '<p class="lc-empty">No one is on shift here right now.</p>');
     const keys = ['prev', 'next'].map(k => r[k]).concat(hot.filter(h => h.t === 'door').map(h => h.to)).filter((v, i, a) => v && L.ROOMS[v] && a.indexOf(v) === i);
@@ -188,8 +188,9 @@ const journalTab = {
 };
 
 function onAct(e) {
-  const L = LG(); if (!L) return; const h = e.target.closest('[data-hot]'), r = e.target.closest('[data-room]');
+  const L = LG(); if (!L) return; const h = e.target.closest('[data-hot]'), r = e.target.closest('[data-room]'), seat = e.target.closest('[data-seat]');
   if (h) { if (L.walkTo(h.dataset.hot) && mobile()) setConsole(false, { restoreFocus: true }); }
+  else if (seat) { if (L.walkToSeat() && mobile()) setConsole(false, { restoreFocus: true }); }
   else if (r) { L.setRoom(r.dataset.room, { from: L.room() }); }
 }
 
