@@ -428,7 +428,7 @@ function sectorScreen(sec) {
   return '<section id="' + sec.id + '" class="screen" aria-labelledby="h-' + sec.id + '">' +
     '<div class="sec-head">' +
     '<span class="sec-ic" data-sprite="' + sec.icon + '" data-px="36"></span>' +
-    '<span><p class="sec-kick">' + esc(sec.kick) + '</p><h2 class="sec-title" id="h-' + sec.id + '">' + esc(sec.title) + '</h2>' +
+    '<span><p class="sec-kick">' + esc(sec.kick) + '</p><h1 class="sec-title" id="h-' + sec.id + '">' + esc(sec.title) + '</h1>' +
     '<p class="sec-sub">' + esc(sec.sub) + '</p></span>' +
     '<span class="sec-chip" id="chip-' + sec.id + '">0%</span></div>' +
     '<div class="panel" style="margin-bottom:16px"><div class="md-body">' + mdBlock(sec.intro) + '</div></div>' +
@@ -444,7 +444,7 @@ function chronoScreen() {
   return '<section id="chrono" class="screen" aria-labelledby="h-chrono">' +
     '<div class="sec-head">' +
     '<span class="sec-ic" data-sprite="calendar" data-px="36"></span>' +
-    '<span><p class="sec-kick">QUEST 11 · TEMPORAL</p><h2 class="sec-title" id="h-chrono">CHRONO MATRIX</h2>' +
+    '<span><p class="sec-kick">QUEST 11 · TEMPORAL</p><h1 class="sec-title" id="h-chrono">CHRONO MATRIX</h1>' +
     '<p class="sec-sub">Every pivot epoch — cosmic, human, memetic, aesthetic — in one grid</p></span>' +
     '<span class="sec-chip" id="chip-chrono">0%</span></div>' +
     '<article class="block panel" id="ch-1" data-title="Chrono Matrix master grid">' +
@@ -472,7 +472,7 @@ function syslogScreen() {
   return '<section id="syslog" class="screen" aria-labelledby="h-syslog">' +
     '<div class="sec-head">' +
     '<span class="sec-ic" data-sprite="bulb" data-px="36"></span>' +
-    '<span><p class="sec-kick">FAST REFERENCE</p><h2 class="sec-title" id="h-syslog">SYS-LOG / CHEAT SHEET</h2>' +
+    '<span><p class="sec-kick">FAST REFERENCE</p><h1 class="sec-title" id="h-syslog">SYS-LOG / CHEAT SHEET</h1>' +
     '<p class="sec-sub">Every crucial constant, formula, chain and trap in one burst</p></span></div>' +
     '<div class="panel" style="margin-bottom:16px"><div class="md-body">' + mdBlock(sl.intro || '') + '</div></div>' +
     panels +
@@ -485,7 +485,7 @@ function flashScreen() {
   return '<section id="flash" class="screen noprintsec" aria-labelledby="h-fl">' +
     '<div class="sec-head">' +
     '<span class="sec-ic" data-sprite="cards" data-px="36"></span>' +
-    '<span><p class="sec-kick">TRAINING DECK</p><h2 class="sec-title" id="h-fl">NEURAL MATRIX</h2>' +
+    '<span><p class="sec-kick">TRAINING DECK</p><h1 class="sec-title" id="h-fl">NEURAL MATRIX</h1>' +
     '<p class="sec-sub">Flip, recall, mark as mastered — ' + CARDS.length + ' cards loaded</p></span></div>' +
     '<div class="panel fpanel">' +
     '<div class="f-controls"><div class="chips" id="fFilters"></div>' +
@@ -509,7 +509,7 @@ function examScreen() {
   return '<section id="exam" class="screen noprintsec" aria-labelledby="h-ex">' +
     '<div class="sec-head">' +
     '<span class="sec-ic" data-sprite="qblock" data-px="36"></span>' +
-    '<span><p class="sec-kick">FINAL BOSS</p><h2 class="sec-title" id="h-ex">THE VOID TRIAL: BOSS EXAM</h2>' +
+    '<span><p class="sec-kick">FINAL BOSS</p><h1 class="sec-title" id="h-ex">THE VOID TRIAL: BOSS EXAM</h1>' +
     '<p class="sec-sub">' + esc(ex.desc || 'A cross-sector boss exam') + '</p></span></div>' +
     '<div class="panel" style="margin-bottom:16px">' +
     '<p style="margin:0">The Void pulls questions from <b>all ten sectors</b> — subsea fiber to stellar collapse, gacha math to game theory. Each correct answer is <b>+10 XP</b>; a perfect run forges the <b>REALITY ARCHITECT</b> badge. Repeatable for record hunting.</p></div>' +
