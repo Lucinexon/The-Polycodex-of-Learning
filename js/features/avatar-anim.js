@@ -28,12 +28,12 @@ const CLIPS = {
   vTilt:   { frames: [F(800, { hx: 1, hy: 0, ex: LR }), F(400, {})] },
   /* walking: 4 poses (contact · pass · contact · pass); ms comes from measured speed */
   walkH:   { loop: 1, cad: 1, frames: [
-    F(0, { by: 1, l0x: 4, l0y: -1, l1x: -4, l1y: -1, a0x: -3, a0y: -1, a1x: 3, a1y: -1 }),
+    F(0, { by: 1, l0x: 4, l0y: -1, l1x: -4, l1y: -1, a0x: -1, a0y: -1.6, a1x: 1, a1y: .8 }),
     F(0, { by: 0, l0x: 0, l0y: -2, l1x: 0, l1y: 0, a0x: 0, a0y: 0, a1x: 0, a1y: 0 }),
-    F(0, { by: 1, l0x: -4, l0y: -1, l1x: 4, l1y: -1, a0x: 3, a0y: -1, a1x: -3, a1y: -1 }),
+    F(0, { by: 1, l0x: -4, l0y: -1, l1x: 4, l1y: -1, a0x: -1, a0y: .8, a1x: 1, a1y: -1.6 }),
     F(0, { by: 0, l0x: 0, l0y: 0, l1x: 0, l1y: -2, a0x: 0, a0y: 0, a1x: 0, a1y: 0 })] },
   walkV:   { loop: 1, cad: 1, frames: [
-    F(0, { l0y: -2, a0y: 2, a1y: -2 }), F(0, {}), F(0, { l1y: -2, a1y: 2, a0y: -2 }), F(0, {})] },
+    F(0, { l0y: -2, a0y: .5, a1y: -1.1 }), F(0, {}), F(0, { l1y: -2, a1y: .5, a0y: -1.1 }), F(0, {})] },
   walkRM:  { loop: 1, frames: [F(260, { l0x: 2, l1x: -2 }), F(260, { l0x: -2, l1x: 2 })] },
   /* sitting: lower the pelvis, thighs horizontal toward the facing side (st:1), hands on lap */
   sitIn:   { frames: [F(90, { by: 2, l0y: -2, l1y: -2 }), F(120, sit())] },
@@ -46,8 +46,8 @@ const CLIPS = {
     F(125, { by: -1, bx: 1, hx: 1, a0x: 4, a0y: -13, a1x: -1, l0x: 1, l1x: 2, l1y: -1, ex: MO(1) }), F(125, { bx: 1, hx: 1, a0x: 3, a0y: -6, a1x: -1, a1y: -3, l1x: 1, ex: MO(1) }),
     F(125, { by: -1, bx: -1, hx: -1, a0x: 1, a1x: -4, a1y: -13, l0x: -2, l0y: -1, l1x: -1, ex: MO(1) }), F(125, { bx: -1, hx: -1, a0x: 1, a0y: -3, a1x: -3, a1y: -6, l0x: -1, ex: MO(1) })] },
   cheer: { loop: 1, dur: 3000, rm: 1, frames: [
-    F(130, { by: 1, l0y: -1, l1y: -1, a0x: 2, a0y: -3, a1x: -2, a1y: -3, ex: CL | MO(3) }), F(170, { by: -3, a0x: 4, a0y: -15, a1x: -4, a1y: -15, l0y: -1, l1y: -1, ex: CL | MO(3) }),
-    F(130, { by: -2, a0x: 4, a0y: -14, a1x: -4, a1y: -14, ex: CL | MO(3) }), F(110, { by: 1, a0x: 3, a0y: -9, a1x: -3, a1y: -9, l0y: -1, l1y: -1, ex: MO(3) })] },
+    F(130, { by: 1, l0y: -1, l1y: -1, a0x: 3, a0y: -5, a1x: -3, a1y: -5, ex: CL | MO(3) }), F(170, { by: -3, a0x: 9, a0y: -14, a1x: -9, a1y: -14, l0y: -1, l1y: -1, ex: CL | MO(3) }),
+    F(130, { by: -2, a0x: 8, a0y: -12, a1x: -8, a1y: -12, ex: CL | MO(3) }), F(110, { by: 1, a0x: 5, a0y: -7, a1x: -5, a1y: -7, l0y: -1, l1y: -1, ex: MO(3) })] },
   heart: { loop: 1, dur: 2400, rm: 0, frames: [
     F(320, { a0x: -7, a0y: -3, a1x: 7, a1y: -3, hx: 1, ex: CL | MO(1) }), F(320, { by: -1, a0x: -7, a0y: -4, a1x: 7, a1y: -4, hx: -1, ex: CL | MO(1) })] },
   sleep: { loop: 1, dur: 4200, rm: 0, frames: [
@@ -56,8 +56,8 @@ const CLIPS = {
     F(160, { a0x: -3, a0y: -6, pr: 1 }), F(220, { a0x: -5, a0y: -12, pr: 1 }), F(520, { a0x: -5, a0y: -13, hy: -1, pr: 1, ex: CL }), F(260, { a0x: -5, a0y: -12, pr: 1 }),
     F(520, { a0x: -5, a0y: -13, hy: -1, pr: 1, ex: CL }), F(200, { a0x: -3, a0y: -6, pr: 1 }), F(140, {})] },
   spark: { loop: 1, dur: 3000, rm: 0, frames: [
-    F(150, { a0x: 5, a0y: -8, a1x: -5, a1y: -8, pr: 2, ex: MO(1) }), F(150, { by: -1, a0x: 5, a0y: -10, a1x: -5, a1y: -10, pr: 3, ex: MO(1) }),
-    F(150, { a0x: 5, a0y: -9, a1x: -5, a1y: -9, pr: 3, hx: 1, ex: MO(1) }), F(150, { by: -1, a0x: 5, a0y: -11, a1x: -5, a1y: -11, pr: 2, hx: -1, ex: MO(1) })] },
+    F(150, { a0x: 6, a0y: -11, a1x: -6, a1y: -11, pr: 2, ex: MO(1) }), F(150, { by: -1, a0x: 6, a0y: -13, a1x: -6, a1y: -13, pr: 3, ex: MO(1) }),
+    F(150, { a0x: 6, a0y: -12, a1x: -6, a1y: -12, pr: 3, hx: 1, ex: MO(1) }), F(150, { by: -1, a0x: 6, a0y: -14, a1x: -6, a1y: -14, pr: 2, hx: -1, ex: MO(1) })] },
   warm:  { loop: 1, dur: 3600, rm: 0, frames: [
     F(170, { a0x: -6, a0y: -5, a1x: 6, a1y: -4, ex: CL }), F(170, { a0x: -6, a0y: -4, a1x: 6, a1y: -5, bx: 1, ex: CL }), F(170, { a0x: -5, a0y: -5, a1x: 5, a1y: -4, ex: CL }), F(170, { a0x: -6, a0y: -4, a1x: 6, a1y: -5, bx: -1, ex: CL })] }
 };

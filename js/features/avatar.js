@@ -88,11 +88,15 @@ function parse(code) {
 }
 const enc = o => KEYS.map(k => (o[k] | 0).toString(36)).join('.');
 /* name-derived look: the reference character with deterministic palette / style variations */
+/* forName() must keep producing the SAME look for the same name after catalogs grow. Everything it indexes into is a fixed table except the hat pick, which
+   depended on MAX.t — so it is frozen to the hat count at the time saved looks were generated. New hats are reachable through the studio and random(), never through forName. */
+const LEGACY = { h: 24, e: 13, b: 6, m: 11, o: 18, t: 18, x: 16, lw: 6, ft: 7 };   /* catalog sizes before the extension: options at or above these indexes are "new" in the studio */
+const LEGACY_HATS = LEGACY.t;
 function forName(name) {
   let h = hashS(name); const nx = n => { const v = h % n; h = Math.imul(h, 1103515245) + 12345 >>> 0; return v; }, o = parse(DEFAULT);
   o.s = nx(9); o.hc = [0, 1, 2, 2, 3, 3, 4, 5, 14][nx(9)]; o.h = [22, 22, 22, 1, 3, 12, 23, 20, 11][nx(9)]; o.o = [0, 0, 0, 1, 10, 11, 12, 15, 16, 17][nx(10)]; o.oc = nx(PAL.length);
   o.ic = nx(IRIS.length); o.lw = [0, 0, 0, 1, 3, 4][nx(6)]; o.lc = nx(LEGC.length); o.ft = [0, 0, 1, 2, 3, 4][nx(6)]; o.fc = nx(SHOEC.length);
-  o.t = nx(4) ? 0 : 1 + nx(MAX.t - 1); return enc(o);
+  o.t = nx(4) ? 0 : 1 + nx(LEGACY_HATS - 1); return enc(o);
 }
 function random() {
   const o = {}; KEYS.forEach(k => { o[k] = Math.floor(Math.random() * MAX[k]); });
@@ -150,14 +154,18 @@ function edHTML() {
   const cur = ED[TAB], t = TABS.find(x => x[0] === TAB);
   const opts = [...Array(MAX[TAB]).keys()].map(i => {
     const sel = i === cur ? ' on' : '';
-    if (t[2] === 'c') return '<button type="button" class="avo sw' + sel + '" data-av="opt" data-i="' + i + '" style="background:' + SW[TAB][i] + '" aria-label="' + t[1] + ' ' + (i + 1) + '"></button>';
+    const isNew = LEGACY[TAB] != null && i >= LEGACY[TAB], lbl = t[1] + ' ' + (i + 1) + ' of ' + MAX[TAB] + (isNew ? ' (new)' : '');
+    const common = ' data-av="opt" data-i="' + i + '" aria-pressed="' + (i === cur) + '" tabindex="' + (i === cur ? 0 : -1) + '" aria-label="' + lbl + '" title="' + lbl + '"' + (isNew ? ' data-new="1"' : '');
+    if (t[2] === 'c') return '<button type="button" class="avo sw' + sel + '"' + common + ' style="background:' + SW[TAB][i] + '"></button>';
     const o = Object.assign({}, ED); o[TAB] = i;
-    return '<button type="button" class="avo' + sel + '" data-av="opt" data-i="' + i + '" aria-label="' + t[1] + ' ' + (i + 1) + '">' + el(o, 46, '', THUMB[TAB]) + '</button>';
+    return '<button type="button" class="avo' + sel + '"' + common + '>' + el(o, 46, '', THUMB[TAB]) + '</button>';
   }).join('');
+  const anyNew = LEGACY[TAB] != null && MAX[TAB] > LEGACY[TAB];
   return '<div class="avs"><div class="avs-pv"><canvas id="avPv" class="avs-cv" width="' + (RIG ? RIG.W : 48) + '" height="' + (RIG ? RIG.H : 64) + '" aria-label="Live preview of your character"></canvas>' +
     '<div class="avs-modes" role="group" aria-label="Preview animation">' + MODES.map(m => '<button type="button" data-av="mode" data-m="' + m[0] + '" class="' + (PV.mode === m[0] ? 'on' : '') + '">' + m[1] + '</button>').join('') + '</div>' +
     '<div class="avs-bt"><button type="button" class="btn" data-av="rand">🎲 Random</button><button type="button" class="btn" data-av="reset">↺ Mine</button><button type="button" class="btn" data-av="def">★ Default</button></div></div>' +
-    '<div class="avs-main"><div class="avs-tabs" role="tablist">' + TABS.map(x => '<button type="button" role="tab" class="' + (x[0] === TAB ? 'on' : '') + '" data-av="tab" data-k="' + x[0] + '" aria-selected="' + (x[0] === TAB) + '">' + x[1] + '</button>').join('') + '</div><div class="avs-grid">' + opts + '</div></div></div>' +
+    '<div class="avs-main"><div class="avs-tabs" role="tablist" aria-label="Appearance categories">' + TABS.map(x => '<button type="button" role="tab" class="' + (x[0] === TAB ? 'on' : '') + '" data-av="tab" data-k="' + x[0] + '" aria-selected="' + (x[0] === TAB) + '" tabindex="' + (x[0] === TAB ? 0 : -1) + '">' + x[1] + '</button>').join('') + '</div>' +
+    '<div class="avs-hd"><b>' + t[1] + '</b><span aria-live="polite">' + (cur + 1) + ' / ' + MAX[TAB] + '</span>' + (anyNew ? '<em class="avs-legend"><i></i> new</em>' : '') + '</div><div class="avs-grid" role="group" aria-label="' + t[1] + ' options">' + opts + '</div></div></div>' +
     '<div class="avs-foot"><span class="avs-me">' + el(ED, 40) + '</span><button type="button" class="btn primary" data-av="save">Save avatar</button></div>';
 }
 function pvInput() {
@@ -167,6 +175,7 @@ function pvInput() {
   else if (m === 'idle') i.emote = null;
   return i;
 }
+function pvDraw() { const cv = document.getElementById('avPv'); if (!cv || !ED || !RIG || !PV.an) return; const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, cv.width, cv.height); const f = RIG.frame(desc(ED), PV.an.pose()); if (f.cv) ctx.drawImage(f.cv, 0, 0); }
 function pvLoop(now) {
   const cv = document.getElementById('avPv'); if (!cv || !ED || !RIG || !ANIM || cv.offsetParent === null) { PV.raf = 0; return; }
   const dt = Math.min(64, now - (PV.last || now)); PV.last = now;
@@ -185,7 +194,21 @@ function edit() {
     else if (a === 'reset') ED = parse(mine() || forName('operator')); else if (a === 'def') ED = parse(DEFAULT);
     else if (a === 'mode') { PV.mode = b.dataset.m; PV.nextEmote = 0; if (PV.an) PV.an = new ANIM.Animator(); }
     else if (a === 'save') { set(enc(ED)); closeModal(); toast('<b>Avatar saved</b><br>It follows you into chat and the lounge.', 'star'); ED = null; sfx('ok'); return; }
-    mb.innerHTML = edHTML(); pvStart(); if (window.sfx) sfx('click');
+    const ae = document.activeElement, grid0 = mb.querySelector('.avs-grid'), keep = ae && mb.contains(ae) ? { av: ae.dataset.av, i: ae.dataset.i, k: ae.dataset.k, m: ae.dataset.m } : null, st = grid0 ? grid0.scrollTop : 0, tabChanged = a === 'tab';
+    mb.innerHTML = edHTML(); pvStart(); pvDraw(); if (window.sfx) sfx('click');
+    const grid = mb.querySelector('.avs-grid'); if (grid) { grid.scrollTop = tabChanged ? 0 : st; if (tabChanged) { const on = grid.querySelector('.avo.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' }); } }
+    if (keep && keep.av) { const sel = '[data-av="' + keep.av + '"]' + (keep.i != null ? '[data-i="' + keep.i + '"]' : '') + (keep.k != null ? '[data-k="' + keep.k + '"]' : '') + (keep.m != null ? '[data-m="' + keep.m + '"]' : ''); const n = mb.querySelector(sel) || (keep.av === 'opt' ? mb.querySelector('.avo.on') : null); if (n && n.focus) n.focus({ preventScroll: true }); }
+  });
+  /* keyboard: ←/→ move between categories (tablist); arrows/Home/End move through the option grid (roving tabindex), Enter/Space select via the click handler */
+  mb.addEventListener('keydown', e => {
+    const t = e.target; if (!ED || !t || !t.closest) return;
+    const key = e.key, nav = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].indexOf(key) >= 0; if (!nav) return;
+    if (t.matches('.avs-tabs [role=tab]')) { if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'Home' && key !== 'End') return; const tabs = [...mb.querySelectorAll('.avs-tabs [role=tab]')], i = tabs.indexOf(t), n = key === 'Home' ? 0 : key === 'End' ? tabs.length - 1 : (i + (key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length; e.preventDefault(); tabs[n].focus(); tabs[n].click(); return; }   /* focus first, so the re-render restores focus to the NEW tab */
+    if (t.matches('.avs-grid .avo')) {
+      const items = [...mb.querySelectorAll('.avs-grid .avo')], i = items.indexOf(t); let cols = 1; for (let k = 1; k < items.length; k++) { if (items[k].offsetTop > items[0].offsetTop + 2) { cols = k; break; } if (k === items.length - 1) cols = items.length; }
+      const n = key === 'ArrowLeft' ? i - 1 : key === 'ArrowRight' ? i + 1 : key === 'ArrowUp' ? i - cols : key === 'ArrowDown' ? i + cols : key === 'Home' ? 0 : items.length - 1;
+      if (n >= 0 && n < items.length) { e.preventDefault(); items.forEach(b => b.setAttribute('tabindex', '-1')); items[n].setAttribute('tabindex', '0'); items[n].focus(); }
+    }
   });
 }
 window.CodexAvatar = { svg: svg, el: el, img: img, pet: pet, petImg: petImg, mine: mine, set: set, edit: edit, forName: forName, random: random, parse: parse, enc: enc, MAX: MAX, KEYS: KEYS, DEFAULT: DEFAULT, desc: desc, sprite: sprite, rig: RIG, anim: ANIM, migrate: migrate, version: 8, count: Object.keys(MAX).reduce((a, k) => a + MAX[k], 0) };

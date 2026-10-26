@@ -4,7 +4,12 @@
 'use strict';
 const $1 = (s, r) => (r || document).querySelector(s), $A = (s, r) => Array.from((r || document).querySelectorAll(s));
 const NE = () => window.NetworkEngine || {};
-const ROOMS = { deck: { n: 'Observation Deck', i: '🔭', prev: 'loft', next: 'cafe' }, cafe: { n: 'Starlight Café', i: '☕', prev: 'deck', next: 'garden' }, garden: { n: 'Glow Greenhouse', i: '🌿', prev: 'cafe', next: 'loft' }, loft: { n: 'Library Loft', i: '📚', prev: 'garden', next: 'deck' } };
+const ROOMS = {
+  deck: { n: 'Observation Deck', i: '🔭', prev: 'loft', next: 'cafe', k: 'DECK 07 · ABYSSAL VIEWPORT', d: 'A glass-walled deck beneath the surface. The telescope is tuned to the night sky above the water, and the whales drift past the windows.' },
+  cafe: { n: 'Starlight Café', i: '☕', prev: 'deck', next: 'garden', k: 'DECK 04 · STARLIGHT CAFÉ', d: 'Warm lamps, a humming espresso machine and a jukebox that plays whatever the room is feeling. Mira keeps the tickets.' },
+  garden: { n: 'Glow Greenhouse', i: '🌿', prev: 'cafe', next: 'loft', k: 'DECK 09 · GLOW GREENHOUSE', d: 'Bioluminescent plants, a koi pond and benches among the ferns. Quiet enough to hear the water.' },
+  loft: { n: 'Library Loft', i: '📚', prev: 'garden', next: 'deck', k: 'DECK 11 · LIBRARY LOFT', d: 'Floor-to-ceiling shelves, a crackling fireplace and a keeper of unfinished books. Your own notes live behind the left bookcase.' }
+};
 const EMO = { wave: ['👋', 'Wave'], dance: ['💃', 'Dance'], heart: ['💖', 'Heart'], cheer: ['🎉', 'Cheer'], sleep: ['💤', 'Nap'], sip: ['☕', 'Sip'], spark: ['✨', 'Sparkle'], warm: ['🔥', 'Warm up'] };
 const HOT = {   /* x,y,w,h = click box; sx,sy = where you stand/sit */
   deck: [{ id: 'scope', t: 'scope', x: 318, y: 120, w: 44, h: 66, sx: 340, sy: 214, l: 'Telescope → Astronomy' }, { id: 'b1', t: 'seat', lift: 4, x: 52, y: 212, w: 56, h: 26, sx: 80, sy: 232, l: 'Bench' }, { id: 'b2', t: 'seat', lift: 4, x: 372, y: 224, w: 56, h: 26, sx: 400, sy: 244, l: 'Bench' }],
@@ -12,6 +17,72 @@ const HOT = {   /* x,y,w,h = click box; sx,sy = where you stand/sit */
   garden: [{ id: 'pond', t: 'pond', x: 150, y: 222, w: 180, h: 54, sx: 240, sy: 214, l: 'Pond' }, { id: 'g1', t: 'seat', lift: 4, x: 36, y: 214, w: 62, h: 26, sx: 68, sy: 236, l: 'Bench' }, { id: 'g2', t: 'seat', lift: 4, x: 384, y: 214, w: 62, h: 26, sx: 416, sy: 236, l: 'Bench' }, { id: 'mush', t: 'spark', x: 342, y: 170, w: 36, h: 36, sx: 360, sy: 214, l: 'Glow mushroom' }],
   loft: [{ id: 'fire', t: 'fire', x: 205, y: 104, w: 72, h: 82, sx: 240, sy: 212, l: 'Fireplace' }, { id: 'shelf', t: 'shelf', x: 24, y: 40, w: 168, h: 130, sx: 110, sy: 214, l: 'Bookshelf → your Notes' }, { id: 'a1', t: 'seat', lift: 3, x: 86, y: 220, w: 50, h: 36, sx: 112, sy: 244, l: 'Armchair' }, { id: 'a2', t: 'seat', lift: 3, x: 346, y: 220, w: 50, h: 36, sx: 372, sy: 244, l: 'Armchair' }]
 };
+const BUS = {};   /* evt → [fn]; handlers are isolated so one bad listener cannot break the render loop */
+const on = (evt, fn) => { (BUS[evt] || (BUS[evt] = [])).push(fn); return () => off(evt, fn); };
+const off = (evt, fn) => { BUS[evt] = (BUS[evt] || []).filter(f => f !== fn); };
+const emit = (evt, d) => { (BUS[evt] || []).slice().forEach(f => { try { f(d); } catch (e) { if (window.console) console.error('[lounge2:' + evt + ']', e); } }); };
+/* ---------- room registry ----------
+   A room definition: { id, n, i, k, d, parent?, spawn?: { x, y, from?: { <roomId>: { x, y } } }, lock?: () => null | 'reason', hot?: [hotspot…] }.
+   Main-ring rooms keep prev/next (the two edge doors). Sub-rooms set `parent` and are entered through `door` hotspots
+   ({ t:'door', to:'<roomId>', x,y,w,h, sx,sy }), never through the ring tabs. Remote clients can only NAME a room (see roomOf); they can never define one. */
+const ID_RE = /^[a-z]{2,12}$/, SEAT_RE = /^[a-z0-9]{1,8}$/;
+const HANDLERS = {};      /* hotspot type → fn(hotspot, L): runs when the player arrives at a hotspot of that type (before the lounge-play hook) */
+const OVERLAYS = [];      /* fn(L, ctx, t, roomId, pos): extra per-frame painters (markers, prompts) drawn after characters */
+const PAINT = {};         /* roomId → { stat(c), dyn(L, c, t), light } — scenery painters; rooms without one use the built-in legacy painters */
+const DECOR = {};         /* roomId → [fn(L, ctx, t)]: scenery-layer decorations drawn behind the characters (door sprites, props) */
+const FX2 = [], FXCAP = 28;   /* cosmetic effects: drawn locally, never part of presence, so they cost no network traffic */
+function fx(kind, x, y, o) { FX2.push({ k: kind, x: x, y: y, t0: performance.now(), d: (o && o.d) || (kind === 'confetti' ? 1500 : kind === 'sparkle' ? 1000 : 750) }); if (FX2.length > FXCAP) FX2.shift(); }
+function drawFx(L, c) {
+  const now = performance.now(), still = !!L.REDUCED;
+  for (let i = FX2.length - 1; i >= 0; i--) {
+    const f = FX2[i], p = (now - f.t0) / f.d; if (p >= 1) { FX2.splice(i, 1); continue; } const a = 1 - p;
+    if (f.k === 'sparkle') { for (let k = 0; k < 7; k++) { const an = k * 0.9 + 0.3, r = still ? 14 : 5 + p * 22, x = f.x + Math.cos(an) * r, y = f.y - (still ? 0 : p * 14) + Math.sin(an) * r * .6; c.fillStyle = k % 2 ? 'rgba(255,236,150,' + a + ')' : 'rgba(255,255,255,' + a + ')'; c.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); c.fillRect(Math.round(x), Math.round(y) - 1, 1, 3); } }
+    else if (f.k === 'dust') { if (still) continue; for (let k = 0; k < 5; k++) { c.fillStyle = 'rgba(220,232,240,' + (.32 * a) + ')'; c.beginPath(); c.arc(f.x + (k - 2) * 5 * (.4 + p), f.y - p * 7 - (k % 2) * 2, 1.4 + p * 2.6, 0, 7); c.fill(); } }
+    else if (f.k === 'ping') { c.strokeStyle = 'rgba(255,222,130,' + (.75 * a) + ')'; c.lineWidth = 1.2; c.beginPath(); c.ellipse(f.x, f.y, still ? 14 : 4 + p * 24, still ? 8 : (4 + p * 24) * .42, 0, 0, 7); c.stroke(); }
+    else if (f.k === 'deny') { const sh = still ? 0 : Math.sin(p * 30) * 3 * a; c.strokeStyle = 'rgba(255,135,149,' + a + ')'; c.lineWidth = 2; c.beginPath(); c.moveTo(f.x - 6 + sh, f.y - 6); c.lineTo(f.x + 6 + sh, f.y + 6); c.moveTo(f.x + 6 + sh, f.y - 6); c.lineTo(f.x - 6 + sh, f.y + 6); c.stroke(); }
+    else if (f.k === 'confetti') { const cols = ['#ffd479', '#5fd0ee', '#ff8fb0', '#8ff0b0', '#c9a0ff']; for (let k = 0; k < 16; k++) { const x = f.x + ((k * 29) % 60) - 30 + (still ? 0 : Math.sin(p * 6 + k) * 4), y = f.y - 34 + (still ? 10 : p * 56) + ((k * 13) % 14); c.fillStyle = cols[k % 5]; c.globalAlpha = Math.min(1, a * 2); c.fillRect(Math.round(x), Math.round(y), 2, k % 3 ? 3 : 2); } c.globalAlpha = 1; }
+  }
+}
+/* room-entry banner: brief, legible destination feedback for ring moves and side-room doors alike */
+function drawBanner(L, c) {
+  const b = STATE.banner; if (!b) return; const age = performance.now() - b.t0; if (age > 2000) { STATE.banner = null; return; }
+  const a = age < 220 ? age / 220 : age > 1500 ? Math.max(0, 1 - (age - 1500) / 500) : 1, yo = L.REDUCED ? 0 : (age < 220 ? (1 - a) * -8 : 0);
+  c.font = 'bold 11px "Atkinson Hyperlegible", sans-serif'; const w = c.measureText(b.txt).width + 26, x = Math.round(L.W / 2 - w / 2), y = 14 + yo;
+  c.globalAlpha = a; c.fillStyle = 'rgba(3,20,30,.88)'; c.fillRect(x, y, w, 20); c.fillStyle = b.sub ? '#ffd479' : '#5fd0ee'; c.fillRect(x, y + 20, w, 2); c.fillStyle = '#e6fbff'; c.fillText(b.txt, x + 13, y + 14); c.globalAlpha = 1;
+}
+const PAUSE = new Set();  /* tokens: while non-empty the world ignores click/keyboard movement (a game or panel owns the input) */
+const inBox = (v, a, b) => typeof v === 'number' && v >= a && v <= b;
+function registerRoom(def) {
+  const bad = why => { if (window.console) console.error('[lounge2:registerRoom] ' + (def && def.id) + ': ' + why); return false; };
+  if (!def || !ID_RE.test(def.id)) return bad('id must match ' + ID_RE);
+  if (def.parent && !(ROOMS[def.parent] && !ROOMS[def.parent].parent)) return bad('parent must be an existing main room');
+  if (!def.n || !def.i) return bad('missing name/icon');
+  const seen = {}, hot = [];
+  for (const h of (def.hot || [])) {
+    if (!h || !h.id || seen[h.id] || !inBox(h.x, 0, 480) || !inBox(h.y, 0, 300) || !(h.w > 0) || !(h.h > 0) || !inBox(h.sx, 0, 480) || !inBox(h.sy, 0, 300)) return bad('bad hotspot ' + (h && h.id));
+    if (h.t === 'seat' && !SEAT_RE.test(h.id)) return bad('seat ids must match ' + SEAT_RE + ' (they travel in presence)');
+    if (h.t === 'door' && !h.to) return bad('door without target');
+    seen[h.id] = 1; hot.push(h);
+  }
+  ROOMS[def.id] = Object.assign({}, ROOMS[def.id], { n: def.n, i: def.i, k: def.k || def.n.toUpperCase(), d: def.d || '', parent: def.parent || undefined, spawn: def.spawn || undefined, lock: def.lock || undefined });
+  if (def.prev) ROOMS[def.id].prev = def.prev; if (def.next) ROOMS[def.id].next = def.next;
+  HOT[def.id] = (HOT[def.id] || []).filter(h => h.sticky).concat(hot);
+  return true;
+}
+/* add a hotspot to an already-registered room (e.g. the sub-room door in a main room); replaces any hotspot with the same id */
+function addHotspot(rid, h) {
+  if (!ROOMS[rid] || !h || !h.id || !inBox(h.x, 0, 480) || !inBox(h.y, 0, 300) || !(h.w > 0) || !(h.h > 0)) return false;
+  HOT[rid] = (HOT[rid] || []).filter(x => x.id !== h.id).concat([h]); return true;
+}
+/* where the player appears in `rid` when arriving from `from` (e.g. back in the café, in front of the kitchen door); must be walkable floor */
+function setSpawn(rid, from, pt) {
+  if (!ROOMS[rid] || !ROOMS[from] || !pt || !inBox(pt.x, 16, 464) || !inBox(pt.y, 205, 282)) return false;
+  const R = ROOMS[rid]; R.spawn = R.spawn || {}; R.spawn.from = R.spawn.from || {}; R.spawn.from[from] = { x: pt.x, y: pt.y }; return true;
+}
+const parentOf = id => (ROOMS[id] && ROOMS[id].parent) || id;
+const mainRooms = () => Object.keys(ROOMS).filter(k => !ROOMS[k].parent);
+const lockOf = id => { const r = ROOMS[id]; if (!r || typeof r.lock !== 'function') return null; try { return r.lock() || null; } catch (e) { return null; } };
+const hlabel = h => (typeof h.lf === 'function' ? (function () { try { return h.lf(); } catch (e) { return h.l; } })() : h.l);
 const STATE = { fade: 0, hover: null, fx: [], ripple: [], cards: null, last: 0, lastTrack: 0, steam: [] };
 const EM = {};   /* uid → { ts, at } so emotes survive roster rebuilds */
 const EXT = {};  /* extension hooks (set by lounge-play.js): npcs(roomId) → player-shaped actors, byUid(uid), arrive(hotspot, L), over(L, c, pos, t, wrap) */
@@ -61,7 +132,7 @@ function paintStatic(id) {
 /* ---------- helpers ---------- */
 const mineCode = () => (window.CodexAvatar && (CodexAvatar.mine() || CodexAvatar.forName(AM().name || 'operator'))) || '';
 const codeOf = p => (window.CodexAvatar && (p.av || CodexAvatar.forName(p.n || 'op'))) || '';
-const roomOf = p => (p && ROOMS[p.r] ? p.r : 'deck');        /* remote room ids are untrusted */
+const roomOf = p => { if (!p) return 'deck'; const r = ROOMS[p.r] && !ROOMS[p.r].parent ? p.r : 'deck'; return p.sr && ROOMS[p.sr] && ROOMS[p.sr].parent === r ? p.sr : r; };   /* remote ids are untrusted: `r` must be a main room; `sr` only counts if the registry says it belongs to that room */
 const seatDef = (rid, sid) => { const hs = HOT[rid] || []; for (let i = 0; i < hs.length; i++) if (hs[i].id === sid && hs[i].t === 'seat') return hs[i]; return null; };
 function room() { const L = LE(); return (L && L.me.room) || 'deck'; }
 function track(force) {
@@ -70,16 +141,19 @@ function track(force) {
 }
 /* compact state that rides on every presence update (network.js merges it into meta()): appearance, room, seat, jukebox, emote, facing */
 function extraMeta() {
-  const L = LE(), m = L ? L.me : {}, o = { av: mineCode(), r: room(), pz: m.pose && m.seat ? String(m.seat) : '', jk: m.jukebox ? 1 : 0, d: m.dir >= 0 ? 1 : -1 };
+  const L = LE(), m = L ? L.me : {}, o = { av: mineCode(), r: parentOf(room()), sr: ROOMS[room()] && ROOMS[room()].parent ? room() : '', pz: m.pose && m.seat ? String(m.seat) : '', jk: m.jukebox ? 1 : 0, d: m.dir >= 0 ? 1 : -1 };
   o.em = m.emote && m.emote.k && Date.now() - m.emote.ts < 6000 ? { k: m.emote.k, ts: m.emote.ts } : null;   /* explicit null clears the field in Firestore merge-writes */
   return o;
 }
-function setRoom(id, silent) {
-  const L = LE(); if (!L || !ROOMS[id] || L.me.room === id) return;
-  L.me.room = id; L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null; L.me.jukebox = 0; const left = id === ROOMS[L.me.room || 'deck'].prev; L.me.x = L.me.cx = 240; L.me.y = L.me.cy = 244; L.me.walk = false;
-  STATE.fade = 1; STATE.hover = null; track(true); if (L.renderRoster) L.renderRoster(); paintBar(); if (!silent && window.sfx) sfx('reveal');
+function setRoom(id, opts) {
+  const L = LE(); if (!L || !ROOMS[id] || L.me.room === id) return false; const o = typeof opts === 'object' && opts ? opts : { silent: !!opts };
+  const why = lockOf(id); if (why) { if (!o.force) { emit('locked', { room: id, why: why }); if (window.toast) toast('<b>' + esc(ROOMS[id].i + ' ' + ROOMS[id].n) + ' is locked</b><br>' + esc(why), 'speech', 3200); if (window.sfx) sfx('cross'); return false; } }
+  const from = L.me.room || 'deck', R = ROOMS[id], sp = (R.spawn && R.spawn.from && R.spawn.from[from]) || (R.spawn && R.spawn.x != null ? R.spawn : null) || { x: 240, y: 244 };
+  L.me.room = id; L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null; L.me.jukebox = 0; L.me.x = L.me.cx = sp.x; L.me.y = L.me.cy = sp.y; L.me.walk = false; L.me.act = null;
+  STATE.fade = 1; STATE.hover = null; STATE.banner = { txt: R.i + ' ' + R.n, t0: performance.now(), sub: !!R.parent }; hideCard(); track(true); if (L.renderRoster) L.renderRoster(); paintBar(); if (!o.silent && window.sfx) sfx('reveal'); emit('room', { from: from, to: id });
+  return true;
 }
-function doEmote(k) { const L = LE(); if (!L || !EMO[k]) return; L.me.emote = { k: k, ts: Date.now() }; EM[AM().uid || 'me'] = { ts: L.me.emote.ts, at: performance.now() }; if (k === 'sip') STATE.fx.push({ k: 'steam', x: L.me.cx, y: L.me.cy - 30, at: performance.now() }); track(true); if (window.sfx) sfx(k === 'cheer' ? 'combo' : 'click'); }
+function doEmote(k) { const L = LE(); if (!L || !EMO[k]) return; L.me.emote = { k: k, ts: Date.now() }; EM[AM().uid || 'me'] = { ts: L.me.emote.ts, at: performance.now() }; if (k === 'sip') STATE.fx.push({ k: 'steam', x: L.me.cx, y: L.me.cy - 30, at: performance.now() }); track(true); if (window.sfx) sfx(k === 'cheer' ? 'combo' : 'click'); emit('emote', { k: k }); }
 /* ---------- jukebox (generated lofi) ---------- */
 const MUS = { A: null, on: false, t: 0, step: 0, out: null };
 const muted = () => { try { return localStorage.getItem('cx_v7_mute') === '1'; } catch (e) { return false; } };
@@ -129,9 +203,27 @@ function dynRoom(L, c, t, id) {
     for (let i = 0; i < 18; i++) { const x = (i * 71 + t * .01) % 480, y = 40 + (i * 29 + Math.sin(t / 2000 + i) * 20) % 140; c.fillStyle = 'rgba(255,230,180,.35)'; c.fillRect(x, y, 1, 1); }
   }
 }
-function lightOverlay(c, id) { const m = { deck: null, cafe: 'rgba(255,170,90,.10)', garden: 'rgba(80,255,190,.06)', loft: 'rgba(255,140,60,.12)' }[id]; if (!m) return; c.fillStyle = m; c.fillRect(0, 0, 480, 300); const g = c.createRadialGradient(240, 150, 90, 240, 150, 300); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.38)'); c.fillStyle = g; c.fillRect(0, 0, 480, 300); }
+function lightOverlay(c, id) { const m = PAINT[id] && PAINT[id].light !== undefined ? PAINT[id].light : { deck: null, cafe: 'rgba(255,170,90,.10)', garden: 'rgba(80,255,190,.06)', loft: 'rgba(255,140,60,.12)' }[id]; if (!m) return; c.fillStyle = m; c.fillRect(0, 0, 480, 300); const g = c.createRadialGradient(240, 150, 90, 240, 150, 300); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.38)'); c.fillStyle = g; c.fillRect(0, 0, 480, 300); }
 function doors(c, id, t) {
-  const R = ROOMS[id]; [['L', 6, R.prev], ['R', 450, R.next]].forEach(d => { const x = d[1]; c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(x, 132, 24, 53); c.fillStyle = 'rgba(255,214,120,' + (.5 + .3 * Math.sin(t / 500)) + ')'; c.fillRect(x, 132, 24, 2); c.fillRect(x, 132, 2, 53); c.fillRect(x + 22, 132, 2, 53); c.font = '12px sans-serif'; c.textAlign = 'center'; c.fillText(ROOMS[d[2]].i, x + 12, 164); c.font = 'bold 7px "Atkinson Hyperlegible",sans-serif'; c.fillStyle = 'rgba(255,240,200,.9)'; c.fillText(ROOMS[d[2]].n.split(' ')[1] ? ROOMS[d[2]].n.split(' ')[0].toUpperCase() : ROOMS[d[2]].n.toUpperCase(), x + 12, 178); c.textAlign = 'left'; });
+  const R = ROOMS[id]; if (!R.prev || !R.next) return; [['L', 6, R.prev], ['R', 450, R.next]].forEach(d => { const x = d[1]; c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(x, 132, 24, 53); c.fillStyle = 'rgba(255,214,120,' + (.5 + .3 * Math.sin(t / 500)) + ')'; c.fillRect(x, 132, 24, 2); c.fillRect(x, 132, 2, 53); c.fillRect(x + 22, 132, 2, 53); c.font = '12px sans-serif'; c.textAlign = 'center'; c.fillText(ROOMS[d[2]].i, x + 12, 164); c.font = 'bold 7px "Atkinson Hyperlegible",sans-serif'; c.fillStyle = 'rgba(255,240,200,.9)'; c.fillText(ROOMS[d[2]].n.split(' ')[1] ? ROOMS[d[2]].n.split(' ')[0].toUpperCase() : ROOMS[d[2]].n.toUpperCase(), x + 12, 178); c.textAlign = 'left'; });
+}
+/* door hotspots: a soft pulsing frame + padlock when locked, so exits are visible without hovering */
+function hotDoors(c, id, t) {
+  (HOT[id] || []).forEach(h => { if (h.t !== 'door') return; const lk = lockOf(h.to), a = .35 + .25 * Math.sin(t / 420);
+    c.strokeStyle = lk ? 'rgba(255,135,149,' + a + ')' : 'rgba(255,214,120,' + a + ')'; c.lineWidth = 1.5; c.strokeRect(h.x + .5, h.y + .5, h.w - 1, h.h - 1);
+    c.font = '10px sans-serif'; c.textAlign = 'center'; c.fillStyle = 'rgba(255,240,200,.95)'; c.fillText(lk ? '🔒' : (ROOMS[h.to] ? ROOMS[h.to].i : '🚪'), h.x + h.w / 2, h.y + h.h / 2 + 4); c.textAlign = 'left'; });
+}
+/* the interactable closest to the player (within reach): shown as a readable prompt, used by the keyboard "interact" key */
+function nearest(L) {
+  const id = room(), hs = HOT[id] || []; let best = null, bd = 64;
+  hs.forEach(h => { const d = Math.hypot(h.sx - L.me.cx, h.sy - L.me.cy); if (d < bd && !(h.t === 'seat' && L.me.pose && L.me.seat === h.id)) { bd = d; best = h; } });
+  const R = ROOMS[id]; if (R && R.prev && R.next && L.me.cy > 128 && L.me.cy < 200) { if (L.me.cx < 46 && bd > L.me.cx) { best = { id: '_prev', t: 'ring', ring: 'prev', l: 'Go to ' + ROOMS[R.prev].n }; } else if (L.me.cx > 434 && bd > 480 - L.me.cx) { best = { id: '_next', t: 'ring', ring: 'next', l: 'Go to ' + ROOMS[R.next].n }; } }
+  return best;
+}
+function prompt(L, c) {
+  if (PAUSE.size || L.me.walk) { STATE.near = null; return; } const h = nearest(L); STATE.near = h; if (!h) return;
+  const txt = (document.activeElement === L.cv ? '[E] ' : '') + hlabel(h); c.font = 'bold 9px "Atkinson Hyperlegible", sans-serif'; const w = c.measureText(txt).width + 14, x = Math.round(L.W / 2 - w / 2), y = L.H - 30;
+  c.fillStyle = 'rgba(3,20,30,.9)'; c.fillRect(x, y, w, 16); c.strokeStyle = '#5fd0ee'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, w - 1, 15); c.fillStyle = '#e6fbff'; c.fillText(txt, x + 7, y + 11);
 }
 function wrap(c, text, max) { const w = String(text).split(/\s+/), out = []; let cur = ''; w.forEach(x => { if (c.measureText(cur + ' ' + x).width > max && cur) { out.push(cur); cur = x; } else cur = (cur ? cur + ' ' : '') + x; }); if (cur) out.push(cur); return out.slice(0, 3); }
 /* ---------- animated characters ---------- */
@@ -185,39 +277,67 @@ function draw(t) {
   const L = LE(), c = L.ctx; if (!c) return; const id = room(), realtime = NE().SupabaseLounge;
   try { if (window.CodexAvatar && CodexAvatar.rig) CodexAvatar.rig.budget(6); } catch (e) {}      /* ≤ ~6 ms of new sprite composition per tick */
   c.imageSmoothingEnabled = false;
-  if (id === 'deck') deckBG(L, c, t); else { if (!cache[id]) cache[id] = paintStatic(id); c.drawImage(cache[id], 0, 0); }
-  dynRoom(L, c, t, id);
+  const P = PAINT[id];
+  if (P && P.draw) P.draw(L, c, t);
+  else if (P && P.stat) { if (!cache[id]) { const cv = document.createElement('canvas'); cv.width = 480; cv.height = 300; P.stat(cv.getContext('2d')); cache[id] = cv; } c.drawImage(cache[id], 0, 0); if (P.dyn) P.dyn(L, c, t); }
+  else { if (id === 'deck') deckBG(L, c, t); else { if (!cache[id]) cache[id] = paintStatic(id); c.drawImage(cache[id], 0, 0); } dynRoom(L, c, t, id); }
+  (DECOR[id] || []).forEach(f => { try { f(L, c, t); } catch (e) { if (window.console && !STATE.warnedDec) { STATE.warnedDec = 1; console.error('[lounge2:decor]', e); } } });
   let banner = null, red = false; if (!NE().online || !NE().online()) { banner = 'OFFLINE MODE — LOG-IN LINK REQUIRED FOR OTHER OPERATORS'; red = true; } else if (!AM().user) banner = 'ESTABLISHING OPERATOR LINK…'; else if (realtime && typeof realtime.available === 'function' && realtime.available() && realtime.state === 'retry') banner = 'REALTIME LINK LOST — RETRYING…';
   if (banner) { c.fillStyle = 'rgba(2,20,34,.74)'; c.fillRect(0, 78, L.W, 34); c.fillStyle = red ? '#ff8795' : '#ffcb7a'; c.font = 'bold 10px "Atkinson Hyperlegible", sans-serif'; c.textAlign = 'center'; c.fillText(banner, L.W / 2, 98); c.textAlign = 'left'; }
   const list = []; Object.keys(L.players).forEach(u => { const p = L.players[u]; if (roomOf(p) === id) { p.uid = u; list.push(p); } });
   const me = { n: AM().name || 'YOU', lv: (typeof window.levelOf === 'function' && typeof S !== 'undefined') ? window.levelOf(S.xp || 0) + 1 : 1, cx: L.me.cx, cy: L.me.cy, dir: L.me.dir, walk: L.me.walk, a: AM().admin };   /* `S` is engine.js's module-scoped let binding, not a window property */
   list.push(me); if (EXT.npcs) EXT.npcs(id).forEach(p => list.push(p)); list.sort((a, b) => a.cy - b.cy); const pos = {};
   list.forEach(p => { const isMe = p === me; const r = token(L, c, p, isMe, t); pos[isMe ? AM().uid : p.uid] = r; });
-  lightOverlay(c, id); doors(c, id, t); bubbles(L, c, pos);
+  lightOverlay(c, id); doors(c, id, t); hotDoors(c, id, t); bubbles(L, c, pos);
   if (EXT.over) { try { EXT.over(L, c, pos, t, wrap); } catch (e) { if (window.console && !STATE.warnedOver) { STATE.warnedOver = 1; console.error('[lounge2:over]', e); } } }
+  OVERLAYS.forEach(f => { try { f(L, c, t, id, pos); } catch (e) { if (window.console && !STATE.warnedOv) { STATE.warnedOv = 1; console.error('[lounge2:overlay]', e); } } });
+  prompt(L, c); drawFx(L, c); drawBanner(L, c);
   STATE.fx = STATE.fx.filter(f => performance.now() - f.at < 1800); STATE.fx.forEach(f => { const a = (performance.now() - f.at) / 1800; c.fillStyle = 'rgba(255,255,255,' + (.7 * (1 - a)) + ')'; c.beginPath(); c.arc(f.x + Math.sin(a * 6) * 3, f.y - a * 24, 2 + a * 3, 0, 7); c.fill(); });
-  const h = STATE.hover; if (h) { c.font = 'bold 9px "Atkinson Hyperlegible", sans-serif'; const w = c.measureText(h.l).width + 10, x = Math.max(4, Math.min(L.W - w - 4, h.x + h.w / 2 - w / 2)), y = Math.max(4, h.y - 16); c.fillStyle = 'rgba(3,20,30,.92)'; c.fillRect(x, y, w, 14); c.strokeStyle = '#ffc874'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, w - 1, 13); c.fillStyle = '#ffe9b0'; c.fillText(h.l, x + 5, y + 10); }
+  const h = STATE.hover; if (h) { c.font = 'bold 9px "Atkinson Hyperlegible", sans-serif'; const w = c.measureText(hlabel(h)).width + 10, x = Math.max(4, Math.min(L.W - w - 4, h.x + h.w / 2 - w / 2)), y = Math.max(4, h.y - 16); c.fillStyle = 'rgba(3,20,30,.92)'; c.fillRect(x, y, w, 14); c.strokeStyle = '#ffc874'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, w - 1, 13); c.fillStyle = '#ffe9b0'; c.fillText(hlabel(h), x + 5, y + 10); }
   if (STATE.fade > 0.01) { c.fillStyle = 'rgba(2,12,20,' + STATE.fade + ')'; c.fillRect(0, 0, L.W, L.H); STATE.fade *= .88; }
   c.font = '7px "Atkinson Hyperlegible", sans-serif'; c.fillStyle = 'rgba(255,255,255,.55)'; c.fillText(ROOMS[id].i + ' ' + ROOMS[id].n.toUpperCase(), 10, 294);
 }
 /* ---------- interaction ---------- */
 function pt(L, e) { const r = L.cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (L.W / r.width), y: (e.clientY - r.top) * (L.H / r.height) }; }
 function hotAt(id, x, y) { const hs = HOT[id] || []; for (let i = 0; i < hs.length; i++) { const h = hs[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; } return null; }
+const doorAtKey = p => doorAt(p.x, p.y);
 function doorAt(x, y) { return y > 128 && y < 190 ? (x < 34 ? 'prev' : x > 446 ? 'next' : null) : null; }
+/* walk to a hotspot's stand point and act on arrival — the single path used by mouse clicks, the Activity Console and keyboard play */
+function walkToHot(L, h) {
+  const realtime = NE().SupabaseLounge;
+  L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null;
+  L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, h.sx)); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, h.sy)); L.me.walk = true; L.me.act = h; if (h.t === 'seat') L.me.pendingSit = h;
+  if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk();
+}
+function walkTo(hotId) { const L = LE(); if (!L || !L.active) return false; const h = (HOT[room()] || []).filter(x => x.id === hotId)[0]; if (!h) return false; hideCard(); walkToHot(L, h); return true; }
+/* everyone visible in a room: remote operators (uid), NPCs, and the local player — used by the console's Room tab */
+function who(rid) {
+  const L = LE(), out = []; if (!L) return out; rid = rid || room();
+  out.push({ me: 1, n: AM().name || 'YOU', code: mineCode() });
+  Object.keys(L.players || {}).forEach(u => { const p = L.players[u]; if (roomOf(p) === rid) out.push({ uid: u, n: p.n || 'OP', code: codeOf(p), a: !!p.a }); });
+  if (EXT.npcs) { try { EXT.npcs(rid).forEach(p => out.push({ npc: 1, uid: p.uid, n: p.n, tag: p.tag, code: codeOf(p) })); } catch (e) {} }
+  return out;
+}
 function onClick(e) {
-  const L = LE(), p = pt(L, e), id = room(), d = doorAt(p.x, p.y), realtime = NE().SupabaseLounge;
-  if (d) { setRoom(ROOMS[id][d]); return; }
+  if (PAUSE.size) return; const L = LE(), p = pt(L, e), id = room(), d = doorAt(p.x, p.y), realtime = NE().SupabaseLounge;
+  if (d && ROOMS[id][d]) { setRoom(ROOMS[id][d]); return; }
   if (AM().user && L.cv) { /* click another operator → mini card */ const keys = Object.keys(L.players); for (let i = 0; i < keys.length; i++) { const o = L.players[keys[i]]; if (roomOf(o) === id && Math.abs(p.x - o.cx) < 14 && p.y > o.cy - 52 && p.y < o.cy + 5) { showCard(keys[i], o, e); return; } } }
   hideCard();
   const h = hotAt(id, p.x, p.y); L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.emote = null;
-  if (h) {
-    L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, h.sx)); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, h.sy)); L.me.walk = true; L.me.act = h; if (h.t === 'seat') L.me.pendingSit = h;
-    if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk(); return;
-  }
+  if (h) { walkToHot(L, h); return; }
   L.me.act = null; L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, Math.round(p.x))); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, Math.round(p.y))); L.me.walk = true; if (window.sfx) sfx('click'); if (realtime && typeof realtime.available === 'function' && realtime.available() && typeof realtime.sendWalk === 'function') realtime.sendWalk();
 }
+const KEYS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1], a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1], A: [-1, 0], D: [1, 0], W: [0, -1], S: [0, 1] };
+function onKey(e) {
+  const L = LE(); if (!L || !L.active || PAUSE.size || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (KEYS[e.key]) { e.preventDefault(); L.me.pose = 0; L.me.seat = null; L.me.pendingSit = null; L.me.act = null; L.me.x = Math.max(L.MIN_X, Math.min(L.MAX_X, Math.round(L.me.x + KEYS[e.key][0] * 30))); L.me.y = Math.max(L.MIN_Y, Math.min(L.MAX_Y, Math.round(L.me.y + KEYS[e.key][1] * 22))); L.me.walk = true; const rt = NE().SupabaseLounge; if (rt && typeof rt.available === 'function' && rt.available() && typeof rt.sendWalk === 'function') rt.sendWalk(); return; }
+  if (e.key === 'e' || e.key === 'E' || e.key === 'Enter' || e.key === ' ') {
+    const h = nearest(L); if (!h) return; e.preventDefault(); hideCard();
+    if (h.t === 'ring') setRoom(ROOMS[room()][h.ring]); else walkToHot(L, h);
+  }
+}
 function arrive(L) {
-  const a = L.me.act; if (!a || L.me.walk) return; L.me.act = null;
+  const a = L.me.act; if (!a || L.me.walk) return; L.me.act = null; emit('arrive', { id: a.id, t: a.t, room: room() });
   if (a.t === 'seat') { L.me.pose = 1; L.me.seat = a.id; L.me.dir = a.sx < 240 ? 1 : -1; track(true); }
   else if (a.t === 'juke') { L.me.jukebox = L.me.jukebox ? 0 : 1; track(true); toast('<b>Jukebox ' + (L.me.jukebox ? 'on' : 'off') + '</b><br>' + (L.me.jukebox ? 'Everyone in the café hears it.' : ''), 'speech', 1800); if (L.me.jukebox) musicStart(); }
   else if (a.t === 'coffee') doEmote('sip');
@@ -226,6 +346,8 @@ function arrive(L) {
   else if (a.t === 'pond') { STATE.ripple.push({ x: L.me.cx, y: 250, at: performance.now() }); if (window.sfx) sfx('flip'); }
   else if (a.t === 'shelf') { if (window.showScreen) showScreen('notebook'); }
   else if (a.t === 'scope') { if (window.showScreen) showScreen('sec7'); }
+  else if (a.t === 'door') setRoom(a.to, { from: room() });
+  else if (HANDLERS[a.t]) { try { HANDLERS[a.t](a, L); } catch (e) { if (window.console) console.error('[lounge2:handler:' + a.t + ']', e); } }
   else if (EXT.arrive) EXT.arrive(a, L);
 }
 function showCard(uid, o, e) {
@@ -248,26 +370,38 @@ function roster() {
 }
 function paintBar() {
   const bar = $1('#lgBar'); if (!bar) return; const id = room();
-  bar.innerHTML = '<div class="lg-rooms" role="tablist" aria-label="Rooms">' + Object.keys(ROOMS).map(k => '<button type="button" role="tab" class="' + (k === id ? 'on' : '') + '" data-room="' + k + '" aria-selected="' + (k === id) + '">' + ROOMS[k].i + ' <span>' + ROOMS[k].n + '</span></button>').join('') + '</div><div class="lg-emo" role="group" aria-label="Emotes">' + Object.keys(EMO).map(k => '<button type="button" data-emo="' + k + '" aria-label="' + EMO[k][1] + '" title="' + EMO[k][1] + '">' + EMO[k][0] + '</button>').join('') + '<button type="button" data-lg2="mute" class="' + (muted() ? 'off' : '') + '" aria-label="Toggle jukebox sound" title="Jukebox sound">' + (muted() ? '🔇' : '🔊') + '</button><button type="button" data-lg2="avatar" aria-label="Edit avatar" title="Edit your avatar">🎨</button></div>';
+  bar.innerHTML = '<div class="lg-rooms" role="tablist" aria-label="Rooms">' + mainRooms().map(k => '<button type="button" role="tab" class="' + (k === parentOf(id) ? 'on' : '') + '" data-room="' + k + '" aria-selected="' + (k === parentOf(id)) + '">' + ROOMS[k].i + ' <span>' + ROOMS[k].n + '</span></button>').join('') + (ROOMS[id].parent ? '<span class="lg-crumb" aria-label="You are in a side room">↳ ' + ROOMS[id].i + ' ' + ROOMS[id].n + '</span>' : '') + '</div><div class="lg-emo" role="group" aria-label="Emotes">' + Object.keys(EMO).map(k => '<button type="button" data-emo="' + k + '" aria-label="' + EMO[k][1] + '" title="' + EMO[k][1] + '">' + EMO[k][0] + '</button>').join('') + '<button type="button" data-lg2="mute" class="' + (muted() ? 'off' : '') + '" aria-label="Toggle jukebox sound" title="Jukebox sound">' + (muted() ? '🔇' : '🔊') + '</button><button type="button" data-lg2="avatar" aria-label="Edit avatar" title="Edit your avatar">🎨</button></div>';
 }
 function init() {
   const L = LE(); if (!L || !L.cv) return;
   Object.assign(L.me, { room: 'deck', pose: 0, seat: null, emote: null, jukebox: 0, act: null, pendingSit: null });
   L.extra = extraMeta;                /* network.js merges this into presence meta */
   L.actors = ACT;                     /* read-only handle for diagnostics */
-  window.CodexLounge = { HOT: HOT, ROOMS: ROOMS, hooks: EXT, room: room, doEmote: doEmote, track: track };   /* seam for lounge-play.js */
+  window.CodexLounge = { HOT: HOT, ROOMS: ROOMS, hooks: EXT, room: room, doEmote: doEmote, track: track, setRoom: setRoom, who: who, walkTo: walkTo, on: on, off: off, emit: emit,
+    registerRoom: registerRoom, addHotspot: addHotspot, setSpawn: setSpawn, fx: fx, fxCount: () => FX2.length, paintDecor: (id, c, t) => { const L = LE(); (DECOR[id] || []).forEach(f => f(L, c, t)); }, bannerOn: () => !!STATE.banner, fading: () => STATE.fade > 0.01, handlers: HANDLERS, addOverlay: f => { OVERLAYS.push(f); return () => { const i = OVERLAYS.indexOf(f); if (i >= 0) OVERLAYS.splice(i, 1); };
+ },
+    decorate: (id, fn) => { if (ID_RE.test(id) && typeof fn === 'function') (DECOR[id] || (DECOR[id] = [])).push(fn); }, registerArt: (id, def) => { if (ID_RE.test(id) && def) { PAINT[id] = def; delete cache[id]; } }, parentOf: parentOf, mainRooms: mainRooms, lockOf: lockOf, label: hlabel, nearest: () => STATE.near,
+    pause: tok => { PAUSE.add(tok || 'x'); emit('pause', { on: true }); }, resume: tok => { PAUSE.delete(tok || 'x'); if (!PAUSE.size) emit('pause', { on: false }); }, paused: () => PAUSE.size > 0 };   /* seam for lounge-play.js */
+/* feedback wiring: effects are purely local and react to the same events other modules use */
+on('arrive', e => { const L = LE(); if (!L || !e) return; const h = (HOT[room()] || []).filter(x => x.id === e.id)[0];
+  if (e.t !== 'seat' && e.t !== 'door') fx('dust', L.me.cx, L.me.cy + 2);
+  if (h && h.t !== 'npc' && h.t !== 'seat' && h.t !== 'door') fx('ping', h.x + h.w / 2, h.y + h.h - 4); });
+on('locked', e => { const h = (HOT[room()] || []).filter(x => x.t === 'door' && x.to === e.room)[0]; if (h) fx('deny', h.x + h.w / 2, h.y + h.h / 2); });
+on('discover', () => { const L = LE(); if (L && L.me) fx('sparkle', L.me.cx, L.me.cy - 46); });
+on('win', () => { const L = LE(); if (L && L.me) fx('confetti', L.me.cx, L.me.cy - 30); });
   L.draw = draw; L.onClick = onClick; L.renderRoster = roster;
   const step0 = L.step; L.step = function (dt, t) { step0.call(this, dt, t); arrive(this); try { tick(this, dt); } catch (e) { if (window.console && !STATE.warned) { STATE.warned = 1; console.error('[lounge2:tick]', e); } } if (L.me.emote && Date.now() - L.me.emote.ts > 4300) L.me.emote = null; STATE.last += dt; if (STATE.last > 1000) { STATE.last = 0; if (wantMusic()) musicStart(); else if (MUS.on) musicStop(); } };
-  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); } };
+  const sa = L.setActive; L.setActive = function (on) { sa.call(this, on); if (!on) { musicStop(); hideCard(); Object.keys(ACT).forEach(k => delete ACT[k]); FX2.length = 0; STATE.banner = null; } emit('active', { on: !!on }); };
   L.cv.insertAdjacentHTML('afterend', '<div id="lgBar" class="lg-bar"></div>'); paintBar();
   $1('#lgBar').addEventListener('click', e => {
     const r = e.target.closest('[data-room]'), m = e.target.closest('[data-emo]'), g = e.target.closest('[data-lg2]');
-    if (r) setRoom(r.dataset.room); else if (m) doEmote(m.dataset.emo);
+    if (r) setRoom(r.dataset.room, { from: room() }); else if (m) doEmote(m.dataset.emo);
     else if (g && g.dataset.lg2 === 'mute') { try { localStorage.setItem('cx_v7_mute', muted() ? '0' : '1'); } catch (x) {} if (muted()) musicStop(); paintBar(); }
     else if (g && g.dataset.lg2 === 'avatar') CodexAvatar.edit();
   });
-  L.cv.addEventListener('mousemove', e => { const p = pt(L, e), id = room(), d = doorAt(p.x, p.y), h = d ? { l: 'Go to ' + ROOMS[ROOMS[id][d]].n, x: d === 'prev' ? 6 : 450, y: 132, w: 24 } : hotAt(id, p.x, p.y); STATE.hover = h; L.cv.style.cursor = h ? 'pointer' : 'default'; });
+  L.cv.addEventListener('mousemove', e => { const p = pt(L, e), id = room(), d = ROOMS[id][doorAtKey(p)] ? doorAt(p.x, p.y) : null, h = d ? { l: 'Go to ' + ROOMS[ROOMS[id][d]].n, x: d === 'prev' ? 6 : 450, y: 132, w: 24 } : hotAt(id, p.x, p.y); STATE.hover = h; L.cv.style.cursor = h ? 'pointer' : 'default'; });
   L.cv.addEventListener('mouseleave', () => { STATE.hover = null; });
+  L.cv.tabIndex = 0; L.cv.setAttribute('aria-label', 'Observation lounge — arrow keys or WASD to move, E to use the highlighted object. The Activity Console lists everything you can do here.'); L.cv.addEventListener('keydown', onKey);
   document.addEventListener('cx:avatar', () => { Object.keys(cache).length; track(true); roster(); });
   /* remote emote detection now lives in tick(): it only runs while the lounge is active */
   roster();
