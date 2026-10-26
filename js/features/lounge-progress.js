@@ -72,7 +72,7 @@ function gameResult(id, r) {
   }, 'game');
 }
 function stat(k, n) { update(d => { if (k in d.stats) d.stats[k] = nat(d.stats[k] + (n || 1), 1e9); }, 'stat'); }
-function reset() { D = blank(); readonly = false; status = 'fresh'; try { localStorage.removeItem(KEY); } catch (e) {} notify('reset'); }
+function reset() { if (readonly) return false; D = blank(); status = 'fresh'; try { localStorage.removeItem(KEY); } catch (e) {} notify('reset'); return true; }
 
 load();
 

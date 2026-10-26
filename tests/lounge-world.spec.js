@@ -127,7 +127,7 @@ test.describe('presence validation (remote data is untrusted)', () => {
       const L = window.NetworkEngine.LoungeEngine, G = window.CodexLounge, old = L.players;
       const mk = (r, sr) => ({ n: 'X', r: r, sr: sr, av: '', x: 100, y: 230, cx: 100, cy: 230 });
       L.players = { a: mk('deck', 'dome'), b: mk('cafe', 'dome'), c: mk('loft', 'archive'), d: mk('nowhere', ''), e: mk('dome', ''), f: mk('deck', 'zzzzzzzzzzzzzzzz'), g: mk('garden', 'conservatory') };
-      const out = {}; ['deck', 'cafe', 'dome', 'archive', 'loft', 'garden', 'conservatory'].forEach(r => { out[r] = G.who(r).filter(w => w.uid).map(w => w.uid).sort(); });
+      const out = {}; ['deck', 'cafe', 'dome', 'archive', 'loft', 'garden', 'conservatory'].forEach(r => { out[r] = G.who(r).filter(w => w.uid && !w.npc).map(w => w.uid).sort(); }); // who() also includes local NPCs with synthetic uids
       L.players = old; return out;
     });
     expect(where.dome).toEqual(['a']);                    // valid pair

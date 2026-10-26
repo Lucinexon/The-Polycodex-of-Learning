@@ -247,6 +247,8 @@ test.describe('progress ledger', () => {
     expect(await page.evaluate(() => window.CodexLoungeProgress.status())).toBe('newer');
     expect(await page.evaluate(() => window.CodexLoungeProgress.readonly())).toBe(true);
     expect(await page.evaluate(() => localStorage.getItem('cx_lounge_world_v1'))).toBe(newer);   // untouched
+    expect(await page.evaluate(() => window.CodexLoungeProgress.reset())).toBe(false);
+    expect(await page.evaluate(() => localStorage.getItem('cx_lounge_world_v1'))).toBe(newer);   // reset must respect the newer-schema guard too
   });
 
   test('legacy Order Up best is imported read-only; the legacy key is not modified', async ({ page }) => {
