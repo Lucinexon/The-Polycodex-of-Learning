@@ -2,6 +2,20 @@
 <html lang="en">
 <head>
   <script>
+  /* v10 cutover entry. The legacy app stays at index.html?ui=legacy. */
+  (function () {
+    try {
+      var q = new URLSearchParams(location.search);
+      var ui = q.get('ui');
+      if (ui === '10') localStorage.setItem('cx_ui', '10');
+      else if (ui === 'legacy') localStorage.setItem('cx_ui', 'legacy');
+      if (ui === '10' || (!ui && localStorage.getItem('cx_ui') === '10')) {
+        location.replace('app.html' + (location.hash || ''));
+      }
+    } catch (e) { /* storage can be unavailable; legacy still boots */ }
+  })();
+  </script>
+  <script>
   /* Non-blocking crash reporter (replaces the old blocking alert()). Benign
      browser noise is ignored; real faults show once in a dismissible strip. */
   (function () {

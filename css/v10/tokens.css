@@ -1,0 +1,180 @@
+/* Polycodex v10 tokens — contract C3.
+   The only place colour, spacing, radius, border, shadow and motion values live.
+   Contrast pairs: docs/v10/contrast.md (scripts/check-contrast.js). */
+
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("../../assets/fonts/atkinson-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("../../assets/fonts/atkinson-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("../../assets/fonts/pixelify-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("../../assets/fonts/pixelify-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* colour roles */
+  --c-water-0: #1b5e73;
+  --c-water-1: #0f3a52;
+  --c-water-2: #0a2238;
+  --c-water-3: #060e1a;
+  --c-mist: #c9d7e0;
+  --c-foam: #f2f6f8;
+  --c-paper: #f4ecd8;
+  --c-paper-2: #e7dbbf;
+  --c-ink: #1a1d22;
+  --c-ink-2: #4a4f57;
+  --c-slate-night: #17212c;
+  --c-lantern: #ffb547;
+  --c-lantern-text: #ffcf8a;
+  --c-lantern-ink: #1f1405;
+  --c-coral: #ff7a6b;
+  --c-coral-text: #ffd0c8;
+  --c-coral-ink: #a8281c;
+  --c-kelp: #7fd18b;
+  --c-kelp-text: #a9e6b1;
+  --c-kelp-ink: #2c6a37;
+  --c-biolum: #9be7d8;
+  --c-shadow-water: #02060c;
+  --c-shadow-paper: #1a1d22;
+
+  /* surface roles, remapped by data-zone */
+  --c-bg: var(--c-water-2);
+  --c-bg-raised: var(--c-water-1);
+  --c-line: #5b8fa2;
+  --c-text: var(--c-foam);
+  --c-text-2: var(--c-mist);
+  --c-shadow: var(--c-shadow-water);
+  --c-paper-text: var(--c-ink);
+  --c-paper-text-2: var(--c-ink-2);
+  --c-paper-bg: var(--c-paper);
+  --c-paper-line: var(--c-ink);
+
+  /* type */
+  --f-display: "Pixelify Sans", "Courier New", monospace;
+  --f-read: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-code: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-1: 14px;
+  --fs-2: 16px;
+  --fs-3: 18px;
+  --fs-4: 22px;
+  --fs-5: 28px;
+  --fs-6: 36px;
+  --fs-d1: 32px;
+  --fs-d2: 48px;
+  --fs-d3: 64px;
+  --measure: 66ch;
+
+  /* space, shape, elevation */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --r-0: 0;
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-pill: 999px;
+  --bw: 2px;
+  --bw-strong: 3px;
+  --e-0: none;
+  --e-1: 2px 2px 0 var(--c-shadow);
+  --e-2: 4px 4px 0 var(--c-shadow);
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 280ms;
+  --dur-4: 600ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-step: steps(4);
+  --z-scene: 0;
+  --z-content: 10;
+  --z-hud: 20;
+  --z-sheet: 30;
+  --z-toast: 40;
+  --z-modal: 50;
+
+  /* layout */
+  --tap: 44px;
+  --bar-top: 48px;
+  --bar-bottom: 64px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+/* depth zones remap the chrome */
+[data-zone="shallows"] {
+  --c-bg: var(--c-water-0);
+  --c-bg-raised: #1d6278;
+  --c-line: #a5cbd5;
+}
+[data-zone="twilight"] {
+  --c-bg: var(--c-water-1);
+  --c-bg-raised: #174b66;
+  --c-line: #7fb3c2;
+}
+[data-zone="midnight"] {
+  --c-bg: var(--c-water-2);
+  --c-bg-raised: #123249;
+  --c-line: #5b8fa2;
+}
+[data-zone="abyss"] {
+  --c-bg: var(--c-water-3);
+  --c-bg-raised: #0c1a29;
+  --c-line: #4a7f93;
+}
+
+/* slate day / night */
+[data-slate="night"] {
+  --c-paper-bg: var(--c-slate-night);
+  --c-paper-text: var(--c-paper);
+  --c-paper-text-2: var(--c-mist);
+  --c-paper-line: #8fa6b4;
+  --c-shadow: #000;
+}
+
+/* text size setting */
+html[data-text="2"] { --fs-1: 16px; --fs-2: 18px; --fs-3: 21px; --fs-4: 25px; --fs-5: 32px; --fs-6: 41px; }
+html[data-text="3"] { --fs-1: 18px; --fs-2: 21px; --fs-3: 23px; --fs-4: 29px; --fs-5: 36px; --fs-6: 47px; }
+
+/* reduced motion and low tier collapse durations in one place */
+html[data-fx="low"], html[data-fx="off"] {
+  --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; --dur-4: 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; --dur-4: 0ms; }
+}
+
+/* Lounge aliases — the Lounge inherits the same roles without a rewrite */
+:root {
+  --lg-dur-1: var(--dur-1);
+  --lg-dur-2: var(--dur-2);
+  --lg-dur-3: var(--dur-3);
+  --lg-ease: var(--ease-out);
+  --lg-focus: var(--c-lantern);
+  --lg-surface: var(--c-paper);
+  --lg-ink: var(--c-ink);
+  --lg-coral: var(--c-coral);
+  --lg-kelp: var(--c-kelp);
+}
