@@ -188,6 +188,7 @@
       done = result.ok;
       if (ctx && ctx.onComplete) ctx.onComplete(result);
     }
+    api.complete = complete;
     var fn = handlers[template];
     if (!fn) {
       el.innerHTML = '<p class="activity-error">This activity is not available yet.</p>';

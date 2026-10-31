@@ -55,7 +55,7 @@
     });
     if (saved && saved.data && controller.restore) controller.restore(saved.data);
 
-    el.querySelector('.lounge-open').addEventListener('click', function () { openLounge(dive, opts); });
+    el.querySelector('.lounge-open').addEventListener('click', function () { openLounge(dive, { newTab: false }); });
     return { controller: controller, element: el };
   }
 
@@ -68,10 +68,10 @@
       if (root.toast) root.toast('The Kitchen is open. Your dive is saved.');
       return;
     }
-    if (root.toast) root.toast('The Lounge lives in the legacy build. Your dive is saved; use Back to return.', { duration: 5000 });
-    var url = 'index.html?ui=legacy&from=v10&dive=' + encodeURIComponent(dive.id) + '&room=' + encodeURIComponent(payload.room || 'kitchen');
-    if (opts && opts.newTab === false) root.location.href = url;
-    else root.open(url, '_blank', 'noopener');
+    if (root.toast) root.toast('The Lounge lives in the legacy build. Your dive is saved; use Back to your dive to return.', { duration: 5000 });
+    var url = 'index.html?ui=legacy&from=v10&dive=' + encodeURIComponent(dive.id) + '&room=' + encodeURIComponent(payload.room || 'kitchen') + '&activity=' + encodeURIComponent(payload.activity || '') + '&returnTo=' + encodeURIComponent(returnPath);
+    if (opts && opts.newTab === true) root.open(url, '_blank', 'noopener');
+    else root.location.href = url;
   }
 
   root.CodexPractice = { mount: mount, openLounge: openLounge, ROOMS: ROOMS };

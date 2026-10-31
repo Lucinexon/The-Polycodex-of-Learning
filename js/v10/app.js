@@ -805,9 +805,9 @@
   function mountPractice(dive, open) {
     var host = document.getElementById('practice-host');
     if (!host) return;
-    if (!root.CodexPractice) {
+    if (!root.CodexPractice || !root.CodexActivities) {
       host.innerHTML = '<p class="small muted">Loading practice…</p>';
-      ensurePractice().then(function () {
+      Promise.all([ensurePractice(), ensureActivities()]).then(function () {
         if (app.dive === dive && document.getElementById('practice-host') === host) mountPractice(dive, open);
       }).catch(function () {
         host.innerHTML = '<p class="small muted">Practice could not load. You can still finish the dive.</p>';
@@ -1347,12 +1347,12 @@
       loadUnitInto('number-shallows-ratios', function (unit) {
         app.unit = unit;
         var dive = unitOfDive(unit, 'ratios-d3') || unit.dives[0];
-        root.CodexPractice.openLounge(dive, { newTab: true });
+        root.CodexPractice.openLounge(dive, { newTab: false });
       }, function () {
-        navigate('index.html?ui=legacy&from=v10&room=kitchen');
+        navigate('index.html?ui=legacy&from=v10&room=kitchen&returnTo=' + encodeURIComponent('/lounge'));
       });
     }).catch(function () {
-      navigate('index.html?ui=legacy&from=v10&room=kitchen');
+      navigate('index.html?ui=legacy&from=v10&room=kitchen&returnTo=' + encodeURIComponent('/lounge'));
     });
   }
 
@@ -1467,7 +1467,7 @@
     }
     if (action === 'practice-lounge') {
       var loungeDive = app.surfaceDive || app.dive;
-      if (loungeDive) ensurePractice().then(function () { root.CodexPractice.openLounge(loungeDive, { newTab: true }); }).catch(function () { root.toast('Practice could not load. Inline practice is still available.', { tone: 'coral' }); });
+      if (loungeDive) ensurePractice().then(function () { root.CodexPractice.openLounge(loungeDive, { newTab: false }); }).catch(function () { root.toast('Practice could not load. Inline practice is still available.', { tone: 'coral' }); });
       return;
     }
     if (action === 'open-kitchen') { openKitchen(); return; }

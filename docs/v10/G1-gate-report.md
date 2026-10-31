@@ -2,7 +2,7 @@
 
 - Branch: `v10`
 - Baseline: `main` at `7480579`
-- Date: 2026-10-30
+- Date: 2026-10-31
 - Status: **G1 NOT PASSED — vertical slice is built and test-green on the v10 path, but the gate has open items.**
 
 This report records what is actually working, what is not, and the evidence for each claim. It does not treat mocks, screenshots or planned work as completed functionality.
@@ -18,7 +18,7 @@ This report records what is actually working, what is not, and the evidence for 
 | M1.5 Descent and unit sheet (Number Reef, Shallows) | **Done** | `renderDescent`, `renderMap`; app spec |
 | M1.6 Title, Continue, onboarding, legacy migration notice | **Done** | Title/onboarding/migration notice; app + migration specs |
 | M1.7 Reef Map with one live reef, planned reefs, 42 Wrecks | **Done** | `renderMap`; `wreck.html`; 3 wreck specs covering all 42 lessons |
-| M1.8 Tune template, Recipe Scaler inline and in Kitchen, Lounge fallback | **Partially done — open** | Tune template and inline practice exist; Kitchen two-way return loop is still manual/incomplete (AC-LG1) |
+| M1.8 Tune template, Recipe Scaler inline and in Kitchen, Lounge fallback | **Done** | Tune template and inline practice; Kitchen two-way return loop with exactly-once result recording and blocked-Lounge fallback, covered by `tests/v10/lounge-loop.spec.js` (3 tests) |
 | M1.9 Lazy loading on the v10 path | **Done for shell modules** | `search.js`, `activities.js`, `practice.js` load on demand via `ensureSearch`/`ensureActivities`/`ensurePractice`; Title loads zero third-party scripts |
 
 The 14 mock screenshots in `docs/v10/mock/` are G1a design artifacts, not G1 functionality.
@@ -29,11 +29,11 @@ The 14 mock screenshots in `docs/v10/mock/` are G1a design artifacts, not G1 fun
 |---|---|---|
 | Owner playtests on a real phone | **Not done** | No real-device playtest notes are recorded. This cannot be claimed from desktop Chromium. |
 | Budgets pass on the throttled profile | **FAIL — 6/9** | Latest median-of-3 run: Title LCP 2604 ms (budget 2500), cached dive 566 ms (budget 300), uncached dive 3759 ms (budget 1500). The other six checks pass. See §4. |
-| All tests green, new and existing ~120 specs | **New green; legacy has 2 pre-existing failures** | v10: 19/19. Units: 16/16. Legacy: 122/126; the two deterministic failures reproduce on `main` at `7480579` and are in untouched frozen Lounge code. Two parallel flakes pass serially. See §5. |
+| All tests green, new and existing ~120 specs | **New green; legacy 120/126 on Chromium, with pre-existing and load-sensitive failures** | v10: 22/22. Units: 16/16. Legacy Chromium: 120/126. One deterministic failure (`tests/lounge-play.spec.js:24`, `seat mismatch orrin a2`) reproduces on `main` at `7480579`; five others are load-sensitive, and a serial rerun passed four of them. The remaining marker-pixel test is an animation-phase flake that passes in a standalone probe on both `main` and `v10`. See §5. |
 | Migration fixtures pass | **Pass** | 5/5 migration specs: backup, display, idempotence, source keys untouched, corrupt/read-only/failure handling |
 | A11y checks for the slice pass | **Automated pass; manual screen-reader pass not recorded** | Contrast 66/66; responsive/a11y specs 5/5; keyboard path covered by app spec. A manual screen-reader run is still an open human check. |
 | Ratios unit through the pipeline to `published` | **Not published** | Status is `reviewed`; review file present; human sign-off pending. The plan requires sign-off before `published`. |
-| AC-LG1 Kitchen loop both ways | **Not complete** | Inline practice works; the Kitchen return-to-same-card loop and exactly-once result recording remain manual/incomplete. |
+| AC-LG1 Kitchen loop both ways | **Pass** | `tests/v10/lounge-loop.spec.js`: dive → Kitchen → same card; Tune result recorded once (re-completion adds no XP event); inline practice completes when `lounge2.js` is blocked. |
 
 ## 3. Content integrity
 
@@ -77,8 +77,8 @@ Important context, stated honestly:
 | Suite | Result | Notes |
 |---|---|---|
 | Unit tests | **16/16 pass** | `npm run test:units`; includes unit lint, broken-fixture lint, manifest current, boot bundle current, content inventory hashes, progress/storage/migration |
-| v10 Playwright | **19/19 pass** | `npm run test:v10`; app 6, migration 5, responsive 5, wreck 3 |
-| Legacy Playwright | **122/126 pass** | `npm run test:legacy`; two deterministic failures reproduce on `main` at `7480579`: `tests/lounge-play.spec.js:24` (`seat mismatch orrin a2`) and `tests/lounge-polish.spec.js:167` (hidden cleanup expected 1, got 4). Both are in untouched frozen Lounge code. Two parallel flakes pass when run serially. |
+| v10 Playwright | **22/22 pass** | `npm run test:v10`; app 6, migration 5, responsive 5, wreck 3, Lounge loop 3 |
+| Legacy Playwright | **120/126 pass on Chromium** | `npx playwright test tests --grep-invert "@v10" --project=chromium --reporter=line`; one deterministic pre-existing failure reproduces on `main` at `7480579`: `tests/lounge-play.spec.js:24` (`seat mismatch orrin a2`). Five other failures were load-sensitive under a busy machine: `lounge-games2.spec.js:315`, `lounge-play.spec.js:169`, `lounge-play.spec.js:210`, `lounge-polish.spec.js:63`, `lounge-polish.spec.js:96`. A serial rerun of those five passed four; only `lounge-polish.spec.js:96` still failed in the harness. A standalone probe of the same marker check found 18 gold pixels on both `main` and `v10`; the marker is animated and its pixel count oscillates, so the harness sampled a low phase. It is a pre-existing animation-phase flake, not a v10 regression. `lounge-polish.spec.js:167` (hidden cleanup) passed in this run. The full three-browser run was not usable under load and exceeded its 15-minute timeout. |
 | Contrast audit | **66/66 pass** | `npm run contrast`; report in `docs/v10/contrast-report.md` |
 | Migration fixtures | **5/5 pass** | Backup, import display, idempotence, source keys untouched, corrupt/read-only/storage-failure handling |
 | Content inventory | **Pass** | `docs/v10/content-inventory.json` hashes and order match |
@@ -107,11 +107,9 @@ The v10 path does not load Firebase, Supabase, `network.js`, MiniSearch or third
 
 1. **Human content sign-off for Ratios.** A named human reviewer must review `js/units/number/shallows/ratios.review.md`, record `reviewedBy` and the date, and only then change the unit to `published`. Until then the unit stays `reviewed`.
 2. **Owner playtest on a real phone.** Record device, OS, browser, throttling/network, and notes on the golden path, keyboard/touch, and perceived responsiveness.
-3. **Kitchen two-way loop (AC-LG1).** From a dive into the Kitchen activity and back to the same card, with the result recorded exactly once; verify the inline fallback when Lounge scripts fail.
-4. **Performance gate.** Re-run `npm run perf` on an idle machine and record the median-of-3 result. Current status is 6/9; cached is expected to pass on an idle machine (~136 ms probe), Title LCP is load-sensitive, and uncached needs further boot/first-paint work to reach 1500 ms.
-5. **Manual screen-reader pass** for the slice.
-6. **Legacy suite decision.** The two deterministic failures are pre-existing on `main` in frozen Lounge code. They must either be fixed separately with owner approval or explicitly accepted as out of scope for G1; they are not caused by v10.
-7. **Commit.** No commit has been made on `v10` yet. Commit only after the above status is recorded; never commit to `main`.
+3. **Performance gate.** Re-run `npm run perf` on an idle machine and record the median-of-3 result. Current status is 6/9; cached is expected to pass on an idle machine (~136 ms probe), Title LCP is load-sensitive, and uncached needs further boot/first-paint work to reach 1500 ms.
+4. **Manual screen-reader pass** for the slice.
+5. **Legacy suite decision.** Current Chromium result is 120/126. One deterministic failure is pre-existing on `main` in frozen Lounge code; five others were load-sensitive, and the remaining marker test is an animation-phase flake that passes in a standalone probe on both branches. The full three-browser run timed out under machine load and is not usable evidence. Decide whether to accept these as out of scope for G1 or fix them separately with owner approval; they are not caused by v10.
 
 ## 9. Reproduce
 
@@ -130,4 +128,4 @@ The dev server serves gzip for compressible files and `Cache-Control: no-store` 
 
 ## 10. Verdict
 
-The v10 vertical slice is real, navigable, test-green on its own path, and preserves all 42 legacy Wrecks and legacy progress. It is **not** a passed G1: content is reviewed but not human-signed-off, the Kitchen loop is incomplete, the owner phone playtest and manual screen-reader pass are not recorded, and the throttled performance gate is 6/9. Those are the honest blockers.
+The v10 vertical slice is real, navigable, test-green on its own path, and preserves all 42 legacy Wrecks and legacy progress. It is **not** a passed G1: content is reviewed but not human-signed-off, the owner phone playtest and manual screen-reader pass are not recorded, and the throttled performance gate is 6/9. Those are the honest blockers.

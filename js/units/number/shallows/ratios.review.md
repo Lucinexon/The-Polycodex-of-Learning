@@ -109,7 +109,7 @@ No distractor was found to be accidentally correct, and no correct option is dup
 - **Human sign-off is still required.** The unit remains `status: 'reviewed'`. Do not change it to `published` without a named human reviewer and date.
 - The sources are well-known open references, but the exact page/anchor for Illustrative Mathematics is the site root rather than a specific task; a human reviewer may want a more precise citation.
 - The unit uses British spelling in some learner-facing strings and US spelling in others; this is a copy-consistency issue, not a mathematical one.
-- The Kitchen two-way return loop is still manual/incomplete; this is an app-shell issue, not a Ratios content issue.
+- The Kitchen two-way return loop and exactly-once result recording are now implemented and covered by `tests/v10/lounge-loop.spec.js`; the inline practice remains available if the legacy Lounge scripts fail.
 
 ## Verdict
 
