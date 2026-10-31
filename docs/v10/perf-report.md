@@ -1,6 +1,6 @@
 # Polycodex v10 performance gate
 
-Generated 2026-10-30T08:37:00.003Z against `http://127.0.0.1:4173` with Chromium, Slow 4G (1.6 Mbps down, 150 ms RTT) and 4× CPU throttling. Gate scenarios run three times in a fresh browser each; the table reports the median run (per metric).
+Generated 2026-10-31T02:07:33.200Z against `http://127.0.0.1:4173` with Chromium, Slow 4G (1.6 Mbps down, 150 ms RTT) and 4× CPU throttling. Gate scenarios run three times in a fresh browser each; the table reports the median run (per metric).
 
 ## Gate
 
@@ -9,10 +9,10 @@ Generated 2026-10-30T08:37:00.003Z against `http://127.0.0.1:4173` with Chromium
 | Title JS (gzip) | 50 KB | 150 KB | PASS |
 | Title CSS (gzip) | 12 KB | 25 KB | PASS |
 | Title third-party scripts | 0 | 0 | PASS |
-| Title LCP (Slow 4G, 4× CPU) | 2604 ms | 2500 ms | FAIL |
-| Title event latency | 128 ms | 200 ms | PASS |
-| Dive first card cached | 566 ms | 300 ms | FAIL |
-| Dive first card uncached | 3759 ms | 1500 ms | FAIL |
+| Title LCP (Slow 4G, 4× CPU) | 1464 ms | 2500 ms | PASS |
+| Title event latency | 64 ms | 200 ms | PASS |
+| Dive first card cached | 298 ms | 300 ms | PASS |
+| Dive first card uncached | 2171 ms | 1500 ms | FAIL |
 | Ratios unit (gzip) | 9.5 KB | 30 KB | PASS |
 | backdrop-filter in v10 CSS | 0 | 0 | PASS |
 
@@ -20,11 +20,11 @@ Generated 2026-10-30T08:37:00.003Z against `http://127.0.0.1:4173` with Chromium
 
 | Scenario | LCP | DCL | Load | Heap | Long tasks | Max event | JS gz | CSS gz | Third-party |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| legacy-home | 6472 ms | 24684 ms | 24997 ms | 0 MB | 31 | 0 ms | 664 KB | 56 KB | 17 |
-| legacy-lesson | 5584 ms | 18902 ms | 19075 ms | 0 MB | 55 | 4584 ms | 664 KB | 56 KB | 17 |
-| v10-title | 2604 ms | 2714 ms | 2714 ms | 0 MB | 5 | 128 ms | 50 KB | 12 KB | 0 |
-| v10-dive-cached | 3628 ms | 1916 ms | 1917 ms | 0 MB | 6 | 0 ms | 50 KB | 12 KB | 0 |
-| v10-dive-uncached | 3776 ms | 3757 ms | 3757 ms | 0 MB | 4 | 0 ms | 50 KB | 12 KB | 0 |
+| legacy-home | 4180 ms | 11976 ms | 12152 ms | 0 MB | 42 | 0 ms | 667 KB | 56 KB | 17 |
+| legacy-lesson | 4792 ms | 12849 ms | 13033 ms | 0 MB | 74 | 1800 ms | 667 KB | 56 KB | 17 |
+| v10-title | 1464 ms | 1452 ms | 1532 ms | 0 MB | 2 | 64 ms | 50 KB | 12 KB | 0 |
+| v10-dive-cached | 2192 ms | 880 ms | 881 ms | 0 MB | 6 | 0 ms | 50 KB | 12 KB | 0 |
+| v10-dive-uncached | 2176 ms | 2176 ms | 2177 ms | 0 MB | 4 | 0 ms | 50 KB | 12 KB | 0 |
 
 ## Notes
 

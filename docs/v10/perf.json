@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T08:37:00.003Z",
+  "generatedAt": "2026-10-31T02:07:33.200Z",
   "base": "http://127.0.0.1:4173",
   "budgets": {
     "titleJsGz": 153600,
@@ -36,28 +36,28 @@
     },
     {
       "label": "Title LCP (Slow 4G, 4× CPU)",
-      "value": 2604,
+      "value": 1464,
       "budget": 2500,
       "unit": " ms",
-      "pass": false
+      "pass": true
     },
     {
       "label": "Title event latency",
-      "value": 128,
+      "value": 64,
       "budget": 200,
       "unit": " ms",
       "pass": true
     },
     {
       "label": "Dive first card cached",
-      "value": 566,
+      "value": 298,
       "budget": 300,
       "unit": " ms",
-      "pass": false
+      "pass": true
     },
     {
       "label": "Dive first card uncached",
-      "value": 3759,
+      "value": 2171,
       "budget": 1500,
       "unit": " ms",
       "pass": false
@@ -82,18 +82,18 @@
       "id": "legacy-home",
       "gate": false,
       "baseline": true,
-      "lcp": 6472,
+      "lcp": 4180,
       "lcpEl": "H1.hero-title",
       "cls": 0.7986,
-      "longTasks": 31,
-      "longTaskMs": 21070,
+      "longTasks": 42,
+      "longTaskMs": 9016,
       "maxEvent": 0,
       "cardAt": 0,
       "cardPaint": 0,
       "nav": {
-        "dcl": 24683.5,
-        "load": 24996.899999976158,
-        "ttfb": 271.7000000476837
+        "dcl": 11975.699999928474,
+        "load": 12151.5,
+        "ttfb": 15.600000023841858
       },
       "heap": 0,
       "resources": [
@@ -434,6 +434,12 @@
           "encoded": 823
         },
         {
+          "name": "http://127.0.0.1:4173/js/v10/legacy-return.js",
+          "initiator": "script",
+          "transfer": 3705,
+          "encoded": 3405
+        },
+        {
           "name": "http://127.0.0.1:4173/assets/polymath-codex-logo.svg",
           "initiator": "img",
           "transfer": 774,
@@ -441,25 +447,25 @@
         }
       ],
       "actionMs": 0,
-      "elapsedMs": 28077,
+      "elapsedMs": 14911,
       "errors": [],
-      "jsGz": 680027,
+      "jsGz": 683432,
       "cssGz": 57772,
       "thirdPartyScripts": 17,
       "thirdPartyResources": 22,
-      "firstCard": 24683.5,
+      "firstCard": 11975.699999928474,
       "inp": 0,
       "title": "THE POLYMATH CODEX · Systems · Lore · Cosmos",
       "runs": [
         {
-          "lcp": 6472,
+          "lcp": 4180,
           "inp": 0,
           "maxEvent": 0,
           "actionMs": null,
           "cardAt": 0,
           "cardPaint": 0,
-          "firstCard": 24683.5,
-          "dcl": 24684,
+          "firstCard": 11975.699999928474,
+          "dcl": 11976,
           "errors": []
         }
       ]
@@ -468,18 +474,18 @@
       "id": "legacy-lesson",
       "gate": false,
       "baseline": true,
-      "lcp": 5584,
+      "lcp": 4792,
       "lcpEl": "H1.hero-title",
       "cls": 0.7986,
-      "longTasks": 55,
-      "longTaskMs": 21460,
-      "maxEvent": 4584,
+      "longTasks": 74,
+      "longTaskMs": 13906,
+      "maxEvent": 1800,
       "cardAt": 0,
       "cardPaint": 0,
       "nav": {
-        "dcl": 18901.900000095367,
-        "load": 19075.400000095367,
-        "ttfb": 316.5
+        "dcl": 12848.5,
+        "load": 13032.700000047684,
+        "ttfb": 88.20000004768372
       },
       "heap": 0,
       "resources": [
@@ -820,38 +826,38 @@
           "encoded": 823
         },
         {
+          "name": "http://127.0.0.1:4173/js/v10/legacy-return.js",
+          "initiator": "script",
+          "transfer": 3705,
+          "encoded": 3405
+        },
+        {
           "name": "http://127.0.0.1:4173/assets/polymath-codex-logo.svg",
           "initiator": "img",
           "transfer": 774,
           "encoded": 474
-        },
-        {
-          "name": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fpmc-web-app-project%2Fdatabases%2F(default)&RID=27033&CVER=22&X-HTTP-Session-Id=gsessionid&zx=x6z8sp5mwqw6&t=1",
-          "initiator": "fetch",
-          "transfer": 0,
-          "encoded": 0
         }
       ],
-      "actionMs": 8648,
-      "elapsedMs": 30600,
+      "actionMs": 5595,
+      "elapsedMs": 21477,
       "errors": [],
-      "jsGz": 680027,
+      "jsGz": 683432,
       "cssGz": 57772,
       "thirdPartyScripts": 17,
-      "thirdPartyResources": 23,
-      "firstCard": 18901.900000095367,
-      "inp": 4584,
+      "thirdPartyResources": 22,
+      "firstCard": 12848.5,
+      "inp": 1800,
       "title": "THE POLYMATH CODEX · Systems · Lore · Cosmos",
       "runs": [
         {
-          "lcp": 5584,
-          "inp": 4584,
-          "maxEvent": 4584,
-          "actionMs": 8648,
+          "lcp": 4792,
+          "inp": 1800,
+          "maxEvent": 1800,
+          "actionMs": 5595,
           "cardAt": 0,
           "cardPaint": 0,
-          "firstCard": 18901.900000095367,
-          "dcl": 18902,
+          "firstCard": 12848.5,
+          "dcl": 12849,
           "errors": []
         }
       ]
@@ -860,18 +866,18 @@
       "id": "v10-title",
       "gate": true,
       "baseline": false,
-      "lcp": 2604,
+      "lcp": 1464,
       "lcpEl": "H1.pixel-logo",
       "cls": 0.0073,
-      "longTasks": 5,
-      "longTaskMs": 436,
-      "maxEvent": 128,
+      "longTasks": 2,
+      "longTaskMs": 129,
+      "maxEvent": 64,
       "cardAt": 0,
       "cardPaint": 0,
       "nav": {
-        "dcl": 2713.600000023842,
-        "load": 2713.8000000715256,
-        "ttfb": 361.10000002384186
+        "dcl": 1451.7000000476837,
+        "load": 1531.8000000715256,
+        "ttfb": 61.800000071525574
       },
       "heap": 0,
       "resources": [
@@ -896,8 +902,8 @@
         {
           "name": "http://127.0.0.1:4173/css/v10/app.css",
           "initiator": "link",
-          "transfer": 10825,
-          "encoded": 10525
+          "transfer": 10824,
+          "encoded": 10524
         },
         {
           "name": "http://127.0.0.1:4173/js/v10/boot-base.js",
@@ -908,8 +914,8 @@
         {
           "name": "http://127.0.0.1:4173/js/v10/app.js",
           "initiator": "script",
-          "transfer": 23681,
-          "encoded": 23381
+          "transfer": 23719,
+          "encoded": 23419
         },
         {
           "name": "http://127.0.0.1:4173/assets/fonts/atkinson-700.woff2",
@@ -922,56 +928,50 @@
           "initiator": "script",
           "transfer": 9981,
           "encoded": 9681
-        },
-        {
-          "name": "http://127.0.0.1:4173/assets/fonts/pixelify-400.woff2",
-          "initiator": "css",
-          "transfer": 12316,
-          "encoded": 12016
         }
       ],
-      "actionMs": 1315,
-      "elapsedMs": 7424,
+      "actionMs": 775,
+      "elapsedMs": 4894,
       "errors": [],
-      "jsGz": 51283,
-      "cssGz": 12106,
+      "jsGz": 51321,
+      "cssGz": 12105,
       "thirdPartyScripts": 0,
       "thirdPartyResources": 0,
-      "firstCard": 2713.600000023842,
-      "inp": 128,
+      "firstCard": 1451.7000000476837,
+      "inp": 64,
       "title": "Start · Polycodex · Polycodex",
       "runs": [
         {
-          "lcp": 2604,
-          "inp": 144,
-          "maxEvent": 144,
-          "actionMs": 1971,
+          "lcp": 1884,
+          "inp": 104,
+          "maxEvent": 104,
+          "actionMs": 743,
           "cardAt": 0,
           "cardPaint": 0,
-          "firstCard": 2713.600000023842,
-          "dcl": 2714,
+          "firstCard": 2138.600000023842,
+          "dcl": 2139,
           "errors": []
         },
         {
-          "lcp": 1704,
-          "inp": 48,
-          "maxEvent": 48,
-          "actionMs": 1179,
+          "lcp": 1416,
+          "inp": 64,
+          "maxEvent": 64,
+          "actionMs": 783,
           "cardAt": 0,
           "cardPaint": 0,
-          "firstCard": 1915.4000000953674,
-          "dcl": 1915,
+          "firstCard": 1474.4000000953674,
+          "dcl": 1474,
           "errors": []
         },
         {
-          "lcp": 2624,
-          "inp": 128,
-          "maxEvent": 128,
-          "actionMs": 1315,
+          "lcp": 1464,
+          "inp": 64,
+          "maxEvent": 64,
+          "actionMs": 775,
           "cardAt": 0,
           "cardPaint": 0,
-          "firstCard": 2874.8000000715256,
-          "dcl": 2875,
+          "firstCard": 1451.7000000476837,
+          "dcl": 1452,
           "errors": []
         }
       ]
@@ -980,18 +980,18 @@
       "id": "v10-dive-cached",
       "gate": true,
       "baseline": false,
-      "lcp": 3628,
+      "lcp": 2192,
       "lcpEl": "P.",
       "cls": 0.0687,
       "longTasks": 6,
-      "longTaskMs": 1274,
+      "longTaskMs": 595,
       "maxEvent": 0,
-      "cardAt": 3419,
-      "cardPaint": 4008,
+      "cardAt": 2113,
+      "cardPaint": 2338,
       "nav": {
-        "dcl": 1916.3999999761581,
-        "load": 1916.7999999523163,
-        "ttfb": 7.100000023841858
+        "dcl": 880.3999999761581,
+        "load": 880.5999999046326,
+        "ttfb": 3.5999999046325684
       },
       "heap": 0,
       "resources": [
@@ -1017,7 +1017,7 @@
           "name": "http://127.0.0.1:4173/css/v10/app.css",
           "initiator": "link",
           "transfer": 0,
-          "encoded": 10525
+          "encoded": 10524
         },
         {
           "name": "http://127.0.0.1:4173/js/v10/boot-base.js",
@@ -1029,7 +1029,13 @@
           "name": "http://127.0.0.1:4173/js/v10/app.js",
           "initiator": "script",
           "transfer": 0,
-          "encoded": 23381
+          "encoded": 23419
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/units/number/shallows/ratios.js",
+          "initiator": "link",
+          "transfer": 0,
+          "encoded": 9681
         },
         {
           "name": "http://127.0.0.1:4173/assets/fonts/atkinson-700.woff2",
@@ -1042,56 +1048,50 @@
           "initiator": "css",
           "transfer": 0,
           "encoded": 12016
-        },
-        {
-          "name": "http://127.0.0.1:4173/js/units/number/shallows/ratios.js",
-          "initiator": "link",
-          "transfer": 0,
-          "encoded": 9681
         }
       ],
-      "actionMs": 566.3000000715256,
-      "elapsedMs": 4346,
+      "actionMs": 298.39999997615814,
+      "elapsedMs": 2510,
       "errors": [],
-      "jsGz": 51283,
-      "cssGz": 12106,
+      "jsGz": 51321,
+      "cssGz": 12105,
       "thirdPartyScripts": 0,
       "thirdPartyResources": 0,
-      "firstCard": 566,
+      "firstCard": 298,
       "inp": 0,
       "title": "A ratio compares two amounts · What a ratio is · Polycodex · Polycodex",
       "runs": [
         {
-          "lcp": 3384,
+          "lcp": 2236,
           "inp": 0,
           "maxEvent": 0,
-          "actionMs": 149.59999990463257,
-          "cardAt": 3335,
-          "cardPaint": 3433,
-          "firstCard": 150,
-          "dcl": 1599,
+          "actionMs": 314.2000000476837,
+          "cardAt": 2154,
+          "cardPaint": 2417,
+          "firstCard": 314,
+          "dcl": 844,
           "errors": []
         },
         {
-          "lcp": 3728,
+          "lcp": 2192,
           "inp": 0,
           "maxEvent": 0,
-          "actionMs": 566.3000000715256,
-          "cardAt": 3547,
-          "cardPaint": 4013,
-          "firstCard": 566,
-          "dcl": 1916,
+          "actionMs": 289.10000002384186,
+          "cardAt": 2075,
+          "cardPaint": 2328,
+          "firstCard": 289,
+          "dcl": 892,
           "errors": []
         },
         {
-          "lcp": 3628,
+          "lcp": 2192,
           "inp": 0,
           "maxEvent": 0,
-          "actionMs": 618.5,
-          "cardAt": 3419,
-          "cardPaint": 4008,
-          "firstCard": 619,
-          "dcl": 1771,
+          "actionMs": 298.39999997615814,
+          "cardAt": 2113,
+          "cardPaint": 2338,
+          "firstCard": 298,
+          "dcl": 880,
           "errors": []
         }
       ]
@@ -1100,18 +1100,18 @@
       "id": "v10-dive-uncached",
       "gate": true,
       "baseline": false,
-      "lcp": 3776,
+      "lcp": 2176,
       "lcpEl": "P.",
-      "cls": 0.0687,
+      "cls": 0.0005,
       "longTasks": 4,
-      "longTaskMs": 1423,
+      "longTaskMs": 549,
       "maxEvent": 0,
-      "cardAt": 2679,
-      "cardPaint": 3759,
+      "cardAt": 1752,
+      "cardPaint": 2171,
       "nav": {
-        "dcl": 3756.6999999284744,
-        "load": 3757.399999976158,
-        "ttfb": 433.59999990463257
+        "dcl": 2176.100000023842,
+        "load": 2176.7000000476837,
+        "ttfb": 217.90000009536743
       },
       "heap": 0,
       "resources": [
@@ -1136,8 +1136,8 @@
         {
           "name": "http://127.0.0.1:4173/css/v10/app.css",
           "initiator": "link",
-          "transfer": 10825,
-          "encoded": 10525
+          "transfer": 10824,
+          "encoded": 10524
         },
         {
           "name": "http://127.0.0.1:4173/js/v10/boot-base.js",
@@ -1148,8 +1148,8 @@
         {
           "name": "http://127.0.0.1:4173/js/v10/app.js",
           "initiator": "script",
-          "transfer": 23681,
-          "encoded": 23381
+          "transfer": 23719,
+          "encoded": 23419
         },
         {
           "name": "http://127.0.0.1:4173/js/units/number/shallows/ratios.js",
@@ -1171,47 +1171,47 @@
         }
       ],
       "actionMs": 0,
-      "elapsedMs": 5629,
+      "elapsedMs": 3975,
       "errors": [],
-      "jsGz": 51283,
-      "cssGz": 12106,
+      "jsGz": 51321,
+      "cssGz": 12105,
       "thirdPartyScripts": 0,
       "thirdPartyResources": 0,
-      "firstCard": 3759,
+      "firstCard": 2171,
       "inp": 0,
       "title": "A ratio compares two amounts · What a ratio is · Polycodex · Polycodex",
       "runs": [
         {
-          "lcp": 3776,
+          "lcp": 1708,
           "inp": 0,
           "maxEvent": 0,
           "actionMs": null,
-          "cardAt": 2679,
-          "cardPaint": 3759,
-          "firstCard": 3759,
-          "dcl": 3757,
+          "cardAt": 1390,
+          "cardPaint": 1739,
+          "firstCard": 1739,
+          "dcl": 1702,
           "errors": []
         },
         {
-          "lcp": 3156,
+          "lcp": 2176,
           "inp": 0,
           "maxEvent": 0,
           "actionMs": null,
-          "cardAt": 2010,
-          "cardPaint": 3148,
-          "firstCard": 3148,
-          "dcl": 3153,
+          "cardAt": 1823,
+          "cardPaint": 2171,
+          "firstCard": 2171,
+          "dcl": 2176,
           "errors": []
         },
         {
-          "lcp": 4084,
+          "lcp": 2244,
           "inp": 0,
           "maxEvent": 0,
           "actionMs": null,
-          "cardAt": 3097,
-          "cardPaint": 4075,
-          "firstCard": 4075,
-          "dcl": 4064,
+          "cardAt": 1752,
+          "cardPaint": 2270,
+          "firstCard": 2270,
+          "dcl": 2288,
           "errors": []
         }
       ]

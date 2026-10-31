@@ -28,7 +28,7 @@ The 14 mock screenshots in `docs/v10/mock/` are G1a design artifacts, not G1 fun
 | G1 criterion | Result | Evidence / caveat |
 |---|---|---|
 | Owner playtests on a real phone | **Not done** | No real-device playtest notes are recorded. This cannot be claimed from desktop Chromium. |
-| Budgets pass on the throttled profile | **FAIL — 6/9** | Latest median-of-3 run: Title LCP 2604 ms (budget 2500), cached dive 566 ms (budget 300), uncached dive 3759 ms (budget 1500). The other six checks pass. See §4. |
+| Budgets pass on the throttled profile | **FAIL — 8/9** | Latest median-of-3 run: uncached dive first card 2171 ms (budget 1500); a prior idle run measured 1825 ms. The other eight checks pass, including Title LCP 1464 ms and cached dive 298 ms. See §4. |
 | All tests green, new and existing ~120 specs | **New green; legacy 120/126 on Chromium, with pre-existing and load-sensitive failures** | v10: 22/22. Units: 16/16. Legacy Chromium: 120/126. One deterministic failure (`tests/lounge-play.spec.js:24`, `seat mismatch orrin a2`) reproduces on `main` at `7480579`; five others are load-sensitive, and a serial rerun passed four of them. The remaining marker-pixel test is an animation-phase flake that passes in a standalone probe on both `main` and `v10`. See §5. |
 | Migration fixtures pass | **Pass** | 5/5 migration specs: backup, display, idempotence, source keys untouched, corrupt/read-only/failure handling |
 | A11y checks for the slice pass | **Automated pass; manual screen-reader pass not recorded** | Contrast 66/66; responsive/a11y specs 5/5; keyboard path covered by app spec. A manual screen-reader run is still an open human check. |
@@ -57,19 +57,18 @@ Harness: `scripts/perf-budget.js`, Chromium, Slow 4G (1.6 Mbps down, 150 ms RTT)
 | Title JS (gzip) | 50 KB | 150 KB | PASS |
 | Title CSS (gzip) | 12 KB | 25 KB | PASS |
 | Title third-party scripts | 0 | 0 | PASS |
-| Title LCP | 2604 ms | 2500 ms | **FAIL** |
-| Title event latency (INP proxy) | 128 ms | 200 ms | PASS |
-| Dive first card cached | 566 ms | 300 ms | **FAIL** |
-| Dive first card uncached | 3759 ms | 1500 ms | **FAIL** |
+| Title LCP | 1464 ms | 2500 ms | PASS |
+| Title event latency (INP proxy) | 64 ms | 200 ms | PASS |
+| Dive first card cached | 298 ms | 300 ms | PASS |
+| Dive first card uncached | 2171 ms | 1500 ms | **FAIL** |
 | Ratios unit (gzip) | 9.5 KB | 30 KB | PASS |
 | backdrop-filter in v10 CSS | 0 | 0 | PASS |
 
 Important context, stated honestly:
 
-- The measurement machine was heavily loaded by the user's own browser and editor (load ~43–63%; no leftover Playwright browsers). Results varied 2–10× between runs.
-- On a quieter machine, a fresh-browser probe measured the cached Descent→card path at **112–145 ms** (median ~136 ms), which is inside the 300 ms budget.
-- The uncached best observed was **~1844 ms**, still above 1500 ms. The remaining cost is the boot resource wave plus the first paint of the dive screen, not the unit download (the unit preload completes around the same time as `app.js`).
-- The Title LCP failure in the latest run is consistent with machine load; the same route measured 1252 ms earlier. It is still recorded as a failure because that is what the gate run measured.
+- Results vary with machine load. The latest median-of-3 run measured cached 298 ms and uncached 2171 ms; a prior run at CPU load ~9% measured cached 259 ms and uncached 1825 ms. Both are recorded honestly rather than selecting only the best run.
+- The cached Descent→card path is inside the 300 ms budget in both runs (298 ms and 259 ms), and **112–145 ms** in quiet fresh-browser probes.
+- The uncached first card is **1825–2171 ms**, still above 1500 ms. The remaining cost is the boot resource wave plus the first paint of the dive screen, not the unit download (the unit preload completes around the same time as `app.js`).
 - No metric was weakened or renamed to make a failure pass. The switch from navigation DCL to real `#dive-title` paint was a correctness fix, not a relaxation: it measures the card the learner actually sees.
 
 ## 5. Test evidence
@@ -107,7 +106,7 @@ The v10 path does not load Firebase, Supabase, `network.js`, MiniSearch or third
 
 1. **Human content sign-off for Ratios.** A named human reviewer must review `js/units/number/shallows/ratios.review.md`, record `reviewedBy` and the date, and only then change the unit to `published`. Until then the unit stays `reviewed`.
 2. **Owner playtest on a real phone.** Record device, OS, browser, throttling/network, and notes on the golden path, keyboard/touch, and perceived responsiveness.
-3. **Performance gate.** Re-run `npm run perf` on an idle machine and record the median-of-3 result. Current status is 6/9; cached is expected to pass on an idle machine (~136 ms probe), Title LCP is load-sensitive, and uncached needs further boot/first-paint work to reach 1500 ms.
+3. **Performance gate.** Current status is **8/9**. Only the uncached dive first card fails: 2171 ms latest (1825 ms best) against 1500 ms. Cached, Title LCP and INP pass. Further boot/first-paint work is needed to close the gap; do not weaken the metric.
 4. **Manual screen-reader pass** for the slice.
 5. **Legacy suite decision.** Current Chromium result is 120/126. One deterministic failure is pre-existing on `main` in frozen Lounge code; five others were load-sensitive, and the remaining marker test is an animation-phase flake that passes in a standalone probe on both branches. The full three-browser run timed out under machine load and is not usable evidence. Decide whether to accept these as out of scope for G1 or fix them separately with owner approval; they are not caused by v10.
 
@@ -128,4 +127,4 @@ The dev server serves gzip for compressible files and `Cache-Control: no-store` 
 
 ## 10. Verdict
 
-The v10 vertical slice is real, navigable, test-green on its own path, and preserves all 42 legacy Wrecks and legacy progress. It is **not** a passed G1: content is reviewed but not human-signed-off, the owner phone playtest and manual screen-reader pass are not recorded, and the throttled performance gate is 6/9. Those are the honest blockers.
+The v10 vertical slice is real, navigable, test-green on its own path, and preserves all 42 legacy Wrecks and legacy progress. It is **not** a passed G1: content is reviewed but not human-signed-off, the owner phone playtest and manual screen-reader pass are not recorded, and the throttled performance gate is 8/9 with the uncached dive first card still over budget. Those are the honest blockers.
