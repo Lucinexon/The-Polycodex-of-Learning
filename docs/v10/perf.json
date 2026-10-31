@@ -1,0 +1,1220 @@
+{
+  "generatedAt": "2026-10-31T02:07:33.200Z",
+  "base": "http://127.0.0.1:4173",
+  "budgets": {
+    "titleJsGz": 153600,
+    "titleCssGz": 25600,
+    "titleThirdPartyScripts": 0,
+    "titleLcp": 2500,
+    "titleInp": 200,
+    "diveCached": 300,
+    "diveUncached": 1500,
+    "unitGz": 30720
+  },
+  "unitGz": 9681,
+  "checks": [
+    {
+      "label": "Title JS (gzip)",
+      "value": 50,
+      "budget": 150,
+      "unit": " KB",
+      "pass": true
+    },
+    {
+      "label": "Title CSS (gzip)",
+      "value": 12,
+      "budget": 25,
+      "unit": " KB",
+      "pass": true
+    },
+    {
+      "label": "Title third-party scripts",
+      "value": 0,
+      "budget": 0,
+      "unit": "",
+      "pass": true
+    },
+    {
+      "label": "Title LCP (Slow 4G, 4× CPU)",
+      "value": 1464,
+      "budget": 2500,
+      "unit": " ms",
+      "pass": true
+    },
+    {
+      "label": "Title event latency",
+      "value": 64,
+      "budget": 200,
+      "unit": " ms",
+      "pass": true
+    },
+    {
+      "label": "Dive first card cached",
+      "value": 298,
+      "budget": 300,
+      "unit": " ms",
+      "pass": true
+    },
+    {
+      "label": "Dive first card uncached",
+      "value": 2171,
+      "budget": 1500,
+      "unit": " ms",
+      "pass": false
+    },
+    {
+      "label": "Ratios unit (gzip)",
+      "value": 9.5,
+      "budget": 30,
+      "unit": " KB",
+      "pass": true
+    },
+    {
+      "label": "backdrop-filter in v10 CSS",
+      "value": 0,
+      "budget": 0,
+      "unit": "",
+      "pass": true
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "legacy-home",
+      "gate": false,
+      "baseline": true,
+      "lcp": 4180,
+      "lcpEl": "H1.hero-title",
+      "cls": 0.7986,
+      "longTasks": 42,
+      "longTaskMs": 9016,
+      "maxEvent": 0,
+      "cardAt": 0,
+      "cardPaint": 0,
+      "nav": {
+        "dcl": 11975.699999928474,
+        "load": 12151.5,
+        "ttfb": 15.600000023841858
+      },
+      "heap": 0,
+      "resources": [
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap",
+          "initiator": "link",
+          "transfer": 1419,
+          "encoded": 1119
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/pixelarticons@2.4.1/fonts/pixelart-icons-font.css",
+          "initiator": "link",
+          "transfer": 5893,
+          "encoded": 5593
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css",
+          "initiator": "link",
+          "transfer": 3728,
+          "encoded": 3428
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css",
+          "initiator": "link",
+          "transfer": 882,
+          "encoded": 582
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/style.css",
+          "initiator": "link",
+          "transfer": 26040,
+          "encoded": 25740
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/codex-plus.css",
+          "initiator": "link",
+          "transfer": 3806,
+          "encoded": 3506
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v6.css",
+          "initiator": "link",
+          "transfer": 4861,
+          "encoded": 4561
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v7.css",
+          "initiator": "link",
+          "transfer": 4612,
+          "encoded": 4312
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/lounge-play.css",
+          "initiator": "link",
+          "transfer": 1589,
+          "encoded": 1289
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/lounge-world.css",
+          "initiator": "link",
+          "transfer": 6798,
+          "encoded": 6498
+        },
+        {
+          "name": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 0
+        },
+        {
+          "name": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 0
+        },
+        {
+          "name": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 0
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8",
+          "initiator": "script",
+          "transfer": 28141,
+          "encoded": 27841
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
+          "initiator": "script",
+          "transfer": 75740,
+          "encoded": 75440
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
+          "initiator": "script",
+          "transfer": 1846,
+          "encoded": 1546
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js",
+          "initiator": "script",
+          "transfer": 11501,
+          "encoded": 11201
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js",
+          "initiator": "script",
+          "transfer": 9075,
+          "encoded": 8775
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js",
+          "initiator": "script",
+          "transfer": 18254,
+          "encoded": 17954
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup-templating.min.js",
+          "initiator": "script",
+          "transfer": 830,
+          "encoded": 530
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-lua.min.js",
+          "initiator": "script",
+          "transfer": 666,
+          "encoded": 366
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js",
+          "initiator": "script",
+          "transfer": 1404,
+          "encoded": 1104
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-c.min.js",
+          "initiator": "script",
+          "transfer": 1248,
+          "encoded": 948
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-cpp.min.js",
+          "initiator": "script",
+          "transfer": 1527,
+          "encoded": 1227
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-java.min.js",
+          "initiator": "script",
+          "transfer": 1524,
+          "encoded": 1224
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js",
+          "initiator": "script",
+          "transfer": 3407,
+          "encoded": 3107
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/minisearch@6.3.0/dist/umd/index.min.js",
+          "initiator": "script",
+          "transfer": 9827,
+          "encoded": 9527
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js",
+          "initiator": "script",
+          "transfer": 4808,
+          "encoded": 4508
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/data/sectors-part1.js",
+          "initiator": "script",
+          "transfer": 40202,
+          "encoded": 39902
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/data/sectors-part2.js",
+          "initiator": "script",
+          "transfer": 27424,
+          "encoded": 27124
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/data/sectors-part3.js",
+          "initiator": "script",
+          "transfer": 31683,
+          "encoded": 31383
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/systems.js",
+          "initiator": "script",
+          "transfer": 48974,
+          "encoded": 48674
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/network.js",
+          "initiator": "script",
+          "transfer": 42727,
+          "encoded": 42427
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/icons.js",
+          "initiator": "script",
+          "transfer": 5348,
+          "encoded": 5048
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/ocean.js",
+          "initiator": "script",
+          "transfer": 5374,
+          "encoded": 5074
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/engine.js",
+          "initiator": "script",
+          "transfer": 26110,
+          "encoded": 25810
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/codex-plus.js",
+          "initiator": "script",
+          "transfer": 10508,
+          "encoded": 10208
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/v5-extras.js",
+          "initiator": "script",
+          "transfer": 6012,
+          "encoded": 5712
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/guide.js",
+          "initiator": "script",
+          "transfer": 11110,
+          "encoded": 10810
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/v6.js",
+          "initiator": "script",
+          "transfer": 3248,
+          "encoded": 2948
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/avatar-rig.js",
+          "initiator": "script",
+          "transfer": 18472,
+          "encoded": 18172
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/avatar-anim.js",
+          "initiator": "script",
+          "transfer": 4728,
+          "encoded": 4428
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/avatar.js",
+          "initiator": "script",
+          "transfer": 9955,
+          "encoded": 9655
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/account.js",
+          "initiator": "script",
+          "transfer": 3929,
+          "encoded": 3629
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/social.js",
+          "initiator": "script",
+          "transfer": 10762,
+          "encoded": 10462
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge2.js",
+          "initiator": "script",
+          "transfer": 20293,
+          "encoded": 19993
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games.js",
+          "initiator": "script",
+          "transfer": 7251,
+          "encoded": 6951
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-play.js",
+          "initiator": "script",
+          "transfer": 10558,
+          "encoded": 10258
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-progress.js",
+          "initiator": "script",
+          "transfer": 3211,
+          "encoded": 2911
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-art.js",
+          "initiator": "script",
+          "transfer": 10175,
+          "encoded": 9875
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-world.js",
+          "initiator": "script",
+          "transfer": 15628,
+          "encoded": 15328
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games-keeper.js",
+          "initiator": "script",
+          "transfer": 5872,
+          "encoded": 5572
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games-sky.js",
+          "initiator": "script",
+          "transfer": 6215,
+          "encoded": 5915
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games-cipher.js",
+          "initiator": "script",
+          "transfer": 6318,
+          "encoded": 6018
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-console.js",
+          "initiator": "script",
+          "transfer": 7687,
+          "encoded": 7387
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/v7.js",
+          "initiator": "script",
+          "transfer": 1123,
+          "encoded": 823
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/legacy-return.js",
+          "initiator": "script",
+          "transfer": 3705,
+          "encoded": 3405
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/polymath-codex-logo.svg",
+          "initiator": "img",
+          "transfer": 774,
+          "encoded": 474
+        }
+      ],
+      "actionMs": 0,
+      "elapsedMs": 14911,
+      "errors": [],
+      "jsGz": 683432,
+      "cssGz": 57772,
+      "thirdPartyScripts": 17,
+      "thirdPartyResources": 22,
+      "firstCard": 11975.699999928474,
+      "inp": 0,
+      "title": "THE POLYMATH CODEX · Systems · Lore · Cosmos",
+      "runs": [
+        {
+          "lcp": 4180,
+          "inp": 0,
+          "maxEvent": 0,
+          "actionMs": null,
+          "cardAt": 0,
+          "cardPaint": 0,
+          "firstCard": 11975.699999928474,
+          "dcl": 11976,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "id": "legacy-lesson",
+      "gate": false,
+      "baseline": true,
+      "lcp": 4792,
+      "lcpEl": "H1.hero-title",
+      "cls": 0.7986,
+      "longTasks": 74,
+      "longTaskMs": 13906,
+      "maxEvent": 1800,
+      "cardAt": 0,
+      "cardPaint": 0,
+      "nav": {
+        "dcl": 12848.5,
+        "load": 13032.700000047684,
+        "ttfb": 88.20000004768372
+      },
+      "heap": 0,
+      "resources": [
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap",
+          "initiator": "link",
+          "transfer": 1419,
+          "encoded": 1119
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/pixelarticons@2.4.1/fonts/pixelart-icons-font.css",
+          "initiator": "link",
+          "transfer": 5893,
+          "encoded": 5593
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css",
+          "initiator": "link",
+          "transfer": 3728,
+          "encoded": 3428
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css",
+          "initiator": "link",
+          "transfer": 882,
+          "encoded": 582
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/style.css",
+          "initiator": "link",
+          "transfer": 26040,
+          "encoded": 25740
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/codex-plus.css",
+          "initiator": "link",
+          "transfer": 3806,
+          "encoded": 3506
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v6.css",
+          "initiator": "link",
+          "transfer": 4861,
+          "encoded": 4561
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v7.css",
+          "initiator": "link",
+          "transfer": 4612,
+          "encoded": 4312
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/lounge-play.css",
+          "initiator": "link",
+          "transfer": 1589,
+          "encoded": 1289
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/lounge-world.css",
+          "initiator": "link",
+          "transfer": 6798,
+          "encoded": 6498
+        },
+        {
+          "name": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 0
+        },
+        {
+          "name": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 0
+        },
+        {
+          "name": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 0
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8",
+          "initiator": "script",
+          "transfer": 28141,
+          "encoded": 27841
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js",
+          "initiator": "script",
+          "transfer": 75740,
+          "encoded": 75440
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js",
+          "initiator": "script",
+          "transfer": 1846,
+          "encoded": 1546
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js",
+          "initiator": "script",
+          "transfer": 11501,
+          "encoded": 11201
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js",
+          "initiator": "script",
+          "transfer": 9075,
+          "encoded": 8775
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js",
+          "initiator": "script",
+          "transfer": 18254,
+          "encoded": 17954
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup-templating.min.js",
+          "initiator": "script",
+          "transfer": 830,
+          "encoded": 530
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-lua.min.js",
+          "initiator": "script",
+          "transfer": 666,
+          "encoded": 366
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js",
+          "initiator": "script",
+          "transfer": 1404,
+          "encoded": 1104
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-c.min.js",
+          "initiator": "script",
+          "transfer": 1248,
+          "encoded": 948
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-cpp.min.js",
+          "initiator": "script",
+          "transfer": 1527,
+          "encoded": 1227
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-java.min.js",
+          "initiator": "script",
+          "transfer": 1524,
+          "encoded": 1224
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js",
+          "initiator": "script",
+          "transfer": 3407,
+          "encoded": 3107
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/minisearch@6.3.0/dist/umd/index.min.js",
+          "initiator": "script",
+          "transfer": 9827,
+          "encoded": 9527
+        },
+        {
+          "name": "https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js",
+          "initiator": "script",
+          "transfer": 4808,
+          "encoded": 4508
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/data/sectors-part1.js",
+          "initiator": "script",
+          "transfer": 40202,
+          "encoded": 39902
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/data/sectors-part2.js",
+          "initiator": "script",
+          "transfer": 27424,
+          "encoded": 27124
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/data/sectors-part3.js",
+          "initiator": "script",
+          "transfer": 31683,
+          "encoded": 31383
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/systems.js",
+          "initiator": "script",
+          "transfer": 48974,
+          "encoded": 48674
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/network.js",
+          "initiator": "script",
+          "transfer": 42727,
+          "encoded": 42427
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/icons.js",
+          "initiator": "script",
+          "transfer": 5348,
+          "encoded": 5048
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/ocean.js",
+          "initiator": "script",
+          "transfer": 5374,
+          "encoded": 5074
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/core/engine.js",
+          "initiator": "script",
+          "transfer": 26110,
+          "encoded": 25810
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/codex-plus.js",
+          "initiator": "script",
+          "transfer": 10508,
+          "encoded": 10208
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/v5-extras.js",
+          "initiator": "script",
+          "transfer": 6012,
+          "encoded": 5712
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/guide.js",
+          "initiator": "script",
+          "transfer": 11110,
+          "encoded": 10810
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/v6.js",
+          "initiator": "script",
+          "transfer": 3248,
+          "encoded": 2948
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/avatar-rig.js",
+          "initiator": "script",
+          "transfer": 18472,
+          "encoded": 18172
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/avatar-anim.js",
+          "initiator": "script",
+          "transfer": 4728,
+          "encoded": 4428
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/avatar.js",
+          "initiator": "script",
+          "transfer": 9955,
+          "encoded": 9655
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/account.js",
+          "initiator": "script",
+          "transfer": 3929,
+          "encoded": 3629
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/social.js",
+          "initiator": "script",
+          "transfer": 10762,
+          "encoded": 10462
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge2.js",
+          "initiator": "script",
+          "transfer": 20293,
+          "encoded": 19993
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games.js",
+          "initiator": "script",
+          "transfer": 7251,
+          "encoded": 6951
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-play.js",
+          "initiator": "script",
+          "transfer": 10558,
+          "encoded": 10258
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-progress.js",
+          "initiator": "script",
+          "transfer": 3211,
+          "encoded": 2911
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-art.js",
+          "initiator": "script",
+          "transfer": 10175,
+          "encoded": 9875
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-world.js",
+          "initiator": "script",
+          "transfer": 15628,
+          "encoded": 15328
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games-keeper.js",
+          "initiator": "script",
+          "transfer": 5872,
+          "encoded": 5572
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games-sky.js",
+          "initiator": "script",
+          "transfer": 6215,
+          "encoded": 5915
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-games-cipher.js",
+          "initiator": "script",
+          "transfer": 6318,
+          "encoded": 6018
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/lounge-console.js",
+          "initiator": "script",
+          "transfer": 7687,
+          "encoded": 7387
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/features/v7.js",
+          "initiator": "script",
+          "transfer": 1123,
+          "encoded": 823
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/legacy-return.js",
+          "initiator": "script",
+          "transfer": 3705,
+          "encoded": 3405
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/polymath-codex-logo.svg",
+          "initiator": "img",
+          "transfer": 774,
+          "encoded": 474
+        }
+      ],
+      "actionMs": 5595,
+      "elapsedMs": 21477,
+      "errors": [],
+      "jsGz": 683432,
+      "cssGz": 57772,
+      "thirdPartyScripts": 17,
+      "thirdPartyResources": 22,
+      "firstCard": 12848.5,
+      "inp": 1800,
+      "title": "THE POLYMATH CODEX · Systems · Lore · Cosmos",
+      "runs": [
+        {
+          "lcp": 4792,
+          "inp": 1800,
+          "maxEvent": 1800,
+          "actionMs": 5595,
+          "cardAt": 0,
+          "cardPaint": 0,
+          "firstCard": 12848.5,
+          "dcl": 12849,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "id": "v10-title",
+      "gate": true,
+      "baseline": false,
+      "lcp": 1464,
+      "lcpEl": "H1.pixel-logo",
+      "cls": 0.0073,
+      "longTasks": 2,
+      "longTaskMs": 129,
+      "maxEvent": 64,
+      "cardAt": 0,
+      "cardPaint": 0,
+      "nav": {
+        "dcl": 1451.7000000476837,
+        "load": 1531.8000000715256,
+        "ttfb": 61.800000071525574
+      },
+      "heap": 0,
+      "resources": [
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/atkinson-400.woff2",
+          "initiator": "link",
+          "transfer": 17508,
+          "encoded": 17208
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/pixelify-600.woff2",
+          "initiator": "link",
+          "transfer": 12316,
+          "encoded": 12016
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v10/tokens.css",
+          "initiator": "link",
+          "transfer": 1881,
+          "encoded": 1581
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v10/app.css",
+          "initiator": "link",
+          "transfer": 10824,
+          "encoded": 10524
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/boot-base.js",
+          "initiator": "script",
+          "transfer": 18521,
+          "encoded": 18221
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/app.js",
+          "initiator": "script",
+          "transfer": 23719,
+          "encoded": 23419
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/atkinson-700.woff2",
+          "initiator": "css",
+          "transfer": 17824,
+          "encoded": 17524
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/units/number/shallows/ratios.js",
+          "initiator": "script",
+          "transfer": 9981,
+          "encoded": 9681
+        }
+      ],
+      "actionMs": 775,
+      "elapsedMs": 4894,
+      "errors": [],
+      "jsGz": 51321,
+      "cssGz": 12105,
+      "thirdPartyScripts": 0,
+      "thirdPartyResources": 0,
+      "firstCard": 1451.7000000476837,
+      "inp": 64,
+      "title": "Start · Polycodex · Polycodex",
+      "runs": [
+        {
+          "lcp": 1884,
+          "inp": 104,
+          "maxEvent": 104,
+          "actionMs": 743,
+          "cardAt": 0,
+          "cardPaint": 0,
+          "firstCard": 2138.600000023842,
+          "dcl": 2139,
+          "errors": []
+        },
+        {
+          "lcp": 1416,
+          "inp": 64,
+          "maxEvent": 64,
+          "actionMs": 783,
+          "cardAt": 0,
+          "cardPaint": 0,
+          "firstCard": 1474.4000000953674,
+          "dcl": 1474,
+          "errors": []
+        },
+        {
+          "lcp": 1464,
+          "inp": 64,
+          "maxEvent": 64,
+          "actionMs": 775,
+          "cardAt": 0,
+          "cardPaint": 0,
+          "firstCard": 1451.7000000476837,
+          "dcl": 1452,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "id": "v10-dive-cached",
+      "gate": true,
+      "baseline": false,
+      "lcp": 2192,
+      "lcpEl": "P.",
+      "cls": 0.0687,
+      "longTasks": 6,
+      "longTaskMs": 595,
+      "maxEvent": 0,
+      "cardAt": 2113,
+      "cardPaint": 2338,
+      "nav": {
+        "dcl": 880.3999999761581,
+        "load": 880.5999999046326,
+        "ttfb": 3.5999999046325684
+      },
+      "heap": 0,
+      "resources": [
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/atkinson-400.woff2",
+          "initiator": "link",
+          "transfer": 0,
+          "encoded": 17208
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/pixelify-600.woff2",
+          "initiator": "link",
+          "transfer": 0,
+          "encoded": 12016
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v10/tokens.css",
+          "initiator": "link",
+          "transfer": 0,
+          "encoded": 1581
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v10/app.css",
+          "initiator": "link",
+          "transfer": 0,
+          "encoded": 10524
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/boot-base.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 18221
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/app.js",
+          "initiator": "script",
+          "transfer": 0,
+          "encoded": 23419
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/units/number/shallows/ratios.js",
+          "initiator": "link",
+          "transfer": 0,
+          "encoded": 9681
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/atkinson-700.woff2",
+          "initiator": "css",
+          "transfer": 0,
+          "encoded": 17524
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/pixelify-400.woff2",
+          "initiator": "css",
+          "transfer": 0,
+          "encoded": 12016
+        }
+      ],
+      "actionMs": 298.39999997615814,
+      "elapsedMs": 2510,
+      "errors": [],
+      "jsGz": 51321,
+      "cssGz": 12105,
+      "thirdPartyScripts": 0,
+      "thirdPartyResources": 0,
+      "firstCard": 298,
+      "inp": 0,
+      "title": "A ratio compares two amounts · What a ratio is · Polycodex · Polycodex",
+      "runs": [
+        {
+          "lcp": 2236,
+          "inp": 0,
+          "maxEvent": 0,
+          "actionMs": 314.2000000476837,
+          "cardAt": 2154,
+          "cardPaint": 2417,
+          "firstCard": 314,
+          "dcl": 844,
+          "errors": []
+        },
+        {
+          "lcp": 2192,
+          "inp": 0,
+          "maxEvent": 0,
+          "actionMs": 289.10000002384186,
+          "cardAt": 2075,
+          "cardPaint": 2328,
+          "firstCard": 289,
+          "dcl": 892,
+          "errors": []
+        },
+        {
+          "lcp": 2192,
+          "inp": 0,
+          "maxEvent": 0,
+          "actionMs": 298.39999997615814,
+          "cardAt": 2113,
+          "cardPaint": 2338,
+          "firstCard": 298,
+          "dcl": 880,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "id": "v10-dive-uncached",
+      "gate": true,
+      "baseline": false,
+      "lcp": 2176,
+      "lcpEl": "P.",
+      "cls": 0.0005,
+      "longTasks": 4,
+      "longTaskMs": 549,
+      "maxEvent": 0,
+      "cardAt": 1752,
+      "cardPaint": 2171,
+      "nav": {
+        "dcl": 2176.100000023842,
+        "load": 2176.7000000476837,
+        "ttfb": 217.90000009536743
+      },
+      "heap": 0,
+      "resources": [
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/atkinson-400.woff2",
+          "initiator": "link",
+          "transfer": 17508,
+          "encoded": 17208
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/pixelify-600.woff2",
+          "initiator": "link",
+          "transfer": 12316,
+          "encoded": 12016
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v10/tokens.css",
+          "initiator": "link",
+          "transfer": 1881,
+          "encoded": 1581
+        },
+        {
+          "name": "http://127.0.0.1:4173/css/v10/app.css",
+          "initiator": "link",
+          "transfer": 10824,
+          "encoded": 10524
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/boot-base.js",
+          "initiator": "script",
+          "transfer": 18521,
+          "encoded": 18221
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/v10/app.js",
+          "initiator": "script",
+          "transfer": 23719,
+          "encoded": 23419
+        },
+        {
+          "name": "http://127.0.0.1:4173/js/units/number/shallows/ratios.js",
+          "initiator": "link",
+          "transfer": 9981,
+          "encoded": 9681
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/atkinson-700.woff2",
+          "initiator": "css",
+          "transfer": 17824,
+          "encoded": 17524
+        },
+        {
+          "name": "http://127.0.0.1:4173/assets/fonts/pixelify-400.woff2",
+          "initiator": "css",
+          "transfer": 12316,
+          "encoded": 12016
+        }
+      ],
+      "actionMs": 0,
+      "elapsedMs": 3975,
+      "errors": [],
+      "jsGz": 51321,
+      "cssGz": 12105,
+      "thirdPartyScripts": 0,
+      "thirdPartyResources": 0,
+      "firstCard": 2171,
+      "inp": 0,
+      "title": "A ratio compares two amounts · What a ratio is · Polycodex · Polycodex",
+      "runs": [
+        {
+          "lcp": 1708,
+          "inp": 0,
+          "maxEvent": 0,
+          "actionMs": null,
+          "cardAt": 1390,
+          "cardPaint": 1739,
+          "firstCard": 1739,
+          "dcl": 1702,
+          "errors": []
+        },
+        {
+          "lcp": 2176,
+          "inp": 0,
+          "maxEvent": 0,
+          "actionMs": null,
+          "cardAt": 1823,
+          "cardPaint": 2171,
+          "firstCard": 2171,
+          "dcl": 2176,
+          "errors": []
+        },
+        {
+          "lcp": 2244,
+          "inp": 0,
+          "maxEvent": 0,
+          "actionMs": null,
+          "cardAt": 1752,
+          "cardPaint": 2270,
+          "firstCard": 2270,
+          "dcl": 2288,
+          "errors": []
+        }
+      ]
+    }
+  ]
+}

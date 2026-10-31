@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-zone="shallows" data-fx="high" data-text="1" data-slate="day">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f3a52">
+  <meta name="description" content="Polycodex is a learning expedition: short dives, real understanding.">
+  <title>Polycodex</title>
+  <link rel="preload" href="assets/fonts/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/pixelify-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/v10/tokens.css">
+  <link rel="stylesheet" href="css/v10/app.css">
+  <script>
+  (function () {
+    if (!/#\/dive\//.test(location.hash || '')) return;
+    var link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'script';
+    link.href = 'js/units/number/shallows/ratios.js';
+    document.head.appendChild(link);
+  })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#screen">Skip to content</a>
+  <div class="scene" id="scene" aria-hidden="true">
+    <div class="scene-sun"></div>
+    <div class="scene-reef scene-reef-a"></div>
+    <div class="scene-reef scene-reef-b"></div>
+    <div class="scene-floor"></div>
+  </div>
+
+  <div class="app" id="app">
+    <header class="hud" id="hud" hidden></header>
+    <div class="banner" id="banner" role="status" hidden></div>
+    <main class="screen" id="screen" tabindex="-1"></main>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+  <div id="sheet-root"></div>
+  <div id="live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="modal-root"></div>
+
+  <noscript>
+    <div class="noscript">
+      <h1>Polycodex needs JavaScript</h1>
+      <p>Turn on JavaScript to open the expedition. Your saved progress stays on this device.</p>
+    </div>
+  </noscript>
+
+  <script src="js/v10/boot-base.js"></script>
+  <script src="js/v10/app.js"></script>
+</body>
+</html>
