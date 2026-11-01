@@ -212,6 +212,20 @@ img, svg { display: block; max-width: 100%; }
 .pixel-logo span { color: var(--c-lantern-text); text-shadow: 4px 4px 0 var(--c-lantern-ink); }
 .title-tag { font-size: clamp(18px, 2.4vw, 24px); color: var(--c-mist); max-width: 24ch; line-height: 1.35; }
 .title-meta { margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+.title-expedition {
+  max-width: 520px; margin-top: clamp(22px, 4vh, 40px); padding: 14px 16px 12px;
+  background: var(--c-bg-raised); border: var(--bw) solid var(--c-line); box-shadow: var(--e-1);
+}
+.expedition-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.expedition-head .eyebrow { margin-bottom: 0; }
+.expedition-state { color: var(--c-lantern-text); font-size: var(--fs-1); font-weight: 700; text-align: right; }
+.expedition-title { font-family: var(--f-display); font-size: clamp(26px, 3.4vw, 38px); font-weight: 600; line-height: 1; margin-top: 6px; }
+.expedition-sub { color: var(--c-text-2); font-size: var(--fs-1); margin-top: 4px; }
+.expedition-rail { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 5px; margin: 14px 0 8px; padding: 0; list-style: none; }
+.expedition-seg { height: 8px; border: 1px solid var(--c-line); background: transparent; }
+.expedition-seg.is-done { background: var(--c-kelp); border-color: var(--c-kelp); }
+.expedition-seg.is-active { background: var(--c-lantern); border-color: var(--c-lantern); }
+.expedition-foot { display: flex; justify-content: space-between; gap: 10px; padding-top: 8px; border-top: 1px solid var(--c-line); color: var(--c-text-2); font-size: var(--fs-1); }
 .title-menu { width: 100%; max-width: 390px; justify-self: end; display: flex; flex-direction: column; gap: 10px; }
 .title-menu .btn { width: 100%; min-height: 58px; justify-content: flex-start; padding: 10px 16px; font-size: var(--fs-4); }
 .title-menu .btn .ic { width: 22px; height: 22px; }
@@ -226,10 +240,12 @@ img, svg { display: block; max-width: 100%; }
 .title-tools { display: flex; gap: 4px; flex-wrap: wrap; }
 .title-tools .hud-btn { color: var(--c-mist); }
 .title-tools .hud-btn:hover { background: rgba(201, 215, 224, .1); }
-.legacy-notice { margin-top: 18px; max-width: 390px; justify-self: end; padding: 14px 16px; font-size: var(--fs-2); }
+.legacy-notice { grid-column: 2; grid-row: 2; margin-top: 18px; max-width: 390px; justify-self: end; padding: 14px 16px; font-size: var(--fs-2); }
 .legacy-notice h2 { font-family: var(--f-display); font-size: var(--fs-3); font-weight: 600; margin-bottom: 4px; }
 .legacy-notice .btn-row { margin-top: 10px; }
 .legacy-notice .btn { min-height: 36px; padding: 5px 10px; font-size: var(--fs-2); box-shadow: none; }
+.legacy-notice .btn.ghost { color: var(--c-paper-text); border-color: transparent; }
+.legacy-notice .btn.ghost:hover { border-color: var(--c-paper-line); background: rgba(31, 20, 5, .08); }
 
 /* ---------- Onboarding ---------- */
 .onboard { max-width: 980px; margin: 0 auto; }
@@ -480,6 +496,9 @@ img, svg { display: block; max-width: 100%; }
   background: var(--c-bg); border-left: var(--bw) solid var(--c-line);
   box-shadow: -5px 0 0 var(--c-shadow); transform: translateX(105%); transition: transform var(--dur-3) var(--ease-out);
   display: flex; flex-direction: column;
+  /* The closed Lantern is off-canvas. Skip its contents until it opens so the
+     first dive card does not pay for laying out hints, glossary and note. */
+  content-visibility: auto; contain-intrinsic-size: auto 600px;
 }
 .lantern.open { transform: translateX(0); }
 .lantern-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: var(--bw) solid var(--c-line); }
@@ -666,7 +685,8 @@ img, svg { display: block; max-width: 100%; }
   .title-wrap { grid-template-columns: 1fr; align-content: center; gap: 26px; }
   .title-brand { text-align: left; }
   .title-menu { max-width: none; justify-self: stretch; }
-  .legacy-notice { max-width: none; justify-self: stretch; }
+  .title-expedition { max-width: none; }
+  .legacy-notice { grid-column: auto; grid-row: auto; max-width: none; justify-self: stretch; }
   .title-foot { margin-top: 4px; }
 }
 @media (max-width: 720px) {

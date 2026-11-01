@@ -113,7 +113,7 @@ test.describe('migration and storage @v10', () => {
     });
     await page.goto('/app.html#/dive/ratios-d1/c1');
     await page.waitForTimeout(800);
-    await expect(page.locator('.save-chip .save-label')).toHaveText("Couldn't save");
+    await expect(page.locator('.dive-save')).toHaveText("Couldn't save");
     await expect(page.locator('.banner')).toContainText('Couldn’t save');
     const text = await page.locator('body').innerText();
     expect(text).not.toContain('Synced');

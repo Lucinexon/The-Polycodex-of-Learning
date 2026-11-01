@@ -14,7 +14,9 @@
   src: url("../../assets/fonts/atkinson-700.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
-  font-display: swap;
+  /* Bold is not preloaded. Use the system bold on a cold first paint instead of
+     swapping late and delaying the dive card. It is cached for later screens. */
+  font-display: optional;
 }
 @font-face {
   font-family: "Pixelify Sans";

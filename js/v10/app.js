@@ -314,6 +314,32 @@
 
   /* ---------------- title ---------------- */
 
+  function expeditionPanel() {
+    var meta = unitMeta('number-shallows-ratios');
+    if (!meta || !meta.dives || !meta.dives.length) return '';
+    var reef = reefById(meta.reef);
+    var dives = meta.dives;
+    var surfaced = dives.filter(function (d) { return statusOfDive(d.id) === 'surfaced'; }).length;
+    var active = dives.filter(function (d) { return statusOfDive(d.id) === 'in_progress'; })[0];
+    var activeNo = active ? dives.indexOf(active) + 1 : Math.min(surfaced + 1, dives.length);
+    var left = dives.filter(function (d) { return statusOfDive(d.id) !== 'surfaced'; })
+      .reduce(function (n, d) { return n + (Number(d.est) || 0); }, 0);
+    var state = surfaced === dives.length ? 'All dives surfaced' : (active ? 'Dive ' + activeNo + ' in progress' : 'Ready for Dive ' + activeNo);
+    return '<section class="title-expedition" aria-label="Current expedition">' +
+      '<div class="expedition-head"><span class="eyebrow">Current expedition</span><span class="expedition-state">' + esc(state) + '</span></div>' +
+      '<h2 class="expedition-title">' + esc(meta.title) + '</h2>' +
+      '<p class="expedition-sub">' + esc(reef ? reef.name : 'Number Reef') + ' · ' + esc(zoneLabel(reef, meta.zone)) + ' · ' + dives.length + ' dives · ' + esc(meta.est || 45) + ' min</p>' +
+      '<ol class="expedition-rail" aria-label="Dive progress">' +
+        dives.map(function (d, i) {
+          var st = statusOfDive(d.id);
+          var cls = st === 'surfaced' ? ' is-done' : (st === 'in_progress' ? ' is-active' : '');
+          return '<li class="expedition-seg' + cls + '"><span class="sr-only">Dive ' + (i + 1) + ': ' + esc(d.title) + ' — ' + (st === 'surfaced' ? 'surfaced' : (st === 'in_progress' ? 'in progress' : 'not started')) + '</span></li>';
+        }).join('') +
+      '</ol>' +
+      '<div class="expedition-foot"><span>' + surfaced + ' of ' + dives.length + ' surfaced</span><span>' + (left ? 'About ' + left + ' min left' : 'Expedition complete') + '</span></div>' +
+    '</section>';
+  }
+
   function renderTitle() {
     hudEl.hidden = true;
     bannerEl.hidden = true;
@@ -328,6 +354,7 @@
         '<h1 class="pixel-logo" tabindex="-1">POLY<span>CODEX</span></h1>' +
         '<p class="title-tag">A learning expedition. Short dives, real understanding.</p>' +
         '<div class="title-meta"><span class="pill live">' + icon('wave') + ' Number Reef is live</span><span class="pill">42 Wrecks to read</span></div>' +
+        expeditionPanel() +
       '</div>' +
       '<div class="title-menu" role="navigation" aria-label="Main">' +
         '<button type="button" class="btn continue" data-action="continue" data-path="' + esc(info.path) + '" data-autofocus>' +
@@ -680,7 +707,7 @@
       return;
     }
     if (!app.unit || app.unit.id !== meta.id) {
-      renderHud();
+      hudEl.hidden = true;
       loadUnitInto(meta.id, function (unit) { app.unit = unit; renderDive(route); });
       return;
     }
@@ -753,7 +780,7 @@
       // Focus after the card has painted so the browser does not force layout
       // inside the click task. Screen readers still get the new heading.
       var head = document.getElementById('dive-title');
-      if (head) root.requestAnimationFrame(function () {
+      if (head) afterPaint(function () {
         if (document.getElementById('dive-title') === head) head.focus({ preventScroll: true });
       });
       R.announce('Card ' + (index + 1) + ' of ' + dive.cards.length + ': ' + card.title);

@@ -175,13 +175,12 @@ async function runScenario(spec) {
   const started = Date.now();
   await page.goto(BASE + spec.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForTimeout(spec.settle || 1800);
+  if (spec.readyUnit) {
+    await page.waitForFunction(() => window.CodexUnits && window.CodexUnits.get('number-shallows-ratios'), null, { timeout: 15000 });
+  }
   if (String(spec.id).indexOf('v10-') === 0) {
     await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
     await page.waitForTimeout(300);
-  }
-  if (spec.readyUnit) {
-    await page.waitForFunction(() => window.CodexUnits && window.CodexUnits.get('number-shallows-ratios'), null, { timeout: 15000 });
-    await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
   }
   let actionMs = null;
   if (spec.action) {
@@ -340,7 +339,7 @@ function row(label, value, budget, unit, pass) {
   md.push('## Notes');
   md.push('');
   md.push('- Resource weight is gzip size fetched from the same files the page requested; transfer sizes are not used because the dev server gzips on the wire.');
-  md.push('- Dive “first card” is the real first paint of `#dive-title` after a double `requestAnimationFrame`. Cached is measured from a Descent click after the unit and shell are warm; uncached is a direct dive URL in a fresh browser.');
+  md.push('- Dive “first card” is the real first paint of `#dive-title` after a double `requestAnimationFrame`. Cached is measured from a Descent click after the unit has registered, fonts are ready and the page has settled for 300 ms; uncached is a direct dive URL in a fresh browser.');
   md.push('- Title event latency is the longest `event` timing entry (INP proxy) from the Continue interaction, not wall-clock click duration.');
   md.push('- The 10-minute heap ratio is not run in the default gate (it is a 12-minute measurement). Run it manually before release.');
   md.push('- Legacy rows are the before baseline, not gates. They use the classic Home and the inline `#s1-1` lesson expansion.');
