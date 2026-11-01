@@ -1,0 +1,115 @@
+{
+  "generatedAt": "2026-10-29T09:41:03.818Z",
+  "sizes": [
+    {
+      "name": "phone",
+      "width": 360,
+      "height": 640
+    },
+    {
+      "name": "desktop",
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "rows": [
+    {
+      "size": "phone",
+      "id": "title",
+      "file": "mock/phone/title.png",
+      "note": "Title with Continue, Dive, Lounge, Logbook",
+      "bytes": 296620
+    },
+    {
+      "size": "phone",
+      "id": "map",
+      "file": "mock/phone/map.png",
+      "note": "Reef Map, Wrecks layer",
+      "bytes": 296905
+    },
+    {
+      "size": "phone",
+      "id": "descent",
+      "file": "mock/phone/descent.png",
+      "note": "Descent and unit sheet",
+      "bytes": 297168
+    },
+    {
+      "size": "phone",
+      "id": "dive",
+      "file": "mock/phone/dive.png",
+      "note": "Dive player, first card",
+      "bytes": 298179
+    },
+    {
+      "size": "phone",
+      "id": "surface",
+      "file": "mock/phone/surface.png",
+      "note": "Surface results and collectible",
+      "bytes": 298340
+    },
+    {
+      "size": "phone",
+      "id": "logbook",
+      "file": "mock/phone/logbook.png",
+      "note": "Logbook, paper surface",
+      "bytes": 298573
+    },
+    {
+      "size": "phone",
+      "id": "wreck",
+      "file": "mock/phone/wreck.png",
+      "note": "Wreck reader, full legacy lesson",
+      "bytes": 42845
+    },
+    {
+      "size": "desktop",
+      "id": "title",
+      "file": "mock/desktop/title.png",
+      "note": "Title with Continue, Dive, Lounge, Logbook",
+      "bytes": 1060769
+    },
+    {
+      "size": "desktop",
+      "id": "map",
+      "file": "mock/desktop/map.png",
+      "note": "Reef Map, Wrecks layer",
+      "bytes": 1057846
+    },
+    {
+      "size": "desktop",
+      "id": "descent",
+      "file": "mock/desktop/descent.png",
+      "note": "Descent and unit sheet",
+      "bytes": 1056737
+    },
+    {
+      "size": "desktop",
+      "id": "dive",
+      "file": "mock/desktop/dive.png",
+      "note": "Dive player, first card",
+      "bytes": 1055212
+    },
+    {
+      "size": "desktop",
+      "id": "surface",
+      "file": "mock/desktop/surface.png",
+      "note": "Surface results and collectible",
+      "bytes": 1053090
+    },
+    {
+      "size": "desktop",
+      "id": "logbook",
+      "file": "mock/desktop/logbook.png",
+      "note": "Logbook, paper surface",
+      "bytes": 1052892
+    },
+    {
+      "size": "desktop",
+      "id": "wreck",
+      "file": "mock/desktop/wreck.png",
+      "note": "Wreck reader, full legacy lesson",
+      "bytes": 147536
+    }
+  ]
+}

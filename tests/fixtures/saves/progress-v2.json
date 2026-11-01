@@ -1,0 +1,33 @@
+{
+  "v": 2,
+  "deviceId": "fixture-device",
+  "updatedAt": 1760000000000,
+  "dives": {
+    "ratios-d1": {
+      "status": "surfaced",
+      "cardId": "c4",
+      "rev": 1,
+      "prompts": { "p1": { "ok": true, "first": true, "at": 1760000000000 } },
+      "checks": {
+        "d1k1": { "ok": true, "idk": false, "at": 1760000000000 },
+        "d1k2": { "ok": false, "idk": true, "at": 1760000000000 },
+        "d1k3": { "ok": true, "idk": false, "at": 1760000000000 }
+      },
+      "activity": null,
+      "seenCards": { "c1": 1760000000000 },
+      "notes": {},
+      "startedAt": 1760000000000,
+      "surfacedAt": 1760000000000,
+      "updatedAt": 1760000000000
+    }
+  },
+  "units": {},
+  "wrecks": { "s1-1": { "status": "read", "anchor": "w-h-2", "para": 5, "updatedAt": 1760000000000, "readAt": 1760000000000 } },
+  "concepts": { "num.ratio.meaning": { "stage": 2, "seenAt": 1760000000000, "practicedAt": 1760000000000, "recalledAt": null, "appliedAt": null, "lastResult": "correct", "lastExposureAt": 1760000000000 } },
+  "reviews": { "v10:ratios-d1:r1": { "b": 1, "d": 20000, "created": 1760000000000, "concept": "num.ratio.meaning" } },
+  "xp": { "dive:ratios-d1:surface": { "amt": 20, "at": 1760000000000 } },
+  "goal": { "daily": 1, "days": { "2025-10-09": 1 } },
+  "collection": { "measuring-cup": "2025-10-09T00:00:00.000Z" },
+  "prefs": { "fx": "med", "text": 1, "slate": "day", "sound": "on", "outline": true },
+  "legacy": { "importedAt": 1760000000000, "sourceHashes": {}, "imported": true, "charted": { "s1-1": true }, "seen": [], "known": [] }
+}

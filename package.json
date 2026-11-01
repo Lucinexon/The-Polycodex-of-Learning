@@ -3,7 +3,20 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "serve": "node scripts/serve.js",
+    "manifest": "node scripts/build-manifest.js",
+    "manifest:check": "node scripts/build-manifest.js --check",
+    "boot:check": "node scripts/build-boot-base.js --check",
+    "lint:units": "node scripts/lint-units.js",
+    "test:units": "node --test tests/unit/*.test.js",
+    "test:e2e": "playwright test",
+    "test:v10": "playwright test tests/v10",
+    "test:legacy": "playwright test tests --grep-invert @v10",
+    "perf": "node scripts/perf-budget.js",
+    "contrast": "node scripts/check-contrast.js",
+    "mocks": "node scripts/render-mocks.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Lucinexon/The-Polycodex-of-Learning.git"
